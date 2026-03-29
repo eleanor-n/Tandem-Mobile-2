@@ -1,18 +1,21 @@
 {
   "expo": {
-    "name": "tandem-native",
-    "slug": "tandem-native",
+    "name": "Tandem",
+    "slug": "tandem",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tandem.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +24,32 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tandem.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Tandem to access your camera to record a video response."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Tandem needs camera access for profile verification.",
+          "microphonePermission": "Tandem needs microphone access for video prompts."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Tandem needs microphone access for video prompts."
+        }
+      ]
+    ]
   }
 }
