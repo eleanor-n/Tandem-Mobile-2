@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Modal,
@@ -942,18 +943,28 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 </Text>
               </View>
             ) : (
-              savedActivities.map(act => (
-                <View key={act.id} style={s.myPostRow}>
-                  <Image source={{ uri: act.photo }} style={s.myPostPhoto} resizeMode="cover" />
-                  <View style={s.myPostInfo}>
-                    <Text style={s.myPostTitle} numberOfLines={2}>{act.title}</Text>
-                    <Text style={s.myPostDate}>{act.date} · {act.location}</Text>
-                  </View>
-                  <View style={s.requestBadge}>
-                    <Text style={s.requestBadgeText}>saved</Text>
-                  </View>
-                </View>
-              ))
+              <FlatList
+                data={savedActivities}
+                keyExtractor={act => act.id}
+                scrollEnabled={false}
+                contentContainerStyle={{ gap: 12 }}
+                renderItem={({ item: act }) => (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => showToast("you saved this one.")}
+                    style={s.myPostRow}
+                  >
+                    <Image source={{ uri: act.photo }} style={s.myPostPhoto} resizeMode="cover" />
+                    <View style={s.myPostInfo}>
+                      <Text style={s.myPostTitle} numberOfLines={2}>{act.title}</Text>
+                      <Text style={s.myPostDate}>{act.date} · {act.location}</Text>
+                    </View>
+                    <View style={s.requestBadge}>
+                      <Text style={s.requestBadgeText}>saved</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
             )}
           </ScrollView>
         )

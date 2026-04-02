@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
   Image, Switch, ActivityIndicator, Modal, TextInput, Alert, Animated,
   KeyboardAvoidingView, Platform, Share,
 } from "react-native";
@@ -502,21 +502,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               <Text style={s.emptyCardCtaText}>+ post an activity</Text>
             </TouchableOpacity>
           ) : (
-            <ScrollView
+            <FlatList
+              data={MOCK_HOSTING}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={s.hScroll}
-              scrollEventThrottle={16}
-              decelerationRate="fast"
-              snapToInterval={152}
-              disableIntervalMomentum={true}
-              directionalLockEnabled={true}
-            >
-              {MOCK_HOSTING.map(h => (
+              keyExtractor={h => h.id}
+              renderItem={({ item: h }) => (
                 <TouchableOpacity
-                  key={h.id}
                   activeOpacity={0.85}
-                  delayPressIn={50}
                   onPress={() => showToast("tap to manage your activity — coming soon.")}
                   style={s.actCard}
                 >
@@ -528,7 +522,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   )}
                   {h.spots > 0 && (
                     <View style={s.spotsBadge}>
-                      <Text style={s.spotsText}>{h.spots === 1 ? "1 companion spot open" : `${h.spots} companion spots open`}</Text>
+                      <Text style={s.spotsText}>{h.spots} spots</Text>
                     </View>
                   )}
                   <View style={s.actBody}>
@@ -536,8 +530,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                     <Text style={s.actDate}>{h.date}</Text>
                   </View>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              )}
+            />
           )}
         </View>
 
@@ -549,21 +543,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               <Text style={s.emptyCardCtaText}>go find something to join →</Text>
             </TouchableOpacity>
           ) : (
-            <ScrollView
+            <FlatList
+              data={MOCK_BEEN_TO}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={s.hScroll}
-              scrollEventThrottle={16}
-              decelerationRate="fast"
-              snapToInterval={152}
-              disableIntervalMomentum={true}
-              directionalLockEnabled={true}
-            >
-              {MOCK_BEEN_TO.map(b => (
+              keyExtractor={b => b.id}
+              renderItem={({ item: b }) => (
                 <TouchableOpacity
-                  key={b.id}
                   activeOpacity={0.85}
-                  delayPressIn={50}
                   onPress={() => showToast("activity memories live in your scrapbook.")}
                   style={[s.actCard, s.beenCard]}
                 >
@@ -573,8 +561,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                     <Text style={s.actDate}>{b.date}</Text>
                   </View>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              )}
+            />
           )}
         </View>
 
