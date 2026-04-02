@@ -11,15 +11,11 @@
       "distribution": "internal"
     },
     "production": {
+      "distribution": "store",
       "autoIncrement": true
     }
   },
   "submit": {
-    "preview": {
-      "ios": {
-        "ascAppId": "6761485692"
-      }
-    },
     "production": {
       "ios": {
         "ascAppId": "6761485692"
