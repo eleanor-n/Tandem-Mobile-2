@@ -33,12 +33,14 @@ export const BottomNav = ({ activeTab, onTabPress, onPostPress }: BottomNavProps
 
         if (tab === "Post") {
           return (
+          
             <TouchableOpacity
-              key={tab}
-              onPress={onPostPress}
-              activeOpacity={0.85}
-              style={s.centerTab}
-            >
+            key={tab}
+            onPress={onPostPress}
+            activeOpacity={0.85}
+            style={s.centerTab}
+          >
+            
               <View style={s.centerBtnOuter}>
                 <LinearGradient
                   colors={gradients.brand}

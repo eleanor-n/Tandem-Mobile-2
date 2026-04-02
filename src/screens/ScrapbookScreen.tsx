@@ -1,293 +1,886 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, Image,
+  Dimensions, Image, Modal, TextInput, Animated,
+  SectionList, Alert, ActivityIndicator, ActionSheetIOS, Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
+import * as MediaLibrary from "expo-media-library";
+import ViewShot from "react-native-view-shot";
+import { Ionicons } from "@expo/vector-icons";
 import { BottomNav } from "../components/BottomNav";
-import SunnyAvatar from "../components/SunnyAvatar";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, radius, shadows, gradients } from "../theme";
+import { radius, gradients } from "../theme";
+import { SB, STICKERS, getCardRotation } from "../theme/scrapbookTheme";
+import { getSunnyResponse } from "../lib/sunny";
 
 const { width: W } = Dimensions.get("window");
-const COL_GAP = 10;
-const H_PAD = 16;
-const COL_W = (W - H_PAD * 2 - COL_GAP) / 2;
+const CARD_W = W - 48; // 24px each side
 
-// Masonry heights alternate so adjacent cards feel different
-const CARD_HEIGHTS = [180, 140, 160, 200, 150, 170, 190, 145];
+// ── Types ──────────────────────────────────────────────────────────────────
 
-const MOCK_MEMORIES = [
+interface ScrapbookPhoto {
+  photo_url: string;
+  display_order: number;
+}
+
+interface ScrapbookMemory {
+  id: string;
+  user_id: string;
+  title: string;
+  partner_name?: string;
+  activity_date?: string;
+  location?: string;
+  cover_photo_url?: string;
+  is_public: boolean;
+  caption?: string;
+  stickers: string[];
+  tags?: string[];
+  photos?: ScrapbookPhoto[];
+  created_at: string;
+}
+
+// ── Mock data ─────────────────────────────────────────────────────────────
+
+const MOCK_MEMORIES: ScrapbookMemory[] = [
   {
-    id: "1",
-    title: "farmer's market 🌿",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=400&h=500&fit=crop",
+    id: "1", user_id: "", title: "farmer's market", partner_name: "alex",
+    activity_date: "2026-03-22", location: "nassau st", is_public: true,
+    stickers: ["heart", "pinned"], caption: "we bought way too much cheese.",
+    cover_photo_url: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=600&fit=crop",
+    tags: ["market"], created_at: "2026-03-22T10:00:00Z",
+    photos: [
+      { photo_url: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=600&fit=crop", display_order: 0 },
+      { photo_url: "https://images.unsplash.com/photo-1506617564039-2f3b650b7010?w=400&h=400&fit=crop", display_order: 1 },
+    ],
   },
   {
-    id: "2",
-    title: "slow morning ☕",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=400&fit=crop",
+    id: "2", user_id: "", title: "slow morning coffee", partner_name: "maya",
+    activity_date: "2026-03-15", location: "blue bottle", is_public: false,
+    stickers: ["star"], caption: "",
+    cover_photo_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop",
+    tags: ["coffee"], created_at: "2026-03-15T09:00:00Z",
+    photos: [
+      { photo_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop", display_order: 0 },
+      { photo_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop", display_order: 1 },
+    ],
   },
   {
-    id: "3",
-    title: "morning hike 🥾",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&h=600&fit=crop",
+    id: "3", user_id: "", title: "morning hike", partner_name: "riley",
+    activity_date: "2026-03-08", location: "sourland mountain", is_public: true,
+    stickers: ["sunny", "pinned"], caption: "worth every step.",
+    cover_photo_url: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=600&fit=crop",
+    tags: ["hiking"], created_at: "2026-03-08T07:00:00Z",
+    photos: [
+      { photo_url: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=600&fit=crop", display_order: 0 },
+      { photo_url: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=400&fit=crop", display_order: 1 },
+      { photo_url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop", display_order: 2 },
+    ],
   },
   {
-    id: "4",
-    title: "garden harvest 🌱",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&h=400&fit=crop",
-  },
-  {
-    id: "5",
-    title: "daily yoga 🧘",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&h=500&fit=crop",
-  },
-  {
-    id: "6",
-    title: "creative flow 🎨",
-    user: "maya",
-    photo: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=400&h=400&fit=crop",
+    id: "4", user_id: "", title: "garden harvest", partner_name: "sam",
+    activity_date: "2026-02-20", location: undefined, is_public: false,
+    stickers: [], caption: "",
+    cover_photo_url: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop",
+    tags: ["nature"], created_at: "2026-02-20T14:00:00Z",
+    photos: [{ photo_url: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop", display_order: 0 }],
   },
 ];
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+const formatDate = (d?: string) => {
+  if (!d) return "";
+  try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch { return ""; }
+};
+
+const MONTH_MAP: Record<number, string> = {
+  0: "january", 1: "february", 2: "march", 3: "april", 4: "may", 5: "june",
+  6: "july", 7: "august", 8: "september", 9: "october", 10: "november", 11: "december",
+};
+const monthLabel = (iso: string) => {
+  const d = new Date(iso);
+  return `${MONTH_MAP[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+// ── AnimatedToggle ────────────────────────────────────────────────────────
+
+const AnimatedToggle = ({ value, onToggle }: { value: boolean; onToggle: () => void }) => {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(anim, { toValue: value ? 1 : 0, useNativeDriver: false, tension: 80, friction: 10 }).start();
+  }, [value]);
+  const bg = anim.interpolate({ inputRange: [0, 1], outputRange: ["#D4C9B0", SB.teal] });
+  const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [2, 22] });
+  return (
+    <TouchableOpacity onPress={onToggle} activeOpacity={0.85}>
+      <Animated.View style={[tog.track, { backgroundColor: bg }]}>
+        <Animated.View style={[tog.knob, { transform: [{ translateX: tx }] }]} />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+const tog = StyleSheet.create({
+  track: { width: 46, height: 26, borderRadius: 13, justifyContent: "center" },
+  knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: "#fff", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+});
+
+// ── Memory Card (polaroid) ────────────────────────────────────────────────
+
+const MemoryCard = ({
+  memory, caveat, onPress, onMenu,
+}: {
+  memory: ScrapbookMemory;
+  caveat: (bold?: boolean) => string | undefined;
+  onPress: () => void;
+  onMenu: () => void;
+}) => {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const photoUri = memory.cover_photo_url || memory.photos?.[0]?.photo_url;
+  const rotation = `${getCardRotation(memory.id)}deg`;
+  const activeStickerKeys = memory.stickers?.slice(0, 3) || [];
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={[mc.wrap, { transform: [{ rotate: rotation }] }]}
+    >
+      {/* Photo area */}
+      <View style={mc.photoArea}>
+        {!imgLoaded && (
+          <View style={mc.photoPlaceholder}>
+            {!photoUri && (
+              <Image source={require("../../assets/icon.png")} style={mc.iconPlaceholder} resizeMode="contain" />
+            )}
+            {photoUri && <ActivityIndicator color={SB.border} />}
+          </View>
+        )}
+        {photoUri && (
+          <Image
+            source={{ uri: photoUri }}
+            style={[StyleSheet.absoluteFillObject, !imgLoaded && { opacity: 0 }]}
+            resizeMode="cover"
+            onLoad={() => setImgLoaded(true)}
+          />
+        )}
+
+        {/* Visibility badge */}
+        <View style={[mc.badge, memory.is_public ? mc.badgePublic : mc.badgePrivate]}>
+          <Text style={[mc.badgeText, { color: memory.is_public ? SB.tealText : SB.inkFaint, fontFamily: caveat(false) }]}>
+            {memory.is_public ? "on profile" : "private"}
+          </Text>
+        </View>
+
+        {/* ··· menu */}
+        <TouchableOpacity style={mc.menuBtn} onPress={onMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={mc.menuDots}>···</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Caption zone */}
+      <View style={mc.body}>
+        <Text style={[mc.title, { fontFamily: caveat(true) }]} numberOfLines={2}>
+          {memory.title}
+        </Text>
+        <Text style={mc.meta}>
+          {[memory.partner_name && `with ${memory.partner_name}`, formatDate(memory.activity_date)]
+            .filter(Boolean).join(" · ")}
+        </Text>
+        {activeStickerKeys.length > 0 && (
+          <View style={mc.stickerRow}>
+            {activeStickerKeys.map(k => {
+              const s = STICKERS.find(s => s.key === k);
+              return s ? (
+                <View key={k} style={[mc.stickerPill, { backgroundColor: s.bg, borderColor: s.border }]}>
+                  <Text style={[mc.stickerText, { color: s.text, fontWeight: s.fontWeight as any }]}>{s.label}</Text>
+                </View>
+              ) : null;
+            })}
+            {memory.stickers.length > 3 && (
+              <View style={[mc.stickerPill, { backgroundColor: SB.borderLight, borderColor: SB.border }]}>
+                <Text style={[mc.stickerText, { color: SB.inkMuted }]}>+{memory.stickers.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const mc = StyleSheet.create({
+  wrap: {
+    width: CARD_W, backgroundColor: "#fff",
+    borderWidth: 0.5, borderColor: SB.border, borderRadius: 8,
+    marginBottom: 28, alignSelf: "center",
+    ...SB.cardShadow,
+  },
+  photoArea: {
+    width: "100%", height: 220,
+    borderTopLeftRadius: 8, borderTopRightRadius: 8, overflow: "hidden",
+    backgroundColor: SB.cream,
+  },
+  photoPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: SB.cream },
+  iconPlaceholder: { width: 48, height: 48, opacity: 0.35 },
+  badge: {
+    position: "absolute", top: 10, right: 10,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 20, borderWidth: 0.5,
+  },
+  badgePublic: { backgroundColor: SB.tealLight, borderColor: SB.teal },
+  badgePrivate: { backgroundColor: "#F5F0E8", borderColor: SB.border },
+  badgeText: { fontSize: 9 },
+  menuBtn: {
+    position: "absolute", bottom: 10, right: 10,
+    backgroundColor: "rgba(0,0,0,0.22)", borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 3,
+  },
+  menuDots: { fontSize: 11, color: "#fff", letterSpacing: 1 },
+  body: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 4 },
+  title: { fontSize: 20, color: SB.ink },
+  meta: { fontSize: 12, color: SB.inkMuted },
+  stickerRow: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
+  stickerPill: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
+  stickerText: { fontSize: 11, fontWeight: "600" },
+});
+
+// ── Memory Detail Modal ───────────────────────────────────────────────────
+
+const MemoryDetailModal = ({
+  memory: init, caveat, onClose,
+}: {
+  memory: ScrapbookMemory;
+  caveat: (bold?: boolean) => string | undefined;
+  onClose: (updated?: Partial<ScrapbookMemory>) => void;
+}) => {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const captureRef = useRef<ViewShot>(null);
+
+  const [title, setTitle] = useState(init.title);
+  const [caption, setCaption] = useState(init.caption || "");
+  const [stickers, setStickers] = useState<string[]>(init.stickers || []);
+  const [isPublic, setIsPublic] = useState(init.is_public);
+  const [photos, setPhotos] = useState<ScrapbookPhoto[]>(init.photos || []);
+  const [uploading, setUploading] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [fullPhoto, setFullPhoto] = useState<string | null>(null);
+  const [saveTick, setSaveTick] = useState(new Animated.Value(0));
+  const [confirmAnim] = useState(new Animated.Value(0));
+  const [confirmText, setConfirmText] = useState("");
+  const sunnyModalText = useRef<string | null>(null);
+  const sunnyModalOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    getSunnyResponse({
+      context: "tandemComplete",
+      activityTitle: init.title,
+      partnerName: init.partner_name,
+    }).then(text => {
+      sunnyModalText.current = text;
+      setTimeout(() => {
+        Animated.timing(sunnyModalOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      }, 800);
+    });
+  }, []);
+
+  const flashSaved = () => {
+    setSaveTick(new Animated.Value(1));
+    Animated.timing(saveTick, { toValue: 0, duration: 1200, delay: 200, useNativeDriver: true }).start();
+  };
+  const flashConfirm = (text: string) => {
+    setConfirmText(text);
+    confirmAnim.setValue(1);
+    Animated.timing(confirmAnim, { toValue: 0, duration: 1500, delay: 400, useNativeDriver: true }).start();
+  };
+
+  const upsertField = async (fields: Record<string, any>) => {
+    if (!user) return;
+    await supabase.from("scrapbook_memories").upsert({ id: init.id, user_id: user.id, ...fields }, { onConflict: "id" });
+  };
+
+  const saveTitle = async () => { await upsertField({ title }); flashSaved(); };
+  const saveCaption = async () => { if (caption !== init.caption) { await upsertField({ caption }); flashSaved(); } };
+
+  const toggleSticker = async (key: string) => {
+    const next = stickers.includes(key) ? stickers.filter(k => k !== key) : [...stickers, key];
+    setStickers(next);
+    await upsertField({ stickers: next });
+  };
+
+  const togglePublic = async () => {
+    const next = !isPublic;
+    setIsPublic(next);
+    await upsertField({ is_public: next });
+    flashConfirm(next ? "showing on your profile" : "kept private");
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") { Alert.alert("permission needed", "allow photo access to add photos."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.85 });
+    if (result.canceled || !result.assets?.[0]) return;
+    const localUri = result.assets[0].uri;
+    setUploading(true);
+    try {
+      const fileName = `${user?.id || "anon"}/${init.id}/${Date.now()}.jpg`;
+      const res = await fetch(localUri);
+      const blob = await res.blob();
+      const { error } = await supabase.storage.from("scrapbook-photos").upload(fileName, blob, { contentType: "image/jpeg" });
+      if (error) throw error;
+      const publicUrl = supabase.storage.from("scrapbook-photos").getPublicUrl(fileName).data.publicUrl;
+      const newPhoto = { photo_url: publicUrl, display_order: photos.length };
+      await supabase.from("scrapbook_photos").insert({ memory_id: init.id, ...newPhoto });
+      if (photos.length === 0) await upsertField({ cover_photo_url: publicUrl });
+      setPhotos(prev => [...prev, newPhoto]);
+    } catch { Alert.alert("upload failed", "couldn't save the photo. try again?"); }
+    setUploading(false);
+  };
+
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const uri = await (captureRef.current as any)?.capture?.();
+      if (!uri) throw new Error("capture failed");
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status === "granted") await MediaLibrary.saveToLibraryAsync(uri);
+      await Sharing.shareAsync(uri, { mimeType: "image/jpeg" });
+    } catch { Alert.alert("couldn't share", "something went wrong. try again?"); }
+    setSharing(false);
+  };
+
+  // Photo collage layout
+  const renderCollage = () => {
+    const canAdd = photos.length < 4;
+    const PhotoWrap = ({ uri, style }: { uri: string; style: any }) => (
+      <TouchableOpacity
+        style={[{ backgroundColor: "#fff", padding: 3 }, style]}
+        onPress={() => setFullPhoto(uri)}
+        activeOpacity={0.85}
+      >
+        <Image source={{ uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+      </TouchableOpacity>
+    );
+    const AddBtn = ({ style }: { style: any }) => (
+      <TouchableOpacity style={[{ backgroundColor: SB.borderLight, alignItems: "center", justifyContent: "center" }, style]} onPress={pickPhoto} activeOpacity={0.8}>
+        {uploading ? <ActivityIndicator color={SB.inkMuted} /> : <Text style={{ fontSize: 24, color: SB.inkMuted }}>+</Text>}
+      </TouchableOpacity>
+    );
+
+    if (photos.length === 0) return (
+      <View style={col.one}>
+        <View style={[col.one, { alignItems: "center", justifyContent: "center", backgroundColor: SB.cream }]}>
+          <Image source={require("../../assets/icon.png")} style={{ width: 48, height: 48, opacity: 0.3 }} resizeMode="contain" />
+        </View>
+        {canAdd && <AddBtn style={col.one} />}
+      </View>
+    );
+    if (photos.length === 1) return (
+      <View style={{ gap: 4 }}>
+        <PhotoWrap uri={photos[0].photo_url} style={col.one} />
+        {canAdd && <AddBtn style={col.one} />}
+      </View>
+    );
+    if (photos.length === 2) return (
+      <View style={{ gap: 4 }}>
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <PhotoWrap uri={photos[0].photo_url} style={col.half} />
+          <PhotoWrap uri={photos[1].photo_url} style={col.half} />
+        </View>
+        {canAdd && <AddBtn style={col.one} />}
+      </View>
+    );
+    return (
+      <View style={{ gap: 4 }}>
+        <PhotoWrap uri={photos[0].photo_url} style={col.top} />
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          {photos.slice(1).map((p, i) => <PhotoWrap key={i} uri={p.photo_url} style={col.third} />)}
+          {canAdd && <AddBtn style={col.third} />}
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={() => onClose({ title, caption, stickers, is_public: isPublic, photos })}>
+      <View style={[dm.container, { paddingTop: insets.top }]}>
+        {/* Top bar */}
+        <View style={dm.topBar}>
+          <TouchableOpacity onPress={() => onClose({ title, caption, stickers, is_public: isPublic, photos })} activeOpacity={0.7}>
+            <Text style={dm.backBtn}>← back</Text>
+          </TouchableOpacity>
+          <Text style={[dm.topTitle, { fontFamily: caveat(true) }]} numberOfLines={1}>{init.title}</Text>
+          <TouchableOpacity onPress={handleShare} activeOpacity={0.7}>
+            {sharing ? <ActivityIndicator size="small" color={SB.teal} /> : <Text style={dm.shareBtn}>share</Text>}
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[dm.scroll, { paddingBottom: insets.bottom + 40 }]}>
+          {/* Capture zone */}
+          <ViewShot ref={captureRef} options={{ format: "jpg", quality: 0.92 }} style={dm.captureZone}>
+            {renderCollage()}
+            {/* Active stickers on capture */}
+            {stickers.length > 0 && (
+              <View style={dm.captureStickers}>
+                {stickers.map(k => {
+                  const s = STICKERS.find(s => s.key === k);
+                  return s ? (
+                    <View key={k} style={[dm.captureStickerPill, { backgroundColor: s.bg, borderColor: s.border }]}>
+                      <Text style={[dm.captureStickerText, { color: s.text }]}>{s.label}</Text>
+                    </View>
+                  ) : null;
+                })}
+              </View>
+            )}
+            <View style={dm.captureFooter}>
+              <Text style={[dm.captureTitle, { fontFamily: caveat(true) }]}>{title}</Text>
+              <Text style={dm.captureMeta}>
+                {[init.partner_name && `with ${init.partner_name}`, formatDate(init.activity_date)].filter(Boolean).join(" · ")}
+              </Text>
+              <View style={dm.captureStamp}>
+                <Image source={require("../../assets/icon.png")} style={{ width: 18, height: 18, opacity: 0.45 }} resizeMode="contain" />
+                <Text style={dm.captureStampText}>tandem</Text>
+              </View>
+            </View>
+          </ViewShot>
+
+          {/* Profile visibility banner */}
+          <View style={[dm.visibilityBanner, { backgroundColor: isPublic ? SB.tealLight : "#F5F0E8", borderColor: isPublic ? SB.teal : SB.border }]}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, flex: 1 }}>
+              <Ionicons name="eye-outline" size={16} color={SB.teal} />
+              <View style={{ flex: 1 }}>
+                <Text style={dm.visLabel}>show on my profile</Text>
+                <Text style={dm.visSub}>people viewing your profile can see this</Text>
+              </View>
+            </View>
+            <AnimatedToggle value={isPublic} onToggle={togglePublic} />
+          </View>
+          <Animated.Text style={[dm.visConfirm, { fontFamily: caveat(false), opacity: confirmAnim }]}>
+            {confirmText}
+          </Animated.Text>
+
+          {/* Memory metadata */}
+          <View style={dm.card}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <TextInput
+                style={[dm.titleInput, { fontFamily: caveat(true) }]}
+                value={title}
+                onChangeText={setTitle}
+                onBlur={saveTitle}
+                multiline={false}
+              />
+              <Animated.Text style={[dm.savedTick, { opacity: saveTick }]}>saved</Animated.Text>
+            </View>
+            <Text style={dm.metaSub}>
+              {[init.partner_name && `with ${init.partner_name}`, formatDate(init.activity_date), init.location]
+                .filter(Boolean).join(" · ")}
+            </Text>
+          </View>
+
+          {/* Caption */}
+          <View style={dm.card}>
+            <TextInput
+              style={[dm.captionInput, { fontFamily: caveat(false) }]}
+              value={caption}
+              onChangeText={setCaption}
+              onBlur={saveCaption}
+              placeholder="tap to add a note about this memory..."
+              placeholderTextColor={SB.inkMuted}
+              multiline
+            />
+          </View>
+
+          {sunnyModalText.current ? (
+            <Animated.Text style={[dm.sunnyLine, { opacity: sunnyModalOpacity }]} numberOfLines={2}>
+              {sunnyModalText.current}
+            </Animated.Text>
+          ) : null}
+
+          {/* Sticker strip */}
+          <View style={dm.card}>
+            <Text style={dm.sectionLabel}>add a sticker</Text>
+            <View style={dm.stickerStrip}>
+              {STICKERS.map(s => {
+                const active = stickers.includes(s.key);
+                return (
+                  <TouchableOpacity
+                    key={s.key}
+                    onPress={() => toggleSticker(s.key)}
+                    activeOpacity={0.75}
+                    style={[dm.stickerBtn, active
+                      ? { backgroundColor: s.bg, borderColor: s.border, transform: [{ scale: 1.05 }] }
+                      : { backgroundColor: "#fff", borderColor: SB.border, opacity: 0.7 }
+                    ]}
+                  >
+                    <Text style={[dm.stickerLabel, { color: active ? s.text : "#999", fontWeight: (s.fontWeight as any) }]}>{s.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Full-size photo viewer */}
+      {fullPhoto && (
+        <Modal visible animationType="fade" onRequestClose={() => setFullPhoto(null)}>
+          <TouchableOpacity style={dm.fullPhotoOverlay} onPress={() => setFullPhoto(null)} activeOpacity={1}>
+            <Image source={{ uri: fullPhoto }} style={dm.fullPhoto} resizeMode="contain" />
+          </TouchableOpacity>
+        </Modal>
+      )}
+    </Modal>
+  );
+};
+
+const col = StyleSheet.create({
+  one: { width: "100%", height: 200, borderRadius: 4, overflow: "hidden" },
+  half: { flex: 1, height: 130, borderRadius: 4, overflow: "hidden" },
+  top: { width: "100%", height: 130, borderRadius: 4, overflow: "hidden" },
+  third: { flex: 1, height: 100, borderRadius: 4, overflow: "hidden" },
+});
+
+const dm = StyleSheet.create({
+  container: { flex: 1, backgroundColor: SB.creamDeep },
+  topBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: SB.border,
+  },
+  backBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", minWidth: 60 },
+  topTitle: { flex: 1, fontSize: 16, color: SB.ink, textAlign: "center", marginHorizontal: 8 },
+  shareBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", minWidth: 60, textAlign: "right" },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, gap: 14 },
+  captureZone: { backgroundColor: SB.cream, borderRadius: 8, overflow: "hidden" },
+  captureFooter: { padding: 14, gap: 4 },
+  captureTitle: { fontSize: 18, color: SB.ink },
+  captureMeta: { fontSize: 12, color: SB.inkMuted },
+  captureStamp: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, opacity: 0.5 },
+  captureStampText: { fontSize: 9, color: SB.inkMuted, letterSpacing: 1 },
+  captureStickers: { flexDirection: "row", gap: 6, paddingHorizontal: 14, paddingTop: 10, flexWrap: "wrap" },
+  captureStickerPill: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
+  captureStickerText: { fontSize: 11, fontWeight: "600" },
+  visibilityBanner: {
+    flexDirection: "row", alignItems: "center",
+    borderWidth: 0.5, borderRadius: 12, padding: 14, gap: 12,
+  },
+  visLabel: { fontSize: 13, fontWeight: "500", color: SB.ink },
+  visSub: { fontSize: 10, color: SB.inkMuted, marginTop: 2 },
+  visConfirm: { fontSize: 12, color: SB.teal, fontStyle: "italic", marginTop: -8, paddingHorizontal: 2 },
+  card: { backgroundColor: "#fff", borderWidth: 1, borderColor: SB.border, borderRadius: 8, padding: 14, gap: 6 },
+  titleInput: { flex: 1, fontSize: 18, color: SB.ink, padding: 0 },
+  savedTick: { fontSize: 11, color: SB.teal },
+  metaSub: { fontSize: 12, color: SB.inkMuted },
+  captionInput: { fontSize: 14, color: SB.inkMid, lineHeight: 22, minHeight: 60 },
+  sectionLabel: { fontSize: 10, color: SB.inkMuted, fontWeight: "600", letterSpacing: 0.5 },
+  stickerStrip: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  stickerBtn: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  stickerLabel: { fontSize: 12, fontWeight: "600" },
+  fullPhotoOverlay: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
+  fullPhoto: { width: W, height: W * 1.2 },
+  sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 20, paddingVertical: 4 },
+});
+
+// ── Timeline View ─────────────────────────────────────────────────────────
+
+const TimelineView = ({
+  memories, caveat, onPress, bottomPad,
+}: {
+  memories: ScrapbookMemory[];
+  caveat: (bold?: boolean) => string | undefined;
+  onPress: (m: ScrapbookMemory) => void;
+  bottomPad: number;
+}) => {
+  const grouped: Record<string, ScrapbookMemory[]> = {};
+  for (const m of memories) {
+    const k = monthLabel(m.created_at);
+    if (!grouped[k]) grouped[k] = [];
+    grouped[k].push(m);
+  }
+  const sections = Object.entries(grouped).map(([title, data]) => ({ title, data }));
+
+  return (
+    <SectionList
+      sections={sections}
+      keyExtractor={m => m.id}
+      stickySectionHeadersEnabled
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: bottomPad }}
+      renderSectionHeader={({ section: { title } }) => (
+        <View style={tl.header}>
+          <Text style={[tl.headerText, { fontFamily: caveat(true) }]}>{title}</Text>
+        </View>
+      )}
+      renderItem={({ item: m }) => {
+        const photoUri = m.cover_photo_url || m.photos?.[0]?.photo_url;
+        return (
+          <TouchableOpacity style={tl.row} onPress={() => onPress(m)} activeOpacity={0.85}>
+            <View style={[tl.thumb, { transform: [{ rotate: `${getCardRotation(m.id)}deg` }] }]}>
+              {photoUri
+                ? <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                : <Image source={require("../../assets/icon.png")} style={tl.thumbIcon} resizeMode="contain" />}
+            </View>
+            <View style={tl.rowBody}>
+              <Text style={[tl.rowTitle, { fontFamily: caveat(true) }]} numberOfLines={1}>{m.title}</Text>
+              <Text style={tl.rowMeta}>
+                {[m.partner_name && `with ${m.partner_name}`, formatDate(m.activity_date)].filter(Boolean).join(" · ")}
+              </Text>
+            </View>
+            {m.is_public && <View style={tl.dot} />}
+          </TouchableOpacity>
+        );
+      }}
+    />
+  );
+};
+
+const tl = StyleSheet.create({
+  header: { backgroundColor: "#EDE6D6", paddingVertical: 8, paddingHorizontal: 16 },
+  headerText: { fontSize: 15, color: SB.inkMuted },
+  row: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    paddingHorizontal: 16, paddingVertical: 12, marginBottom: 8,
+    backgroundColor: SB.cream,
+    borderWidth: 1, borderColor: SB.border, borderRadius: 8,
+    marginHorizontal: 16,
+    ...SB.cardShadow,
+  },
+  thumb: {
+    width: 52, height: 52, borderRadius: 4,
+    backgroundColor: SB.amberLight, overflow: "hidden",
+    borderWidth: 2, borderColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+  },
+  thumbIcon: { width: 24, height: 24, opacity: 0.3 },
+  rowBody: { flex: 1, gap: 2 },
+  rowTitle: { fontSize: 14, color: SB.ink },
+  rowMeta: { fontSize: 11, color: SB.inkMuted },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: SB.teal },
+});
+
+// ── Empty State ───────────────────────────────────────────────────────────
+
+const EmptyState = ({ caveat, onPost, sunnyLine, sunnyOpacity }: {
+  caveat: (bold?: boolean) => string | undefined;
+  onPost: () => void;
+  sunnyLine?: string | null;
+  sunnyOpacity: Animated.Value;
+}) => (
+  <View style={em.wrap}>
+    <View style={em.polaroid}>
+      <View style={em.photoArea}>
+        <Image source={require("../../assets/icon.png")} style={{ width: 52, height: 52, opacity: 0.4 }} resizeMode="contain" />
+      </View>
+      <View style={em.body}>
+        <Text style={[em.title, { fontFamily: caveat(true) }]}>your first memory is waiting</Text>
+        <Text style={[em.desc, { fontFamily: caveat(false) }]}>go do something. i'll be here.</Text>
+      </View>
+    </View>
+    {sunnyLine ? (
+      <Animated.Text style={[em.sunnyLine, { opacity: sunnyOpacity }]} numberOfLines={2}>
+        {sunnyLine}
+      </Animated.Text>
+    ) : null}
+    <TouchableOpacity style={em.btn} activeOpacity={0.88} onPress={onPost}>
+      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={em.btnInner}>
+        <Text style={em.btnText}>post an activity</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  </View>
+);
+
+const em = StyleSheet.create({
+  wrap: { flex: 1, alignItems: "center", paddingTop: 60, paddingHorizontal: 40, gap: 28 },
+  polaroid: {
+    width: W * 0.62, backgroundColor: "#fff",
+    borderWidth: 1.5, borderStyle: "dashed", borderColor: "#D4C9B0", borderRadius: 8,
+    ...SB.cardShadow,
+  },
+  photoArea: { height: 160, backgroundColor: SB.amberLight, alignItems: "center", justifyContent: "center", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  body: { padding: 14, alignItems: "center", gap: 4 },
+  title: { fontSize: 18, color: SB.inkMuted, textAlign: "center" },
+  desc: { fontSize: 13, color: SB.inkMuted, textAlign: "center" },
+  btn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden" },
+  btnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  btnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 8 },
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────
 
 interface ScrapbookScreenProps {
   activeTab: string;
   onTabPress: (tab: string) => void;
-  onMembershipPress?: () => void;
+  onPostPress?: () => void;
 }
 
-export const ScrapbookScreen = ({ activeTab, onTabPress, onMembershipPress }: ScrapbookScreenProps) => {
+export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: ScrapbookScreenProps) => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const [tab, setTab] = useState<"mine" | "friends">("mine");
-  const [, setSavedActivities] = useState<any[]>([]);
-  const [, setLoadingSaved] = useState(false);
-  const isGo = true;
+  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
+  const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
+  const [memories, setMemories] = useState<ScrapbookMemory[]>(MOCK_MEMORIES);
+  const [selectedMemory, setSelectedMemory] = useState<ScrapbookMemory | null>(null);
+  const sunnyEmptyText = useRef<string | null>(null);
+  const [sunnyEmptyVisible, setSunnyEmptyVisible] = useState(false);
+  const sunnyEmptyOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (tab !== "mine" || !user) return;
-    setLoadingSaved(true);
-    (async () => {
-      try {
-        const { data } = await supabase.from("profiles").select("saved_activities").eq("user_id", user.id).single();
-        setSavedActivities((data?.saved_activities as any[]) || []);
-      } catch {
-        setSavedActivities([]);
-      } finally {
-        setLoadingSaved(false);
-      }
-    })();
-  }, [tab, user]);
+    if (memories.length === 0) {
+      getSunnyResponse({ context: "emptyScrapbook" }).then(text => {
+        sunnyEmptyText.current = text;
+        setTimeout(() => {
+          setSunnyEmptyVisible(true);
+          Animated.timing(sunnyEmptyOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        }, 700);
+      });
+    }
+  }, []);
 
-  // Split memories into two columns for masonry
-  const leftCol = MOCK_MEMORIES.filter((_, i) => i % 2 === 0);
-  const rightCol = MOCK_MEMORIES.filter((_, i) => i % 2 === 1);
+  const caveat = useCallback(
+    (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined,
+    [fontsLoaded]
+  );
+
+  const handleMenu = (memory: ScrapbookMemory) => {
+    const options = ["edit memory", "delete memory", "cancel"];
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+        idx => {
+          if (idx === 0) setSelectedMemory(memory);
+          if (idx === 1) {
+            Alert.alert("delete memory?", "this can't be undone.", [
+              { text: "cancel", style: "cancel" },
+              {
+                text: "delete", style: "destructive",
+                onPress: async () => {
+                  setMemories(prev => prev.filter(m => m.id !== memory.id));
+                  await supabase.from("scrapbook_memories").delete().eq("id", memory.id);
+                },
+              },
+            ]);
+          }
+        }
+      );
+    } else {
+      Alert.alert(memory.title, undefined, [
+        { text: "edit memory", onPress: () => setSelectedMemory(memory) },
+        {
+          text: "delete memory", style: "destructive",
+          onPress: () => Alert.alert("delete?", "this can't be undone.", [
+            { text: "cancel", style: "cancel" },
+            { text: "delete", style: "destructive", onPress: async () => {
+              setMemories(prev => prev.filter(m => m.id !== memory.id));
+              await supabase.from("scrapbook_memories").delete().eq("id", memory.id);
+            }},
+          ]),
+        },
+        { text: "cancel", style: "cancel" },
+      ]);
+    }
+  };
+
+  const handleMemoryClosed = (updated?: Partial<ScrapbookMemory>) => {
+    if (updated && selectedMemory) {
+      setMemories(prev => prev.map(m => m.id === selectedMemory.id ? { ...m, ...updated } : m));
+    }
+    setSelectedMemory(null);
+  };
+
+  const bottomPad = 100 + insets.bottom;
 
   return (
-    <View style={s.container}>
+    <View style={[sc.container]}>
       {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={s.headerTitle}>scrapbook</Text>
-          <Text style={{ fontFamily: 'System', fontSize: 24 }}>📷</Text>
-        </View>
-        {/* mine / friends toggle */}
-        <View style={s.toggle}>
-          {(["mine", "friends"] as const).map(t => (
-            <TouchableOpacity key={t} onPress={() => setTab(t)} activeOpacity={0.8} style={s.toggleBtn}>
-              {tab === t ? (
-                <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.toggleActive}>
-                  <Text style={s.toggleActiveText}>{t}</Text>
-                </LinearGradient>
-              ) : (
-                <View style={s.toggleInactive}>
-                  <Text style={s.toggleInactiveText}>{t}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+      <View style={[sc.header, { paddingTop: insets.top + 8 }]}>
+        <Text style={[sc.title, { fontFamily: caveat(true) }]}>scrapbook</Text>
+        <View style={sc.headerRight}>
+          <TouchableOpacity
+            style={[sc.timelineBtn, viewMode === "timeline" && sc.timelineBtnActive]}
+            onPress={() => setViewMode(v => v === "grid" ? "timeline" : "grid")}
+            activeOpacity={0.75}
+          >
+            <Text style={[sc.timelineBtnText, viewMode === "timeline" && sc.timelineBtnTextActive]}>
+              timeline
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={sc.addBtn}
+            onPress={() => onPostPress?.()}
+            activeOpacity={0.8}
+          >
+            <Text style={sc.addBtnText}>+</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {!isGo ? (
-        // ── Locked / upgrade state ────────────────────────────
-        <ScrollView
-          style={s.scroll}
-          contentContainerStyle={[s.content, { paddingBottom: 100 + insets.bottom }]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={s.lockedBody}>
-            <SunnyAvatar expression="warm" size={64} />
-            <Text style={s.lockedTitle}>your adventures, all in one place.</Text>
-            <Text style={s.lockedDesc}>
-              upgrade to Tandem Go and every outing gets its own card. your people, your memories — right here.
-            </Text>
-            <TouchableOpacity style={s.upgradeBtn} activeOpacity={0.88} onPress={onMembershipPress}>
-              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.upgradeBtnInner}>
-                <Text style={s.upgradeBtnText}>Upgrade to Tandem Go</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          {/* Preview masonry (faded) */}
-          <Text style={s.previewLabel}>WHAT'S WAITING FOR YOU</Text>
-          <View style={s.masonryRow}>
-            {/* Left col */}
-            <View style={s.col}>
-              {leftCol.map((m, i) => (
-                <View key={m.id} style={[s.masonryCard, { height: CARD_HEIGHTS[i * 2] ?? 160, opacity: 0.35 }]}>
-                  <Image source={{ uri: m.photo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                  <View style={s.cardTag}>
-                    <Text style={s.cardTagText} numberOfLines={1}>{m.title}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-            {/* Right col */}
-            <View style={s.col}>
-              {rightCol.map((m, i) => (
-                <View key={m.id} style={[s.masonryCard, { height: CARD_HEIGHTS[i * 2 + 1] ?? 150, opacity: 0.35 }]}>
-                  <Image source={{ uri: m.photo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                  <View style={s.cardTag}>
-                    <Text style={s.cardTagText} numberOfLines={1}>{m.title}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
+      {/* Body */}
+      {viewMode === "timeline" ? (
+        <TimelineView memories={memories} caveat={caveat} onPress={setSelectedMemory} bottomPad={bottomPad} />
+      ) : memories.length === 0 ? (
+        <EmptyState
+          caveat={caveat}
+          onPost={() => onPostPress?.()}
+          sunnyLine={sunnyEmptyVisible ? sunnyEmptyText.current : null}
+          sunnyOpacity={sunnyEmptyOpacity}
+        />
       ) : (
-        // ── Unlocked masonry grid ──────────────────────────────
         <ScrollView
-          style={s.scroll}
-          contentContainerStyle={[s.content, { paddingBottom: 100 + insets.bottom }]}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 24, paddingBottom: bottomPad }}
         >
-          {MOCK_MEMORIES.length === 0 ? (
-            <View style={s.empty}>
-              <SunnyAvatar expression="warm" size={60} />
-              <Text style={s.emptyTitle}>your scrapbook is empty.</Text>
-              <Text style={s.emptyDesc}>join an activity and sunny will save the memory here.</Text>
-            </View>
-          ) : (
-            <View style={s.masonryRow}>
-              <View style={s.col}>
-                {leftCol.map((m, i) => (
-                  <MasonryCard key={m.id} memory={m} height={CARD_HEIGHTS[i * 2] ?? 160} />
-                ))}
-              </View>
-              <View style={s.col}>
-                {rightCol.map((m, i) => (
-                  <MasonryCard key={m.id} memory={m} height={CARD_HEIGHTS[i * 2 + 1] ?? 150} />
-                ))}
-              </View>
-            </View>
-          )}
+          {memories.map(m => (
+            <MemoryCard
+              key={m.id}
+              memory={m}
+              caveat={caveat}
+              onPress={() => setSelectedMemory(m)}
+              onMenu={() => handleMenu(m)}
+            />
+          ))}
         </ScrollView>
       )}
 
-      <BottomNav activeTab={activeTab} onTabPress={onTabPress} />
+      <BottomNav activeTab={activeTab} onTabPress={onTabPress} onPostPress={onPostPress} />
+
+      {selectedMemory && (
+        <MemoryDetailModal
+          memory={selectedMemory}
+          caveat={caveat}
+          onClose={handleMemoryClosed}
+        />
+      )}
     </View>
   );
 };
 
-const splitEmoji = (text: string): [string, string] => {
-  const match = text.match(/^(.*?)\s*([\u{1F000}-\u{1FFFF}\u{2600}-\u{27FF}\u{2300}-\u{23FF}].*)$/u);
-  return match ? [match[1], match[2]] : [text, ""];
-};
-
-const MasonryCard = ({ memory, height }: { memory: typeof MOCK_MEMORIES[0]; height: number }) => {
-  const [titleText, titleEmoji] = splitEmoji(memory.title);
-  return (
-  <View style={[s.masonryCard, { height }]}>
-    <Image source={{ uri: memory.photo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-    {/* Frosted tag at bottom */}
-    <View style={s.cardTag}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-        <Text style={s.cardTagText} numberOfLines={1}>{titleText}</Text>
-        {titleEmoji ? <Text style={{ fontFamily: 'System', fontSize: 11 }}>{titleEmoji}</Text> : null}
-      </View>
-    </View>
-    {/* User attribution below card */}
-    <View style={s.cardMeta}>
-      <View style={s.cardMetaAvatar}>
-        <Text style={s.cardMetaInitial}>{memory.user[0].toUpperCase()}</Text>
-      </View>
-      <Text style={s.cardMetaName}>{memory.user}</Text>
-    </View>
-  </View>
-  );
-};
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-
+const sc = StyleSheet.create({
+  container: { flex: 1, backgroundColor: SB.cream },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 12,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+    paddingHorizontal: 20, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: SB.border,
+    backgroundColor: SB.cream,
   },
-  headerTitle: { fontSize: 24, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
-
-  toggle: {
-    flexDirection: "row", backgroundColor: colors.surface,
-    borderRadius: radius.full, padding: 3,
+  title: { fontSize: 26, color: SB.ink },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  timelineBtn: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, borderColor: SB.border,
   },
-  toggleBtn: { overflow: "hidden", borderRadius: radius.full },
-  toggleActive: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.full },
-  toggleActiveText: { fontSize: 12, fontWeight: "700", color: colors.white },
-  toggleInactive: { paddingHorizontal: 14, paddingVertical: 6 },
-  toggleInactiveText: { fontSize: 12, fontWeight: "600", color: colors.muted },
-
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: H_PAD, paddingTop: 16, gap: 16 },
-
-  // Masonry
-  masonryRow: { flexDirection: "row", gap: COL_GAP },
-  col: { flex: 1, gap: COL_GAP },
-  masonryCard: {
-    width: COL_W, borderRadius: radius.md,
-    overflow: "hidden", backgroundColor: colors.surface,
-    marginBottom: 4,
+  timelineBtnActive: { backgroundColor: SB.tealLight, borderColor: SB.teal },
+  timelineBtnText: { fontSize: 13, color: SB.inkMuted, fontWeight: "600" },
+  timelineBtnTextActive: { color: SB.tealText },
+  addBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: SB.teal, alignItems: "center", justifyContent: "center",
   },
-  cardTag: {
-    position: "absolute", bottom: 8, left: 8, right: 8,
-    backgroundColor: "rgba(255,255,255,0.88)",
-    borderRadius: radius.full,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  cardTagText: { fontSize: 11, fontWeight: "700", color: colors.foreground },
-  cardMeta: {
-    position: "absolute", bottom: -26, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 4,
-  },
-  cardMetaAvatar: {
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: colors.tintTeal, alignItems: "center", justifyContent: "center",
-  },
-  cardMetaInitial: { fontSize: 9, fontWeight: "700", color: colors.teal },
-  cardMetaName: { fontSize: 11, color: colors.muted, fontWeight: "500" },
-
-  // Locked state
-  lockedBody: { alignItems: "center", gap: 14, paddingTop: 20, paddingBottom: 8 },
-  lockedTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground, textAlign: "center", maxWidth: 280, lineHeight: 26 },
-  lockedDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 280, lineHeight: 21 },
-  upgradeBtn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
-  upgradeBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  upgradeBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
-  previewLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.4, alignSelf: "flex-start" },
-
-  // Empty
-  empty: { alignItems: "center", paddingTop: 60, gap: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground },
-  emptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 21 },
+  addBtnText: { fontSize: 20, color: "#fff", lineHeight: 24, marginTop: -1 },
 });

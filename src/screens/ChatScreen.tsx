@@ -9,13 +9,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, shadows, gradients } from "../theme";
 
 interface ChatScreenProps {
-  convo: { id: string; name: string; photo: string };
+  convo: { id: string; name: string; photo: string; age?: number };
   onBack: () => void;
 }
 
 // Mock messages so the thread doesn't feel empty
 const MOCK_MESSAGES = [
-  { id: "m1", text: "hey! stoked you're in for the hike 🥾", sent: false },
+  { id: "m1", text: "hey! stoked you're in for the hike", sent: false },
   { id: "m2", text: "same! what time were you thinking?", sent: true },
   { id: "m3", text: "7am at the trailhead — there's parking on ridge rd", sent: false },
 ];
@@ -69,7 +69,7 @@ export const ChatScreen = ({ convo, onBack }: ChatScreenProps) => {
             </View>
           </View>
           <Text style={s.matchedName}>{convo.name}</Text>
-          <Text style={s.matchedHint}>you matched! say something good.</Text>
+          <Text style={s.matchedHint}>you're both in. coordinate the details.</Text>
         </View>
 
         {/* Message bubbles */}

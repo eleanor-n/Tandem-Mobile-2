@@ -27,6 +27,9 @@ export const colors = {
   // White/Black
   white: "#FFFFFF",
   black: "#000000",
+
+  // Screen-specific
+  welcomeBackground: "#F5F0E8",
 };
 
 export const gradients = {

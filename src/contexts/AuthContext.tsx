@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { supabase } from "../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase, handleSupabaseError } from "../lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -53,7 +54,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Initial session — handles app launch with existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const sessionTimeout = setTimeout(() => {
+      // Safety valve: if getSession hangs (e.g. AsyncStorage delay), unblock the UI
+      setLoading(false);
+    }, 5000);
+
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      clearTimeout(sessionTimeout);
+      if (error) {
+        // Stale or invalid token — clear it and force sign-in
+        await handleSupabaseError(error);
+        await AsyncStorage.multiRemove(["supabase.auth.token", "tandem_has_onboarded", "tandem_sunny_welcomed"]);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -64,7 +80,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (
+        (event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") &&
+        !session
+      ) {
+        // Stale token detected — clear local state and drop to sign-in
+        await AsyncStorage.multiRemove(["supabase.auth.token", "tandem_has_onboarded", "tandem_sunny_welcomed"]);
+        setSession(null);
+        setUser(null);
+        setOnboardingCompleted(null);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user && event === "SIGNED_IN") {
@@ -76,11 +104,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setOnboardingCompleted(null);
         setLoading(false);
       }
-      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION, etc.
-      // — session already handled by getSession() above; no need to re-check onboarding
+      // TOKEN_REFRESHED with valid session, USER_UPDATED, INITIAL_SESSION, etc.
+      // — no action needed
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(sessionTimeout);
+      subscription.unsubscribe();
+    };
   }, [checkOnboarding]);
 
   const signOut = async () => {

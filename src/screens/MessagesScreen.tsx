@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SunnyAvatar from "../components/SunnyAvatar";
+import { getSunnyResponse } from "../lib/sunny";
 import { colors, radius, shadows } from "../theme";
 
 export interface Conversation {
@@ -49,12 +50,16 @@ const MOCK_CONVERSATIONS: Conversation[] = [
 
 interface MessagesScreenProps {
   onBack: () => void;
-  onOpenChat: (convo: { id: string; name: string; photo: string }) => void;
+  onOpenChat: (convo: { id: string; name: string; photo: string; age?: number }) => void;
 }
 
 export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
   const insets = useSafeAreaInsets();
   const conversations = MOCK_CONVERSATIONS;
+  const [sunnyEmptyDesc, setSunnyEmptyDesc] = useState("conversations start here when you connect on an activity.");
+  useEffect(() => {
+    getSunnyResponse({ context: "emptyMessages" }).then(setSunnyEmptyDesc);
+  }, []);
 
   return (
     <View style={s.container}>
@@ -65,7 +70,7 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
         </TouchableOpacity>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text style={s.title}>messages</Text>
-          <Text style={{ fontFamily: 'System', fontSize: 22 }}>💬</Text>
+          <Text style={{ fontSize: 22, fontFamily: undefined }}>{'\u200B'}💬{'\u200B'}</Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
@@ -74,7 +79,7 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
         <View style={s.empty}>
           <SunnyAvatar expression="warm" size={60} />
           <Text style={s.emptyTitle}>no messages yet.</Text>
-          <Text style={s.emptyDesc}>conversations start here when you connect on an activity.</Text>
+          <Text style={s.emptyDesc}>{sunnyEmptyDesc}</Text>
         </View>
       ) : (
         <ScrollView
@@ -85,7 +90,7 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
             <TouchableOpacity
               key={c.id}
               style={[s.row, c.unread && s.rowUnread]}
-              onPress={() => onOpenChat({ id: c.id, name: c.name, photo: c.photo })}
+              onPress={() => onOpenChat({ id: c.id, name: c.name, photo: c.photo, age: c.age })}
               activeOpacity={0.85}
             >
               {/* Teal left bar on unread */}

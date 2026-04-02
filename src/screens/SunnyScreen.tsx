@@ -2,14 +2,17 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Animated, KeyboardAvoidingView, Platform,
-  Dimensions, Alert,
+  Dimensions, Alert, Image, Linking,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import SunnyAvatar, { SunnyExpression } from "../components/SunnyAvatar";
+import { SplashAnimationScreen } from "./SplashAnimationScreen";
+import { registerForPushNotifications } from "../lib/notifications";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, gradients, shadows } from "../theme";
@@ -61,6 +64,12 @@ const STEPS = [
     expression: "warm" as SunnyExpression,
     inputType: "text",
     placeholder: "Your first name",
+  },
+  {
+    key: "photo",
+    messages: ["let's put a face to the name. add a profile photo."],
+    expression: "warm" as SunnyExpression,
+    inputType: "photo",
   },
   {
     key: "birthday",
@@ -199,44 +208,27 @@ const PROGRESS_MAP: Record<number, number> = {
 const getSunnyReaction = async (
   userAnswer: string,
   questionKey: string,
-  userName: string
+  userName: string,
 ): Promise<{ message: string; expression: SunnyExpression }> => {
-  const fallback = FALLBACK_REACTIONS[userAnswer];
+  const name = userName || "you";
 
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 80,
-        system: SUNNY_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: `The user's name is ${userName || "this person"}. They were asked about "${questionKey}" and answered: "${userAnswer}". Give a short, genuine Sunny reaction. Reply with ONLY JSON in this exact format with no other text: {"message": "your reaction here", "expression": "warm"}. Expression must be one of: warm, excited, smirky, proud, celebratory.`,
-          },
-        ],
-      }),
-    });
+  const reactions: Record<string, { message: string; expression: SunnyExpression }> = {
+    name: { message: `love that name.`, expression: "warm" },
+    birthday: { message: `noted.`, expression: "warm" },
+    gender: { message: `got it.`, expression: "warm" },
+    occupation: { message: `interesting. bet there's a story there.`, expression: "warm" },
+    personality: { message: `that actually makes a lot of sense for you.`, expression: "warm" },
+    humor: { message: `good taste. we're going to get along.`, expression: "smirky" },
+    usage: { message: `you're in the right place.`, expression: "warm" },
+    ideal_saturday: { message: `honestly that sounds like exactly the kind of day tandem was built for.`, expression: "excited" },
+    friend_who: { message: `that person exists. and they're probably already looking for someone like you.`, expression: "proud" },
+    deep_prompt: { message: `okay i didn't expect that. in the best way.`, expression: "warm" },
+    done: { message: `alright. your people are out there. let's go find them.`, expression: "celebratory" },
+  };
 
-    if (!response.ok) throw new Error("API error");
-
-    const data = await response.json();
-    const text = data.content?.[0]?.text || "";
-    const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
-
-    if (parsed.message && parsed.expression) {
-      return {
-        message: parsed.message,
-        expression: parsed.expression as SunnyExpression,
-      };
-    }
-    throw new Error("Invalid response shape");
-  } catch {
-    return fallback || getGenericFallback();
-  }
+  const reaction = reactions[questionKey];
+  if (reaction) return reaction;
+  return { message: "that's good to know.", expression: "warm" };
 };
 
 // ─── Typing Indicator ─────────────────────────────────────────
@@ -331,47 +323,66 @@ const MessageBubble = ({
 };
 
 // ─── Option Chips (mobile-friendly compact layout) ────────────
+const GRID_CHIP_W = (SCREEN_W - 24 - 18) / 4;
+
 const OptionChips = ({
-  options, multiSelect, selected, onSelect, onDone,
+  options, multiSelect, selected, onSelect, onDone, gridMode,
 }: {
   options: string[];
   multiSelect?: boolean;
   selected: string[];
   onSelect: (v: string) => void;
   onDone?: () => void;
-}) => (
+  gridMode?: boolean;
+}) => {
+  const mainOptions = gridMode ? options.slice(0, -1) : options;
+  const lastOption = gridMode ? options[options.length - 1] : null;
+
+  const renderChip = (opt: string, extraStyle?: object) => {
+    const isSelected = selected.includes(opt);
+    return (
+      <TouchableOpacity
+        key={opt}
+        onPress={() => onSelect(opt)}
+        activeOpacity={0.8}
+        style={[
+          styles.optionChip,
+          isSelected && styles.optionChipSelected,
+          gridMode && { width: GRID_CHIP_W, height: 44, justifyContent: "center", alignItems: "center" },
+          extraStyle,
+        ]}
+      >
+        {isSelected ? (
+          <LinearGradient
+            colors={gradients.brand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.optionChipGradient, gridMode && { flex: 1, width: "100%", alignItems: "center", justifyContent: "center" }]}
+          >
+            <Text style={[styles.optionChipTextSelected, gridMode && { fontSize: 12 }]}>{opt}</Text>
+          </LinearGradient>
+        ) : (
+          <Text style={[styles.optionChipText, gridMode && { fontSize: 12 }]}>{opt}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
   <View style={styles.chipsContainer}>
     <ScrollView
       horizontal={false}
       showsVerticalScrollIndicator={false}
       style={styles.chipsScrollArea}
     >
-      <View style={styles.chipsWrap}>
-        {options.map(opt => {
-          const isSelected = selected.includes(opt);
-          return (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => onSelect(opt)}
-              activeOpacity={0.8}
-              style={[styles.optionChip, isSelected && styles.optionChipSelected]}
-            >
-              {isSelected ? (
-                <LinearGradient
-                  colors={gradients.brand}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.optionChipGradient}
-                >
-                  <Text style={styles.optionChipTextSelected}>{opt}</Text>
-                </LinearGradient>
-              ) : (
-                <Text style={styles.optionChipText}>{opt}</Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+      <View style={[styles.chipsWrap, gridMode && { gap: 6 }]}>
+        {mainOptions.map(opt => renderChip(opt))}
       </View>
+      {gridMode && lastOption && (
+        <View style={{ marginTop: 6 }}>
+          {renderChip(lastOption, { width: "100%" as any })}
+        </View>
+      )}
     </ScrollView>
 
     {multiSelect && onDone && (
@@ -396,7 +407,8 @@ const OptionChips = ({
       </TouchableOpacity>
     )}
   </View>
-);
+  );
+};
 
 // ─── Birthday Input (auto-formats MM/DD/YYYY) ─────────────────
 const BirthdayInput = ({ onSubmit }: { onSubmit: (v: string) => void }) => {
@@ -508,6 +520,7 @@ const PromptInput = ({
           return;
         }
 
+        let submitUri = uri;
         if (userId) {
           try {
             const timestamp = Date.now();
@@ -515,10 +528,12 @@ const PromptInput = ({
             const response = await fetch(uri);
             const blob = await response.blob();
             const { error } = await supabase.storage
-              .from("voice-memos")
-              .upload(path, blob, { contentType: "audio/m4a" });
-            if (error) {
-              // Bucket missing or upload failed — proceed with local URI
+              .from("deep-prompt-media")
+              .upload(path, blob, { contentType: "audio/m4a", upsert: true });
+            if (!error) {
+              const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
+              submitUri = urlData.publicUrl;
+            } else {
               console.warn("Voice upload failed:", error.message);
             }
           } catch (uploadErr) {
@@ -526,7 +541,7 @@ const PromptInput = ({
           }
         }
 
-        onSubmit(uri, "voice");
+        onSubmit(submitUri, "voice");
       } catch (err: any) {
         Alert.alert(
           "Recording failed",
@@ -579,6 +594,7 @@ const PromptInput = ({
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
 
+      let videoSubmitUri = asset.uri;
       if (userId) {
         try {
           const timestamp = Date.now();
@@ -586,22 +602,20 @@ const PromptInput = ({
           const response = await fetch(asset.uri);
           const blob = await response.blob();
           const { error } = await supabase.storage
-            .from("videos")
-            .upload(path, blob, { contentType: "video/mp4" });
-          if (error) {
-            // Bucket missing or upload failed — show friendly message but still save the answer
-            if (error.message?.toLowerCase().includes("bucket") || (error as any).statusCode === 404 || (error as any).statusCode === "404") {
-              Alert.alert("Video upload unavailable right now", "Your answer was recorded. It will sync when storage is ready.");
-            } else {
-              console.warn("Video upload failed:", error.message);
-            }
+            .from("deep-prompt-media")
+            .upload(path, blob, { contentType: "video/mp4", upsert: true });
+          if (!error) {
+            const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
+            videoSubmitUri = urlData.publicUrl;
+          } else {
+            console.warn("Video upload failed:", error.message);
           }
         } catch (uploadErr) {
           console.warn("Video upload error:", uploadErr);
         }
       }
 
-      onSubmit(asset.uri, "video");
+      onSubmit(videoSubmitUri, "video");
     } catch (err: any) {
       Alert.alert(
         "Video recording failed",
@@ -744,7 +758,10 @@ interface SunnyScreenProps {
 
 export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [showSplash, setShowSplash] = useState<boolean | null>(null);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+  const [pendingCompleteData, setPendingCompleteData] = useState<Record<string, any> | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -753,10 +770,19 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const [isTalking, setIsTalking] = useState(false);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [profileData, setProfileData] = useState<Record<string, any>>({});
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [userName, setUserName] = useState("");
   const [deepPromptQuestion, setDeepPromptQuestion] = useState<string | null>(null);
+  const [showAgeGate, setShowAgeGate] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const progressAnim = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    AsyncStorage.getItem("splash_shown").then(val => {
+      setShowSplash(!val);
+    });
+  }, []);
 
   const step = STEPS[stepIndex];
   const isShowingInput = messagesShown >= step.messages.length;
@@ -846,7 +872,8 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     setProfileData(data);
 
     if (step.key === "done") {
-      setTimeout(() => onComplete(data), 800);
+      setPendingCompleteData(data);
+      setTimeout(() => setShowNotifPrompt(true), 800);
       return;
     }
 
@@ -871,13 +898,19 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     advanceWithReaction(value, step.key);
   };
 
-  const handleTextSubmit = (value: string) => {
+  const handleTextSubmit = async (value: string) => {
     addUserMessage(value);
     const data = { ...profileData, [step.key]: value };
     setProfileData(data);
 
     if (step.key === "name") {
       setUserName(value);
+      const nameValue = value;
+      if (nameValue) {
+        await supabase.auth.updateUser({
+          data: { first_name: nameValue, full_name: nameValue },
+        });
+      }
       setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
@@ -897,6 +930,17 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
         }, 1000);
       }, 600);
       return;
+    }
+
+    if (step.key === "birthday") {
+      const parts = value.split("/").map(Number);
+      const dob = new Date(parts[2], parts[0] - 1, parts[1]);
+      const ageMs = Date.now() - dob.getTime();
+      const age = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+      if (age < 18) {
+        setShowAgeGate(true);
+        return;
+      }
     }
 
     advanceWithReaction(value, step.key);
@@ -920,13 +964,28 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   };
 
   // Stage 2 of deep_prompt: user submits their answer
-  const handlePromptSubmit = (value: string, mode: ResponseMode) => {
+  const handlePromptSubmit = async (value: string, mode: ResponseMode) => {
     const displayText = mode === "voice" ? "voice memo" : mode === "video" ? "video recorded" : value;
     addUserMessage(displayText);
     const promptData = deepPromptQuestion
       ? { prompt_question: deepPromptQuestion, prompt_answer: value }
       : value;
     const data = { ...profileData, [step.key]: promptData };
+    // Save media URL to deep_prompt_media keyed by the prompt question
+    if ((mode === "voice" || mode === "video") && deepPromptQuestion && user) {
+      try {
+        const { data: existing } = await supabase
+          .from("profiles")
+          .select("deep_prompt_media")
+          .eq("user_id", user.id)
+          .single();
+        const current = (existing?.deep_prompt_media as Record<string, any>) || {};
+        await supabase
+          .from("profiles")
+          .update({ deep_prompt_media: { ...current, [deepPromptQuestion]: { uri: value, type: mode } } } as any)
+          .eq("user_id", user.id);
+      } catch { /* non-blocking */ }
+    }
     setProfileData(data);
     advanceWithReaction(mode === "voice" || mode === "video" ? displayText : value, step.key);
   };
@@ -937,6 +996,51 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     const data = { ...profileData, [step.key]: selectedChips };
     setProfileData(data);
     advanceWithReaction(selectedChips.join(", "), step.key);
+  };
+
+  const handlePhotoUpload = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "photo access needed",
+        "please go to Settings > Tandem and allow photo library access.",
+        [
+          { text: "cancel", style: "cancel" },
+          { text: "open settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"] as any,
+      allowsEditing: true,
+      aspect: [1, 1] as [number, number],
+      quality: 0.85,
+      allowsMultipleSelection: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const uri = result.assets[0].uri;
+    setProfilePhotoUri(uri);
+    setPhotoUploading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
+      const path = `${user?.id}/profile.${ext}`;
+      const { error } = await supabase.storage.from("profile-photos").upload(path, blob, { contentType: `image/${ext}`, upsert: true });
+      if (!error) {
+        const { data: urlData } = supabase.storage.from("profile-photos").getPublicUrl(path);
+        console.log("Profile photo saved:", urlData.publicUrl);
+        const data = { ...profileData, photos: [urlData.publicUrl] };
+        setProfileData(data);
+      }
+    } catch (e) {
+      console.warn("Photo upload failed:", e);
+    } finally {
+      setPhotoUploading(false);
+    }
+    addUserMessage("photo added ✓");
+    advanceWithReaction("photo added", "photo", true);
   };
 
   const handleSkip = () => {
@@ -969,6 +1073,37 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     }
     return true;
   };
+
+  if (showSplash === null) return null; // waiting for AsyncStorage check
+  if (showSplash) {
+    return <SplashAnimationScreen onComplete={() => setShowSplash(false)} />;
+  }
+
+  if (showAgeGate) {
+    return (
+      <View style={styles.ageGate}>
+        <SunnyAvatar expression="warm" size={72} />
+        <Text style={styles.ageGateTitle}>hey, we love the enthusiasm.</Text>
+        <Text style={styles.ageGateBody}>
+          tandem is for adults 18 and up. come back when you're ready — we'll be here.
+        </Text>
+        <TouchableOpacity
+          style={styles.ageGateBtn}
+          activeOpacity={0.85}
+          onPress={() => signOut()}
+        >
+          <LinearGradient
+            colors={gradients.brand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.ageGateBtnInner}
+          >
+            <Text style={styles.ageGateBtnText}>got it</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -1043,6 +1178,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
                 selected={selectedChips}
                 onSelect={toggleChip}
                 onDone={step.inputType === "multi" ? handleMultiDone : undefined}
+                gridMode={step.key === "personality"}
               />
             )}
             {step.inputType === "text" && (
@@ -1053,6 +1189,23 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
             )}
             {step.inputType === "birthday" && (
               <BirthdayInput onSubmit={handleTextSubmit} />
+            )}
+            {step.inputType === "photo" && (
+              <View style={styles.photoPickerArea}>
+                {profilePhotoUri ? (
+                  <View style={styles.photoPreviewRow}>
+                    <Image source={{ uri: profilePhotoUri }} style={styles.photoPreview} />
+                    <TouchableOpacity onPress={handlePhotoUpload} style={styles.photoChangeBtn} activeOpacity={0.7}>
+                      <Text style={styles.photoChangeBtnText}>{photoUploading ? "uploading..." : "change photo"}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={handlePhotoUpload} style={styles.photoPickerBtn} activeOpacity={0.8}>
+                    <Ionicons name="camera-outline" size={22} color={colors.teal} />
+                    <Text style={styles.photoPickerText}>choose a photo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
             {step.inputType === "prompt_pick" && (
               deepPromptQuestion === null ? (
@@ -1080,6 +1233,44 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
           </>
         )}
       </View>
+
+      {/* Notification permission prompt overlay */}
+      {showNotifPrompt && (
+        <View style={styles.notifOverlay}>
+          <SunnyAvatar expression="warm" size={64} />
+          <Text style={styles.notifTitle}>one last thing.</Text>
+          <Text style={styles.notifBody}>
+            sunny needs to be able to reach you. enable notifications so you know when someone wants to tandem.
+          </Text>
+          <TouchableOpacity
+            style={styles.notifYesBtn}
+            activeOpacity={0.85}
+            onPress={async () => {
+              setShowNotifPrompt(false);
+              await registerForPushNotifications();
+              onComplete(pendingCompleteData ?? {});
+            }}
+          >
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.notifYesBtnInner}
+            >
+              <Text style={styles.notifYesBtnText}>yes please</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setShowNotifPrompt(false);
+              onComplete(pendingCompleteData ?? {});
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.notifSkip}>maybe later</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -1113,6 +1304,46 @@ const styles = StyleSheet.create({
     color: colors.muted,
     letterSpacing: 0.5,
   },
+
+  // Age gate
+  ageGate: {
+    flex: 1, backgroundColor: colors.background,
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 36, gap: 16,
+  },
+  ageGateTitle: {
+    fontSize: 22, fontFamily: "Quicksand-Bold",
+    color: colors.foreground, textAlign: "center",
+  },
+  ageGateBody: {
+    fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22,
+  },
+  ageGateBtn: {
+    width: "100%", height: 52, borderRadius: 26, overflow: "hidden", marginTop: 8,
+  },
+  ageGateBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  ageGateBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+
+  // Notification prompt overlay
+  notifOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: colors.background,
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 36, gap: 16,
+  },
+  notifTitle: {
+    fontSize: 22, fontFamily: "Quicksand-Bold",
+    color: colors.foreground, textAlign: "center",
+  },
+  notifBody: {
+    fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22,
+  },
+  notifYesBtn: {
+    width: "100%", height: 52, borderRadius: 26, overflow: "hidden", marginTop: 8,
+  },
+  notifYesBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  notifYesBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  notifSkip: { fontSize: 13, color: colors.muted, marginTop: 4 },
 
   chat: { flex: 1 },
   chatContent: { paddingHorizontal: 16, paddingTop: 16 },
@@ -1328,6 +1559,19 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.white,
   },
+
+  // Photo picker
+  photoPickerArea: { paddingHorizontal: 16, paddingVertical: 8 },
+  photoPickerBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderWidth: 1.5, borderColor: colors.teal, borderStyle: "dashed", borderRadius: 12,
+    paddingVertical: 20, backgroundColor: colors.background,
+  },
+  photoPickerText: { fontSize: 15, fontWeight: "600", color: colors.teal },
+  photoPreviewRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  photoPreview: { width: 64, height: 64, borderRadius: 32 },
+  photoChangeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  photoChangeBtnText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
 
   // Skip
   skipBtn: {

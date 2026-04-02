@@ -10,10 +10,10 @@ Tandem is a **platonic social connection app** where users post activity-based l
 
 **Tagline:** *"The activity is the icebreaker. The companion makes the memory."*
 
-**Platform:** iOS-first native mobile app (React Native / Expo)
-**Project path:** `~/Desktop/tandem-native`
-**Supabase project ID:** `ccntlaunczirvntnsjbm`
-**Website:** thetandemweb.com
+**Platform:** iOS-first native mobile app (React Native / Expo)  
+**Project path:** `~/Desktop/tandem-native`  
+**Supabase project ID:** `ccntlaunczirvntnsjbm`  
+**Website:** thetandemweb.com  
 **Contact:** tandemapp.hq@gmail.com
 
 ---
@@ -305,8 +305,8 @@ Since navigation is state-based in `App.tsx`, there are no URL routes. Screens a
 
 ### Bottom Tab Bar
 
-Tabs: **Discover, Map, Post (center CTA), Messages, Profile**
-Active tab icon: teal (`#2DD4BF`)
+Tabs: **Discover, Map, Post (center CTA), Messages, Profile**  
+Active tab icon: teal (`#2DD4BF`)  
 Inactive: `#6B7280`
 
 ---
@@ -343,7 +343,7 @@ Membership cards in `/settings/membership`:
 ### Do-Not-Break Rules
 
 - **Never hardcode credentials.** All keys/URLs come from `.env` or Supabase Edge Function secrets.
-- **Age is shown ONLY on ProfileScreen**, displayed as "[X] years old" below the user's name. Age is computed from the birthday field using calculateAge(). Do NOT show age attached to a name anywhere (no "Maya, 22" format). Do NOT show age in MessagesScreen, ChatScreen, activity cards, host strips, or request rows.
+- **Never show age on any user-facing UI.** No "Maya, 22" anywhere. First name only.
 - **Never make the background pure white (`#FFFFFF`).** Always `#FAFAF6`.
 - **Never use teal/gradient as a full screen background.**
 - **Never add dating-profile style fields** (YOU BOTH, comfort show, etc.) to activity cards.

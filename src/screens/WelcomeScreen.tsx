@@ -129,7 +129,7 @@ export const WelcomeScreen = ({
             end={{ x: 1, y: 0 }}
             style={s.ctaGradient}
           >
-            <Text style={s.ctaText}>sign up  →</Text>
+            <Text style={s.ctaText}>join tandem →</Text>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -149,7 +149,7 @@ const POLAROID_W = W * 0.55;
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F0E8",
+    backgroundColor: colors.welcomeBackground,
     paddingHorizontal: 28,
   },
   logoRow: {

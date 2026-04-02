@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export type Tier = "free" | "go" | "trail";
 
-export const FREE_IM_IN_LIMIT = 3;
+export const FREE_IM_IN_LIMIT = 5;
 
 export function useMembershipTier() {
   const { user } = useAuth();

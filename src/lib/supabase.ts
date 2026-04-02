@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, AuthApiError } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SUPABASE_URL = "https://ccntlaunczirvntnsjbm.supabase.co";
@@ -13,3 +13,20 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     flowType: "pkce",
   },
 });
+
+const STALE_SESSION_KEYS = [
+  "supabase.auth.token",
+  "tandem_has_onboarded",
+  "tandem_sunny_welcomed",
+];
+
+export const handleSupabaseError = async (error: unknown) => {
+  if (
+    error instanceof AuthApiError &&
+    (error.message.includes("Refresh Token Not Found") ||
+      error.message.includes("Invalid Refresh Token"))
+  ) {
+    await supabase.auth.signOut();
+    await AsyncStorage.multiRemove(STALE_SESSION_KEYS);
+  }
+};

@@ -10,22 +10,33 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Switch,
+  Animated,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomNav } from "../components/BottomNav";
 import SunnyAvatar from "../components/SunnyAvatar";
 import { UpsellSheet } from "../components/UpsellSheet";
-import { PremiumLock } from "../components/PremiumLock";
+import { AppWalkthrough } from "../components/AppWalkthrough";
 import { useMembershipTier } from "../hooks/useMembershipTier";
 import { supabase } from "../lib/supabase";
+import { getSunnyResponse } from "../lib/sunny";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
 
 
-// Dimensions imported for future use
+const calculateAge = (birthday: string | null): number | null => {
+  if (!birthday) return null;
+  return Math.floor(
+    (Date.now() - new Date(birthday).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  );
+};
 
 // ── Mock activity data ───────────────────────────────────────────────────────
 const MOCK_ACTIVITIES = [
@@ -38,13 +49,29 @@ const MOCK_ACTIVITIES = [
     location: "Nassau St",
     date: "Saturday, April 5",
     time: "10am",
+    tags: ["Free", "This Weekend", "Indoors"],
+    vibeEmojis: ["☀️ outdoor", "🧋 casual", "👋 first-timers welcome"],
     goingCount: 2,
     goingAvatars: [
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
       "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
     ],
     vibe: "casual saturday morning with good lattes and better conversation.",
-    host: { name: "maya", user_id: "mock-host-1", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face" },
+    host: {
+      name: "maya", user_id: "mock-host-1",
+      photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
+      rating: 4.9, bio: "coffee nerd and weekend wanderer",
+      activitiesCount: 12, companionsCount: 8,
+      sharedInterests: ["coffee", "live music"],
+      promptAnswers: [
+        { question: "a hill i'd die on", answer: "oat milk is not a personality. but it helps." },
+        { question: "my friends would say my green flag is", answer: "i always show up on time and bring snacks." },
+      ],
+      previousActivities: [
+        { title: "morning espresso run", location: "Nassau St", date: "Mar 22", category: "coffee" },
+        { title: "jazz at Small World", location: "Nassau St", date: "Mar 15", category: "concerts" },
+      ],
+    },
   },
   {
     id: "a2",
@@ -55,6 +82,8 @@ const MOCK_ACTIVITIES = [
     location: "Hillsborough",
     date: "Sunday, April 6",
     time: "8:30am",
+    tags: ["Outdoors", "This Weekend", "Active"],
+    vibeEmojis: ["🥾 outdoors", "🌅 early bird", "🎒 bring layers"],
     goingCount: 5,
     goingAvatars: [
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
@@ -62,7 +91,21 @@ const MOCK_ACTIVITIES = [
       "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
     ],
     vibe: "early start, always worth it. bring snacks and layers.",
-    host: { name: "alex", user_id: "mock-host-2", photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" },
+    host: {
+      name: "alex", user_id: "mock-host-2",
+      photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
+      rating: 4.8, bio: "trail runner, always chasing sunrise views",
+      activitiesCount: 18, companionsCount: 14,
+      sharedInterests: ["hiking", "fitness"],
+      promptAnswers: [
+        { question: "a hill i'd die on", answer: "trekking poles are not optional. they just aren't." },
+        { question: "my friends would say my green flag is", answer: "i've never once cancelled a hike because of clouds." },
+      ],
+      previousActivities: [
+        { title: "canal path run", location: "D&R Canal", date: "Mar 29", category: "fitness" },
+        { title: "rocky hill loop", location: "Rocky Hill", date: "Mar 8", category: "hiking" },
+      ],
+    },
   },
   {
     id: "a3",
@@ -73,12 +116,28 @@ const MOCK_ACTIVITIES = [
     location: "Princeton Farmers Market",
     date: "Saturday, April 5",
     time: "9am",
+    tags: ["Free", "This Weekend", "Outdoors"],
+    vibeEmojis: ["🧺 outdoors", "☕ casual", "🆓 free"],
     goingCount: 3,
     goingAvatars: [
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
     ],
     vibe: "fresh bread, good people. best way to start the weekend.",
-    host: { name: "sam", user_id: "mock-host-3", photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face" },
+    host: {
+      name: "sam", user_id: "mock-host-3",
+      photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
+      rating: 5.0, bio: "farmers market regular, always finds the best stands",
+      activitiesCount: 7, companionsCount: 5,
+      sharedInterests: ["markets", "coffee"],
+      promptAnswers: [
+        { question: "a hill i'd die on", answer: "the sourdough from the corner stand is unmatched. fight me." },
+        { question: "my friends would say my green flag is", answer: "i always find the most interesting vendor and introduce everyone." },
+      ],
+      previousActivities: [
+        { title: "west side market stroll", location: "West Side", date: "Mar 22", category: "markets" },
+        { title: "sunday brunch crawl", location: "Downtown", date: "Mar 9", category: "coffee" },
+      ],
+    },
   },
   {
     id: "a4",
@@ -89,13 +148,29 @@ const MOCK_ACTIVITIES = [
     location: "Little Tokyo",
     date: "Friday, April 4",
     time: "9pm",
+    tags: ["This Week", "Evening", "Indoors"],
+    vibeEmojis: ["🎷 live music", "🌙 evening", "👗 come as you are"],
     goingCount: 4,
     goingAvatars: [
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
       "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
     ],
     vibe: "late-night jazz and good drinks. dress however you want.",
-    host: { name: "jamie", user_id: "mock-host-4", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face" },
+    host: {
+      name: "jamie", user_id: "mock-host-4",
+      photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
+      rating: 4.7, bio: "music lover, always finding the best live shows",
+      activitiesCount: 9, companionsCount: 6,
+      sharedInterests: ["concerts", "live music"],
+      promptAnswers: [
+        { question: "a hill i'd die on", answer: "if you're talking during the set, we can't be friends." },
+        { question: "my friends would say my green flag is", answer: "i always find the best spot and save you a seat." },
+      ],
+      previousActivities: [
+        { title: "indie night at the echo", location: "Echo Park", date: "Mar 28", category: "concerts" },
+        { title: "open mic at the griffith", location: "Griffith Park", date: "Mar 14", category: "concerts" },
+      ],
+    },
   },
   {
     id: "a5",
@@ -106,13 +181,29 @@ const MOCK_ACTIVITIES = [
     location: "Venice Beach",
     date: "Sunday, April 6",
     time: "11am",
+    tags: ["Outdoors", "Active", "Free"],
+    vibeEmojis: ["🏐 active", "🌊 outdoors", "🆓 free"],
     goingCount: 6,
     goingAvatars: [
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
     ],
     vibe: "no experience needed. just show up.",
-    host: { name: "riley", user_id: "mock-host-5", photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face" },
+    host: {
+      name: "riley", user_id: "mock-host-5",
+      photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face",
+      rating: 4.9, bio: "beach volleyball regular, all skill levels welcome",
+      activitiesCount: 22, companionsCount: 17,
+      sharedInterests: ["fitness", "outdoors"],
+      promptAnswers: [
+        { question: "a hill i'd die on", answer: "sunscreen is not optional. i will hand it to you." },
+        { question: "my friends would say my green flag is", answer: "i cheer for everyone, even total beginners." },
+      ],
+      previousActivities: [
+        { title: "morning beach run", location: "Venice Beach", date: "Mar 30", category: "fitness" },
+        { title: "sunset volleyball", location: "Santa Monica", date: "Mar 16", category: "fitness" },
+      ],
+    },
   },
 ];
 
@@ -170,18 +261,34 @@ const FALLBACK_PHOTOS: Record<string, string> = {
   default: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800",
 };
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  coffee: "☕", hiking: "🥾", markets: "🛍", concerts: "🎵", fitness: "💪", sports: "🏃",
+const CATEGORY_ICON: Record<string, string> = {
+  coffee: "cafe-outline",
+  hiking: "walk-outline",
+  markets: "bag-outline",
+  concerts: "musical-notes-outline",
+  fitness: "barbell-outline",
+  sports: "football-outline",
+  default: "compass-outline",
+};
+
+const CATEGORY_GRADIENT: Record<string, [string, string]> = {
+  coffee:   ["#C8956C", "#A0695A"],
+  hiking:   ["#5BA85E", "#3D7A40"],
+  markets:  ["#E8A838", "#C68A20"],
+  concerts: ["#7B5EA7", "#5A3D88"],
+  fitness:  ["#4A90D9", "#2D6BB5"],
+  sports:   ["#E05C4B", "#B83C2E"],
+  default:  ["#2DD4BF", "#3B82F6"],
 };
 
 const FILTERS = [
-  { key: "all",      label: "all",       emoji: "" },
-  { key: "coffee",   label: "coffee",    emoji: "☕" },
-  { key: "hiking",   label: "hiking",    emoji: "🥾" },
-  { key: "markets",  label: "markets",   emoji: "🛍" },
-  { key: "concerts", label: "concerts",  emoji: "🎵" },
-  { key: "fitness",  label: "fitness",   emoji: "💪" },
-  { key: "sports",   label: "sports",    emoji: "🏃" },
+  { key: "all",      label: "all",       icon: "" },
+  { key: "coffee",   label: "coffee",    icon: "cafe-outline" },
+  { key: "hiking",   label: "hiking",    icon: "walk-outline" },
+  { key: "markets",  label: "markets",   icon: "bag-outline" },
+  { key: "concerts", label: "concerts",  icon: "musical-notes-outline" },
+  { key: "fitness",  label: "fitness",   icon: "barbell-outline" },
+  { key: "sports",   label: "sports",    icon: "football-outline" },
 ];
 
 
@@ -190,19 +297,40 @@ interface DiscoverScreenProps {
   onTabPress: (tab: string) => void;
   onMessagesPress?: () => void;
   onMembershipPress?: () => void;
+  openPostModal?: boolean;
+  onPostModalOpened?: () => void;
 }
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const rawName = user?.user_metadata?.full_name
+  const emailPrefix = user?.email?.split("@")[0] ?? "";
+  const fullName = user?.user_metadata?.full_name
     || user?.user_metadata?.name
-    || user?.email?.split("@")[0] || "there";
-  const firstName = rawName.split(/[\s._\-@]/)[0].replace(/[^a-zA-Z]/g, "").toLowerCase() || "there";
+    || user?.user_metadata?.first_name
+    || user?.user_metadata?.display_name
+    || "";
+  const firstName = fullName
+    ? fullName.split(" ")[0].toLowerCase()
+    : emailPrefix.toLowerCase() || "there";
   const [discoverMode, setDiscoverMode] = useState<"browse" | "myActivity">("browse");
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [toggleY, setToggleY] = useState(120);
   const hasUnread = false;
+
+  // Sunny dynamic copy
+  const [sunnyDeckDoneDesc, setSunnyDeckDoneDesc] = useState("check back tomorrow or post your own.");
+  useEffect(() => {
+    getSunnyResponse({ context: "emptyDiscover" }).then(setSunnyDeckDoneDesc);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("walkthrough_complete").then(val => {
+      if (!val) setShowWalkthrough(true);
+    });
+  }, []);
 
   const { tier, isLimited, incrementImIn } = useMembershipTier();
 
@@ -213,6 +341,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
   const [requestSheetActivity, setRequestSheetActivity] = useState<typeof MOCK_MY_POSTS[0] | null>(null);
   const [myPostsState, setMyPostsState] = useState(MOCK_MY_POSTS);
 
+  // Live activity data
+  const [liveActivities, setLiveActivities] = useState<any[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const [myPosts, setMyPosts] = useState<any[]>([]);
+  const [loadingMyPosts, setLoadingMyPosts] = useState(false);
+
+  const [fontsLoaded] = useFonts({ Caveat_400Regular });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
@@ -220,50 +355,259 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
     setToast(msg);
     toastTimer.current = setTimeout(() => setToast(""), 2400);
   };
+
+  const [saveToastVisible, setSaveToastVisible] = useState(false);
+  const saveToastOpacity = useRef(new Animated.Value(0)).current;
+  const triggerSaveToast = () => {
+    setSaveToastVisible(true);
+    saveToastOpacity.setValue(0);
+    Animated.timing(saveToastOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    setTimeout(() => {
+      Animated.timing(saveToastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => setSaveToastVisible(false));
+    }, 2500);
+  };
   const [showPostModal, setShowPostModal] = useState(false);
+  useEffect(() => {
+    if (openPostModal) { setShowPostModal(true); onPostModalOpened?.(); }
+  }, [openPostModal]);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [, setCelebrationName] = useState("");
-  const [, setSelectedGenders] = useState<string[]>([]);
-  const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
-  const [isGroupActivity, setIsGroupActivity] = useState(false);
+  const [showFilterUpsell, setShowFilterUpsell] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Filter state
+  const [filterDistance, setFilterDistance] = useState("10 mi");
+  const [filterAgeMin, setFilterAgeMin] = useState(18);
+  const [filterAgeMax, setFilterAgeMax] = useState(35);
+  const [filterGenders, setFilterGenders] = useState<string[]>(["all"]);
+  const [filterSexuality, setFilterSexuality] = useState<string[]>([]);
+  const [filterReligion, setFilterReligion] = useState<string[]>([]);
+  const [filterPersonality, setFilterPersonality] = useState<string[]>([]);
+  const [filterHumor, setFilterHumor] = useState<string[]>([]);
+
+  const toggleMulti = (list: string[], val: string, setList: (v: string[]) => void) => {
+    if (val === "all") { setList(["all"]); return; }
+    const next = list.filter(x => x !== "all");
+    setList(next.includes(val) ? next.filter(x => x !== val) : [...next, val]);
+  };
+
+  const hasLockedFilter = filterSexuality.length > 0 || filterReligion.length > 0 ||
+    filterPersonality.length > 0 || filterHumor.length > 0;
+
+  const resetFilters = () => {
+    setFilterDistance("10 mi");
+    setFilterAgeMin(18);
+    setFilterAgeMax(35);
+    setFilterGenders(["all"]);
+    setSelectedCategory(null);
+    setFilterSexuality([]);
+    setFilterReligion([]);
+    setFilterPersonality([]);
+    setFilterHumor([]);
+  };
+  const [postSpots, setPostSpots] = useState(1);
   const [showGroupUpsell, setShowGroupUpsell] = useState(false);
+  const [showGroupNudge, setShowGroupNudge] = useState(false);
+  const maxCompanions = tier === "free" ? 1 : 10;
+  const [postTitle, setPostTitle] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [postSelectedCategory, setPostSelectedCategory] = useState("");
+  const [postCustomCategory, setPostCustomCategory] = useState("");
+  const [postLocation, setPostLocation] = useState("");
+  const [postDesc, setPostDesc] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const [showHostProfile, setShowHostProfile] = useState(false);
+  const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    AsyncStorage.getItem("saved_activities").then(val => {
+      if (val) setSavedSet(new Set(JSON.parse(val)));
+    });
+  }, []);
+
+  const saveActivity = (id: string) => {
+    setSavedSet(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      AsyncStorage.setItem("saved_activities", JSON.stringify([...next]));
+      return next;
+    });
+    const activity = MOCK_ACTIVITIES.find(a => a.id === id);
+    if (activity) {
+      AsyncStorage.getItem("saved_activities_meta").then(val => {
+        const existing = val ? JSON.parse(val) : {};
+        existing[id] = { title: activity.title, date: activity.date, host: activity.host.name, category: activity.category };
+        AsyncStorage.setItem("saved_activities_meta", JSON.stringify(existing));
+      });
+    }
+  };
+  const [profileActivity, setProfileActivity] = useState<typeof MOCK_ACTIVITIES[0] | null>(null);
+
+  // I'm In celebration modal
+  const [showCelebModal, setShowCelebModal] = useState(false);
+  const [celebData, setCelebData] = useState<{ title: string; subtitle: string; onDone: () => void } | null>(null);
+
+  const showImInToast = (title: string, subtitle: string, onDone: () => void) => {
+    setCelebData({ title, subtitle, onDone });
+    setShowCelebModal(true);
+  };
+
+  const handleCelebrationDismiss = () => {
+    setShowCelebModal(false);
+    celebData?.onDone();
+    setCelebData(null);
+  };
+
+  // Approved counts per post for tier enforcement
+  const [approvedCounts, setApprovedCounts] = useState<Record<string, number>>({});
+  const getApprovalLimit = () => {
+    if (tier === "trail") return Infinity;
+    if (tier === "go") return 5;
+    return 1; // free
+  };
+
+  // Fetch live browse activities
+  useEffect(() => {
+    if (discoverMode !== "browse") return;
+    let cancelled = false;
+    setLoadingActivities(true);
+    supabase
+      .from("activities")
+      .select("*, profiles!user_id(first_name, avatar_url)")
+      .eq("status", "active")
+      .gte("activity_date", new Date().toISOString().split("T")[0])
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data && data.length > 0) {
+          setLiveActivities(data.map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            category: a.tags?.[0] ?? "default",
+            photo: FALLBACK_PHOTOS[a.tags?.[0]] ?? FALLBACK_PHOTOS.default,
+            distance: "",
+            location: a.location_name ?? "",
+            date: a.activity_date ?? "",
+            time: a.activity_time ?? "",
+            tags: a.tags ?? [],
+            vibeEmojis: [],
+            goingCount: 0,
+            goingAvatars: [],
+            vibe: a.description ?? "",
+            host: {
+              name: a.profiles?.first_name ?? "someone",
+              user_id: a.user_id,
+              photo: a.profiles?.avatar_url ?? "",
+              rating: 0,
+              bio: "",
+              activitiesCount: 0,
+              companionsCount: 0,
+              sharedInterests: [],
+              promptAnswers: [],
+              previousActivities: [],
+            },
+          })));
+        } else {
+          setLiveActivities([]);
+        }
+        setLoadingActivities(false);
+      });
+    return () => { cancelled = true; };
+  }, [discoverMode]);
+
+  // Fetch my posts when switching to myActivity tab
+  useEffect(() => {
+    if (discoverMode !== "myActivity" || !user) return;
+    let cancelled = false;
+    setLoadingMyPosts(true);
+    supabase
+      .from("activities")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(async ({ data, error }) => {
+        if (cancelled || error || !data) { setLoadingMyPosts(false); return; }
+        const mapped = await Promise.all(data.map(async (a: any) => {
+          const { data: requests } = await supabase
+            .from("activity_interactions")
+            .select("*, profiles!user_id(first_name, avatar_url)")
+            .eq("activity_id", a.id)
+            .eq("action", "join_request");
+          return {
+            id: a.id,
+            title: a.title,
+            photo: FALLBACK_PHOTOS[a.tags?.[0]] ?? FALLBACK_PHOTOS.default,
+            date: a.activity_date ?? "",
+            pendingRequests: (requests ?? []).map((r: any) => ({
+              id: r.user_id,
+              name: r.profiles?.first_name ?? "someone",
+              photo: r.profiles?.avatar_url ?? "",
+              bio: "",
+            })),
+          };
+        }));
+        if (!cancelled) {
+          setMyPosts(mapped);
+          setMyPostsState(mapped);
+        }
+        setLoadingMyPosts(false);
+      });
+    return () => { cancelled = true; };
+  }, [discoverMode, user]);
 
   // Reset deck index when filter or mode changes
   useEffect(() => {
     setCurrentIndex(0);
   }, [activeFilter, discoverMode]);
 
-  const filteredActivities = activeFilter === "all"
-    ? MOCK_ACTIVITIES
-    : MOCK_ACTIVITIES.filter(a => a.category === activeFilter);
-
-  const handleCelebrationDismiss = () => {
-    setShowCelebration(false);
-    setCurrentIndex(prev => prev + 1);
-  };
+  const deck = (() => {
+    const source = liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES;
+    return activeFilter === "all" ? source : source.filter((a: any) => a.category === activeFilter);
+  })();
 
   const handleImIn = async (activityId: string) => {
     if (isLimited) {
       setShowUpsell(true);
       return;
     }
-    const act = MOCK_ACTIVITIES.find(a => a.id === activityId);
-    try {
-      if (user) {
-        await supabase.from("join_requests").insert({
-          activity_id: activityId,
-          requester_id: user.id,
-          status: "pending",
-        } as any);
+    const source = liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES;
+    const act = source.find((a: any) => a.id === activityId);
+    // SUPABASE: Ensure join_requests table exists:
+    // CREATE TABLE IF NOT EXISTS join_requests (
+    //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    //   activity_id uuid REFERENCES activities(id) ON DELETE CASCADE,
+    //   requester_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+    //   status text DEFAULT 'pending',
+    //   created_at timestamptz DEFAULT now()
+    // );
+    // Enable RLS and add policy: allow insert for authenticated users where requester_id = auth.uid()
+    if (user) {
+      const { error } = await supabase.from("join_requests").insert({
+        activity_id: activityId,
+        requester_id: user.id,
+        status: "pending",
+      } as any);
+      if (error) {
+        console.warn("join_requests insert failed:", error.message);
       }
-    } catch {
-      // join_requests table may not exist yet
     }
     await incrementImIn();
     setRequestedSet(prev => new Set([...prev, activityId]));
-    setCelebrationName(act?.host.name ?? "");
-    setShowCelebration(true);
+    const hostName = act?.host.name ?? "them";
+    const actTitle = act?.title ?? "the activity";
+    const subtitle = await getSunnyResponse({
+      context: "imIn",
+      activityTitle: actTitle,
+      hostName,
+    });
+    showImInToast(
+      "you're in!",
+      subtitle,
+      () => setCurrentIndex(prev => prev + 1),
+    );
   };
 
   const handleSkip = () => {
@@ -271,7 +615,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
   };
 
   // My Activity — request sheet handlers
-  const handleLetIn = (postId: string, requesterId: string, requesterName: string, activityTitle: string) => {
+  const handleLetIn = (postId: string, requesterId: string, _requesterName: string, activityTitle: string) => {
+    const limit = getApprovalLimit();
+    const current = approvedCounts[postId] ?? 0;
+    if (current >= limit) return; // already at limit, button should be disabled
+    setApprovedCounts(prev => ({ ...prev, [postId]: (prev[postId] ?? 0) + 1 }));
     setMyPostsState(prev => prev.map(p => {
       if (p.id !== postId) return p;
       return { ...p, pendingRequests: p.pendingRequests.filter(r => r.id !== requesterId) };
@@ -282,7 +630,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         pendingRequests: prev.pendingRequests.filter(r => r.id !== requesterId),
       } : null);
     }
-    showToast(`you added ${requesterName} to ${activityTitle}.`);
+    showToast(`you're in. get ready for ${activityTitle}.`);
   };
 
   const handlePass = (postId: string, requesterId: string) => {
@@ -296,13 +644,75 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         pendingRequests: prev.pendingRequests.filter(r => r.id !== requesterId),
       } : null);
     }
-    showToast("got it.");
+    showToast("not this time. there's more out there.");
   };
 
-  // Deck
-  const deck = filteredActivities;
+  const formatDateForDB = (date: Date | string): string => {
+    // Strip ordinal suffixes (1st, 2nd, 3rd...) if string, then convert to Date
+    const d = date instanceof Date
+      ? date
+      : new Date((date as string).trim().replace(/(\d+)(st|nd|rd|th)/gi, "$1"));
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleSubmitPost = async () => {
+    if (!postTitle.trim()) {
+      showToast("add a title to post.");
+      return;
+    }
+    const finalCategory = postSelectedCategory === "other"
+      ? postCustomCategory.trim()
+      : postSelectedCategory;
+    const formattedDate = formatDateForDB(selectedDate);
+    console.log("DATE BEING SENT:", formattedDate, typeof formattedDate);
+    setIsPosting(true);
+    try {
+      const { data, error } = await supabase.from("activities").insert({
+        user_id: user?.id,
+        title: postTitle.trim(),
+        description: postDesc.trim() || null,
+        activity_date: formattedDate,
+        activity_time: selectedTime
+          ? selectedTime.toTimeString().split(" ")[0]
+          : null,
+        location_name: postLocation.trim() || null,
+        tags: finalCategory ? [finalCategory] : [],
+        max_participants: postSpots,
+        is_group: postSpots > 1,
+        status: "active",
+      }).select().single();
+      if (error) {
+        console.error("post creation error:", JSON.stringify(error));
+        showToast("something went wrong. try again?");
+        return;
+      }
+      console.log("post created:", data);
+      setShowPostModal(false);
+      setPostTitle("");
+      setSelectedDate(new Date());
+      setSelectedTime(null);
+      setPostSelectedCategory("");
+      setPostCustomCategory("");
+      setPostLocation("");
+      setPostDesc("");
+      setPostSpots(1);
+      setShowGroupNudge(false);
+      showToast("posted! check back soon.");
+    } catch (err) {
+      console.error("post creation exception:", err);
+      showToast("something went wrong. try again?");
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   const currentCard = deck[currentIndex];
   const isDone = currentIndex >= deck.length;
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? "good morning" : hour < 17 ? "good afternoon" : "good evening";
   const photoUri = currentCard
     ? (currentCard.photo && currentCard.photo.startsWith("http") ? currentCard.photo : (FALLBACK_PHOTOS[currentCard.category] || FALLBACK_PHOTOS.default))
     : "";
@@ -312,13 +722,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
         <View style={s.headerLeft}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={s.greeting}>good morning, {firstName} </Text>
-            <Text style={[s.greeting, { fontFamily: 'System' }]}>👋</Text>
-          </View>
+          <Text style={s.greeting}>{timeGreeting}, {firstName}</Text>
           <Text style={s.headerTitle}>discover</Text>
         </View>
         <View style={s.headerRight}>
+          <TouchableOpacity style={s.iconBtn} onPress={() => setShowFilterSheet(true)} activeOpacity={0.7}>
+            <Ionicons name="options-outline" size={22} color={colors.teal} />
+          </TouchableOpacity>
           <TouchableOpacity style={s.iconBtn} onPress={() => setShowNotifications(true)} activeOpacity={0.7}>
             <Ionicons name={hasUnread ? "notifications" : "notifications-outline"} size={22} color={colors.teal} />
             {hasUnread && <View style={s.iconBadge} />}
@@ -334,7 +744,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
       </View>
 
       {/* Browse / My Activity toggle */}
-      <View style={s.modeToggleRow}>
+      <View style={s.modeToggleRow} onLayout={e => setToggleY(e.nativeEvent.layout.y)}>
         <View style={s.modeToggle}>
           {(["browse", "myActivity"] as const).map(mode => (
             <TouchableOpacity key={mode} onPress={() => setDiscoverMode(mode)} activeOpacity={0.8} style={s.modeToggleBtn}>
@@ -369,14 +779,14 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
               {activeFilter === f.key ? (
                 <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.filterPillActive}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    {f.emoji ? <Text style={{ fontFamily: 'System', fontSize: 13 }}>{f.emoji}</Text> : null}
+                    {f.icon ? <Ionicons name={f.icon as any} size={13} color={colors.white} /> : null}
                     <Text style={s.filterTextActive}>{f.label}</Text>
                   </View>
                 </LinearGradient>
               ) : (
                 <View style={s.filterPill}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    {f.emoji ? <Text style={{ fontFamily: 'System', fontSize: 13 }}>{f.emoji}</Text> : null}
+                    {f.icon ? <Ionicons name={f.icon as any} size={13} color={colors.teal} /> : null}
                     <Text style={s.filterText}>{f.label}</Text>
                   </View>
                 </View>
@@ -389,6 +799,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
       {/* Main content area */}
       {discoverMode === "myActivity" ? (
         /* ── My Activity Tab ── */
+        loadingMyPosts ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+            <ActivityIndicator color={colors.teal} size="large" />
+          </View>
+        ) : (
         <ScrollView
           style={s.feed}
           contentContainerStyle={[s.feedContent, { paddingBottom: 100 + insets.bottom }]}
@@ -418,26 +833,39 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
                 </View>
                 {post.pendingRequests.length > 0 && (
                   <View style={s.requestBadge}>
-                    <Text style={s.requestBadgeText}>{post.pendingRequests.length} requests</Text>
+                    <Text style={s.requestBadgeText}>{post.pendingRequests.length} wants to tandem</Text>
                   </View>
                 )}
               </TouchableOpacity>
             ))
           )}
         </ScrollView>
+        )
       ) : (
         /* ── Browse Tab — Card Deck ── */
         <View style={s.deckContainer}>
+          {loadingActivities ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator color={colors.teal} size="large" />
+            </View>
+          ) : null}
+          {/* Locked filter indicator */}
+          {!loadingActivities && hasLockedFilter && (
+            <View style={s.lockedFilterPill}>
+              <Ionicons name="lock-closed-outline" size={11} color={colors.teal} />
+              <Text style={s.lockedFilterText}>filtered (tandem go)</Text>
+            </View>
+          )}
           {/* Progress indicator */}
-          {!isDone && deck.length > 0 && (
+          {!loadingActivities && !isDone && deck.length > 0 && (
             <Text style={s.deckProgress}>{currentIndex + 1} of {deck.length} nearby</Text>
           )}
 
-          {isDone || deck.length === 0 ? (
+          {!loadingActivities && (isDone || deck.length === 0) ? (
             <View style={s.deckDone}>
               <SunnyAvatar expression="warm" size={64} />
               <Text style={s.deckDoneTitle}>that's everyone nearby for now.</Text>
-              <Text style={s.deckDoneDesc}>check back tomorrow or post your own.</Text>
+              <Text style={s.deckDoneDesc}>{sunnyDeckDoneDesc}</Text>
             </View>
           ) : (
             <>
@@ -449,17 +877,39 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
               >
                 <View style={s.cardWrapper}>
                   {/* White card */}
-                  <View style={s.card}>
-                    {/* Photo with category pill overlay */}
+                  <View style={[s.card, savedSet.has(currentCard.id) && s.cardSaved]}>
+                    {/* Saved indicator pill */}
+                    {savedSet.has(currentCard.id) && (
+                      <View style={s.savedPill}>
+                        <Ionicons name="bookmark" size={11} color={colors.teal} />
+                        <Text style={s.savedPillText}>saved for later</Text>
+                      </View>
+                    )}
+                    {/* Full-bleed photo with category pill overlay */}
                     <View style={s.photoWrap}>
                       <Image source={{ uri: photoUri }} style={s.cardPhoto} resizeMode="cover" />
-                      {CATEGORY_EMOJI[currentCard.category] && (
-                        <View style={s.categoryPill}>
-                          <Text style={{ fontFamily: 'System', fontSize: 13 }}>{CATEGORY_EMOJI[currentCard.category]}</Text>
-                          <Text style={s.categoryPillText}>{currentCard.category}</Text>
-                        </View>
-                      )}
-                      {/* Trail featured badge */}
+                      {/* Category pill — bottom-left frosted overlay */}
+                      <View style={s.categoryPill}>
+                        <Ionicons
+                          name={(CATEGORY_ICON[currentCard.category] || CATEGORY_ICON.default) as any}
+                          size={12}
+                          color={colors.foreground}
+                        />
+                        <Text style={s.categoryPillText}>{currentCard.category}</Text>
+                      </View>
+                      {/* Bookmark icon — top-right */}
+                      <TouchableOpacity
+                        style={s.bookmarkBtn}
+                        activeOpacity={0.8}
+                        onPress={() => { saveActivity(currentCard.id); triggerSaveToast(); }}
+                      >
+                        <Ionicons
+                          name={savedSet.has(currentCard.id) ? "bookmark" : "bookmark-outline"}
+                          size={20}
+                          color={colors.teal}
+                        />
+                      </TouchableOpacity>
+                      {/* Trail featured badge — top-right */}
                       {tier === "trail" && (
                         <LinearGradient
                           colors={gradients.brand}
@@ -467,56 +917,87 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
                           end={{ x: 1, y: 0 }}
                           style={s.featuredBadge}
                         >
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                            <Text style={{ fontFamily: 'System', fontSize: 10, color: colors.white }}>✨</Text>
-                            <Text style={s.featuredBadgeText}>featured</Text>
-                          </View>
+                          <Text style={s.featuredBadgeText}>featured</Text>
                         </LinearGradient>
                       )}
                     </View>
 
                     {/* Body */}
                     <View style={s.cardBody}>
-                      <Text style={s.cardTitle}>{currentCard.title}</Text>
+                      <Text style={s.cardTitle} numberOfLines={2}>{currentCard.title}</Text>
 
                       <View style={s.cardMeta}>
-                        <Ionicons name="location" size={13} color={colors.teal} />
-                        <Text style={s.cardMetaTeal}>{currentCard.distance} · {currentCard.location}</Text>
+                        <Ionicons name="location-outline" size={14} color={colors.teal} />
+                        <Text style={s.cardMetaTeal}>{currentCard.location} · {currentCard.distance}</Text>
                       </View>
 
-                      <View style={s.cardMeta}>
-                        <Ionicons name="calendar-outline" size={13} color={colors.muted} />
+                      <View style={[s.cardMeta, { marginTop: 6 }]}>
+                        <Ionicons name="calendar-outline" size={14} color={colors.muted} />
                         <Text style={s.cardMetaGray}>{currentCard.date} · {currentCard.time}</Text>
                       </View>
 
+                      {/* Vibe emoji tags */}
+                      {currentCard.vibeEmojis && currentCard.vibeEmojis.length > 0 && (
+                        <View style={[s.vibeTagsRow, { marginTop: 12 }]}>
+                          {currentCard.vibeEmojis.map((tag: string, i: number) => (
+                            <View key={i} style={s.vibeTagPill}>
+                              <Text style={s.vibeTagText}>{tag}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
                       {currentCard.vibe ? (
-                        <View style={s.vibeBox}>
+                        <View style={[s.vibeBox, { marginTop: 10 }]}>
                           <Text style={s.vibeText}>"{currentCard.vibe}"</Text>
                         </View>
                       ) : null}
 
-                      {/* Going row */}
-                      <View style={s.cardFooter}>
-                        <View style={s.goingRow}>
-                          <View style={s.avatarStack}>
-                            {currentCard.goingAvatars.slice(0, 3).map((uri, i) => (
-                              <Image
-                                key={i}
-                                source={{ uri }}
-                                style={[s.stackAvatar, { marginLeft: i === 0 ? 0 : -8, zIndex: 3 - i }]}
-                              />
-                            ))}
-                          </View>
-                          <Text style={s.goingText}>{currentCard.goingCount} going</Text>
+                      {/* Prompt answer cards */}
+                      {currentCard.host.promptAnswers && currentCard.host.promptAnswers.map((p: any, i: number) => (
+                        <View key={i} style={[s.promptCard, { marginTop: i === 0 ? 12 : 8 }]}>
+                          <Text style={s.promptCardQ}>{p.question.toUpperCase()}</Text>
+                          <Text style={s.promptCardA}>{p.answer}</Text>
                         </View>
+                      ))}
+
+                      {/* Attendee request row */}
+                      <View style={[s.goingRow, { marginTop: 16 }]}>
+                        <View style={s.avatarStack}>
+                          {currentCard.goingAvatars.slice(0, 3).map((uri: string, i: number) => (
+                            <Image
+                              key={i}
+                              source={{ uri }}
+                              style={[s.stackAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i }]}
+                            />
+                          ))}
+                        </View>
+                        <Text style={s.goingText}>{currentCard.goingCount} wants to tandem</Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Host strip — below the card */}
+                  {/* Host strip — below card on cream bg */}
                   <View style={s.hostStrip}>
-                    <Image source={{ uri: currentCard.host.photo }} style={s.hostStripAvatar} />
-                    <Text style={s.hostStripText}>hosted by <Text style={s.hostStripName}>{currentCard.host.name}</Text></Text>
+                    <View style={s.hostStripAvatarWrap}>
+                      <Image source={{ uri: currentCard.host.photo }} style={s.hostStripAvatar} />
+                    </View>
+                    <View style={s.hostStripInfo}>
+                      <Text style={s.hostStripLabel}>
+                        posted by{" "}
+                        <Text style={s.hostStripName}>{currentCard.host.name}</Text>
+                      </Text>
+                      <Text style={s.hostStripBio} numberOfLines={1}>{currentCard.host.bio}</Text>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setProfileActivity(currentCard);
+                        setShowHostProfile(true);
+                      }}
+                    >
+                      <Text style={s.viewProfile}>profile</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </ScrollView>
@@ -536,13 +1017,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
                         <Text style={s.passBtnText}>pass</Text>
                       </View>
                     </TouchableOpacity>
-                    <TouchableOpacity style={{ flex: 1 }} onPress={() => showToast("saved for later.")} activeOpacity={0.8}>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={handleSkip} activeOpacity={0.8}>
                       <View style={s.passBtn}>
-                        <Text style={s.passBtnText}>later</Text>
+                        <Text style={s.passBtnText}>skip</Text>
                       </View>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flex: 1.6 }}
+                      style={{ flex: 2 }}
                       onPress={() => handleImIn(currentCard.id)}
                       activeOpacity={0.88}
                     >
@@ -552,10 +1033,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
                         end={{ x: 1, y: 0 }}
                         style={s.imInBtn}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                          <Text style={s.imInBtnText}>i'm in</Text>
-                          <Text style={{ fontFamily: 'System', fontSize: 14, color: colors.white }}>✨</Text>
-                        </View>
+                        <Text style={s.imInBtnText}>i'm in →</Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   </>
@@ -572,11 +1050,27 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         </View>
       )}
 
+      {saveToastVisible && (
+        <Animated.View style={[s.saveToast, { opacity: saveToastOpacity }]} pointerEvents="none">
+          <Text style={[s.saveToastText, fontsLoaded ? { fontFamily: "Caveat_400Regular" } : {}]}>
+            {'saved to your profile · find it under "saved"'}
+          </Text>
+        </Animated.View>
+      )}
+
       <BottomNav
         activeTab={activeTab}
         onTabPress={onTabPress}
         onPostPress={() => setShowPostModal(true)}
       />
+
+      {showWalkthrough && (
+        <AppWalkthrough
+          toggleY={toggleY}
+          insetTop={insets.top}
+          onComplete={() => setShowWalkthrough(false)}
+        />
+      )}
 
       {/* Notifications Modal */}
       <Modal visible={showNotifications} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowNotifications(false)}>
@@ -585,7 +1079,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
           <View style={notifS.header}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={notifS.title}>notifications</Text>
-              <Text style={{ fontFamily: 'System', fontSize: 22 }}>🔔</Text>
+              <Ionicons name="notifications-outline" size={22} color={colors.teal} />
             </View>
             <TouchableOpacity onPress={() => setShowNotifications(false)} style={notifS.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={colors.muted} />
@@ -593,8 +1087,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
           </View>
           <View style={notifS.empty}>
             <SunnyAvatar expression="warm" size={60} />
-            <Text style={notifS.emptyTitle}>all caught up.</Text>
-            <Text style={notifS.emptyDesc}>sunny will let you know when someone joins your activity.</Text>
+            <Text style={notifS.emptyTitle}>nothing yet.</Text>
+            <Text style={notifS.emptyDesc}>notifications are on their way. for now, sunny's keeping an eye on things.</Text>
           </View>
         </View>
       </Modal>
@@ -605,66 +1099,199 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
           <View style={filterS.handle} />
           <View style={filterS.header}>
             <Text style={filterS.title}>filters</Text>
-            <TouchableOpacity onPress={() => { setSelectedGenders([]); setSelectedDistance(null); }}>
-              <Text style={filterS.resetText}>reset</Text>
+            <TouchableOpacity onPress={() => setShowFilterSheet(false)} style={filterS.closeBtn} activeOpacity={0.7}>
+              <Ionicons name="close" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
+
           <ScrollView style={filterS.scroll} contentContainerStyle={filterS.scrollContent} showsVerticalScrollIndicator={false}>
+
+            {/* ── Distance ── */}
             <Text style={filterS.sectionLabel}>DISTANCE</Text>
-            <View style={filterS.optionWrap}>
-              {["5mi", "10mi", "25mi", "50mi", "100mi"].map(d => (
-                <TouchableOpacity key={d} onPress={() => setSelectedDistance(d)} activeOpacity={0.8}
-                  style={[filterS.option, selectedDistance === d && filterS.optionSelected]}>
-                  <Text style={[filterS.optionText, selectedDistance === d && filterS.optionTextSelected]}>{d}</Text>
+            <View style={filterS.pillRow}>
+              {["0.5 mi", "1 mi", "5 mi", "10 mi", "25 mi+"].map(d => (
+                <TouchableOpacity key={d} onPress={() => setFilterDistance(d)} activeOpacity={0.8}>
+                  {filterDistance === d ? (
+                    <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.pillActive}>
+                      <Text style={filterS.pillActiveText}>{d}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={filterS.pill}><Text style={filterS.pillText}>{d}</Text></View>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
-            <View style={filterS.lockCard}>
-              <View style={filterS.lockCardTop}>
-                <Text style={filterS.lockCardTitle}>more filters</Text>
-                <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
-              </View>
-              <View style={filterS.lockedTags}>
-                {["Category", "Time of day", "Group size", "Indoors / outdoors"].map(f => (
-                  <View key={f} style={filterS.lockedTag}><Text style={filterS.lockedTagText}>{f}</Text></View>
-                ))}
-              </View>
-              <TouchableOpacity style={filterS.unlockBtn} activeOpacity={0.88} onPress={() => { setShowFilterSheet(false); onMembershipPress?.(); }}>
-                <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.unlockBtnInner}>
-                  <Text style={filterS.unlockBtnText}>Unlock Tandem Go</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+
+            {/* ── Category ── */}
+            <Text style={filterS.sectionLabel}>CATEGORY</Text>
+            <View style={filterS.optionWrap}>
+              {["coffee", "hiking", "markets", "concerts", "fitness", "sports"].map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
+                  activeOpacity={0.8}
+                  style={[filterS.option, selectedCategory === cat && filterS.optionSelected]}
+                >
+                  <Text style={[filterS.optionText, selectedCategory === cat && filterS.optionTextSelected]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
+
+            {/* ── Age range ── */}
+            <Text style={filterS.sectionLabel}>AGE RANGE</Text>
+            <View style={filterS.ageRow}>
+              <View style={filterS.ageStepper}>
+                <Text style={filterS.ageLabel}>min</Text>
+                <View style={filterS.stepperRow}>
+                  <TouchableOpacity style={filterS.stepBtn} onPress={() => setFilterAgeMin(v => Math.max(18, v - 1))} activeOpacity={0.7}>
+                    <Text style={filterS.stepBtnText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={filterS.stepValue}>{filterAgeMin}</Text>
+                  <TouchableOpacity style={filterS.stepBtn} onPress={() => setFilterAgeMin(v => Math.min(filterAgeMax - 1, v + 1))} activeOpacity={0.7}>
+                    <Text style={filterS.stepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={filterS.ageDash}>—</Text>
+              <View style={filterS.ageStepper}>
+                <Text style={filterS.ageLabel}>max</Text>
+                <View style={filterS.stepperRow}>
+                  <TouchableOpacity style={filterS.stepBtn} onPress={() => setFilterAgeMax(v => Math.max(filterAgeMin + 1, v - 1))} activeOpacity={0.7}>
+                    <Text style={filterS.stepBtnText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={filterS.stepValue}>{filterAgeMax}</Text>
+                  <TouchableOpacity style={filterS.stepBtn} onPress={() => setFilterAgeMax(v => Math.min(99, v + 1))} activeOpacity={0.7}>
+                    <Text style={filterS.stepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* ── Gender ── */}
+            <Text style={filterS.sectionLabel}>GENDER</Text>
+            <View style={filterS.pillRow}>
+              {["man", "woman", "nonbinary", "all"].map(g => {
+                const active = filterGenders.includes(g);
+                return (
+                  <TouchableOpacity key={g} onPress={() => toggleMulti(filterGenders, g, setFilterGenders)} activeOpacity={0.8}>
+                    {active ? (
+                      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.pillActive}>
+                        <Text style={filterS.pillActiveText}>{g}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={filterS.pill}><Text style={filterS.pillText}>{g}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* ── Sexuality (locked) ── */}
+            <View style={filterS.lockedSectionHeader}>
+              <Text style={filterS.sectionLabel}>SEXUALITY</Text>
+              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
+            </View>
+            <View style={filterS.pillRow}>
+              {["straight", "gay · lesbian", "bisexual", "all"].map(s => (
+                <TouchableOpacity key={s} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterSexuality, s, setFilterSexuality); }} activeOpacity={0.8}>
+                  <View style={filterS.pillLocked}>
+                    <Text style={filterS.pillLockedText}>{s}</Text>
+                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* ── Religion (locked) ── */}
+            <View style={filterS.lockedSectionHeader}>
+              <Text style={filterS.sectionLabel}>RELIGION</Text>
+              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
+            </View>
+            <View style={filterS.pillRow}>
+              {["christian", "jewish", "muslim", "hindu", "buddhist", "spiritual", "agnostic / atheist", "all"].map(r => (
+                <TouchableOpacity key={r} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterReligion, r, setFilterReligion); }} activeOpacity={0.8}>
+                  <View style={filterS.pillLocked}>
+                    <Text style={filterS.pillLockedText}>{r}</Text>
+                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* ── Personality (locked) ── */}
+            <View style={filterS.lockedSectionHeader}>
+              <Text style={filterS.sectionLabel}>PERSONALITY</Text>
+              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
+            </View>
+            <View style={filterS.pillRow}>
+              {["introvert", "extrovert", "ambivert"].map(p => (
+                <TouchableOpacity key={p} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterPersonality, p, setFilterPersonality); }} activeOpacity={0.8}>
+                  <View style={filterS.pillLocked}>
+                    <Text style={filterS.pillLockedText}>{p}</Text>
+                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* ── Humor (locked) ── */}
+            <View style={filterS.lockedSectionHeader}>
+              <Text style={filterS.sectionLabel}>HUMOR</Text>
+              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
+            </View>
+            <View style={filterS.pillRow}>
+              {["dry", "sarcastic", "goofy", "witty", "dad jokes"].map(h => (
+                <TouchableOpacity key={h} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterHumor, h, setFilterHumor); }} activeOpacity={0.8}>
+                  <View style={filterS.pillLocked}>
+                    <Text style={filterS.pillLockedText}>{h}</Text>
+                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
           </ScrollView>
+
           <View style={filterS.footer}>
-            <TouchableOpacity onPress={() => setShowFilterSheet(false)} style={filterS.showResultsBtn} activeOpacity={0.88}>
-              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.showResultsBtnInner}>
-                <Text style={filterS.showResultsBtnText}>show results</Text>
+            <TouchableOpacity onPress={() => setShowFilterSheet(false)} style={filterS.applyBtn} activeOpacity={0.88}>
+              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.applyBtnInner}>
+                <Text style={filterS.applyBtnText}>apply filters</Text>
               </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={resetFilters} activeOpacity={0.7} style={{ alignSelf: "center", marginTop: 10 }}>
+              <Text style={filterS.resetText}>reset</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* I'm In Celebration */}
-      <Modal visible={showCelebration} animationType="fade" transparent onRequestClose={handleCelebrationDismiss}>
-        <View style={celebS.overlay}>
-          <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={celebS.banner}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={celebS.bannerText}>request sent!</Text>
-              <Text style={{ fontFamily: 'System', fontSize: 20, color: colors.white }}>🎉</Text>
-            </View>
-          </LinearGradient>
+      {/* I'm In celebration modal */}
+      <Modal visible={showCelebModal} animationType="fade" transparent onRequestClose={handleCelebrationDismiss}>
+        <View style={celebS.backdrop}>
           <View style={celebS.card}>
-            <SunnyAvatar expression="celebratory" size={72} />
-            <Text style={celebS.headline}>request sent.</Text>
-            <Text style={celebS.sub}>
-              the host will let you know if you're in.
-            </Text>
-            <TouchableOpacity onPress={handleCelebrationDismiss} activeOpacity={0.88} style={celebS.btn}>
-              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={celebS.btnInner}>
-                <Text style={celebS.btnText}>keep going</Text>
+            <Text style={celebS.title}>{celebData?.title ?? "you're in!"}</Text>
+            <Text style={celebS.subtitle}>{celebData?.subtitle ?? ""}</Text>
+            <TouchableOpacity
+              style={celebS.keepGoingBtn}
+              onPress={handleCelebrationDismiss}
+              activeOpacity={0.88}
+            >
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={celebS.keepGoingInner}
+              >
+                <Text style={celebS.keepGoingText}>keep going</Text>
               </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { handleCelebrationDismiss(); setDiscoverMode("myActivity"); }}
+              style={{ paddingTop: 12, paddingBottom: 4 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 13, color: colors.muted, textAlign: "center" }}>
+                see your pending requests →
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -686,89 +1313,155 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
               placeholder="what are you doing?"
               placeholderTextColor={colors.muted}
               multiline
+              value={postTitle}
+              onChangeText={setPostTitle}
             />
 
             <Text style={modalS.sectionLabel}>CATEGORY</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={modalS.categoryScroll}>
-              <View style={modalS.categoryRow}>
-                {[
-                  { emoji: "🏃", label: "sports" },
-                  { emoji: "☕", label: "coffee" },
-                  { emoji: "🎨", label: "creative" },
-                  { emoji: "🥾", label: "hiking" },
-                  { emoji: "🎵", label: "music" },
-                  { emoji: "🛍", label: "markets" },
-                ].map(c => (
-                  <TouchableOpacity key={c.label} style={modalS.categoryTile} activeOpacity={0.8}>
-                    <Text style={{ fontFamily: 'System', fontSize: 22 }}>{c.emoji}</Text>
-                    <Text style={modalS.categoryLabel}>{c.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+            <View style={modalS.categoryPillRow}>
+              {[
+                { key: "outdoors",  label: "outdoors" },
+                { key: "food",      label: "food + drinks" },
+                { key: "arts",      label: "arts + culture" },
+                { key: "fitness",   label: "fitness + wellness" },
+                { key: "social",    label: "social + events" },
+                { key: "learning",  label: "learning + skills" },
+                { key: "travel",    label: "day trips + travel" },
+                { key: "games",     label: "games + fun" },
+                { key: "music",     label: "music + shows" },
+                { key: "other",     label: "something else" },
+              ].map(c => (
+                <TouchableOpacity
+                  key={c.key}
+                  onPress={() => { setPostSelectedCategory(prev => prev === c.key ? "" : c.key); if (c.key !== "other") setPostCustomCategory(""); }}
+                  activeOpacity={0.8}
+                  style={[modalS.categoryPill, postSelectedCategory === c.key && modalS.categoryPillActive]}
+                >
+                  <Text style={[modalS.categoryPillText, postSelectedCategory === c.key && modalS.categoryPillTextActive]}>
+                    {c.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {postSelectedCategory === "other" && (
+              <TextInput
+                style={modalS.customCategoryInput}
+                value={postCustomCategory}
+                onChangeText={setPostCustomCategory}
+                placeholder="what are you doing?"
+                placeholderTextColor={colors.muted}
+                maxLength={40}
+                autoFocus
+              />
+            )}
 
-            <View style={modalS.rowFields}>
-              <TouchableOpacity style={modalS.pillField}>
-                <Ionicons name="calendar-outline" size={15} color={colors.teal} />
-                <Text style={modalS.pillFieldText}>pick a date</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={modalS.pillField}>
-                <Ionicons name="time-outline" size={15} color={colors.teal} />
-                <Text style={modalS.pillFieldText}>pick a time</Text>
-              </TouchableOpacity>
+            <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHEN IS IT?</Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.8}
+              style={modalS.dateField}
+            >
+              <Text style={modalS.dateFieldText}>
+                {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" })}
+              </Text>
+              <Text style={modalS.dateFieldHint}>tap to change</Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="spinner"
+                minimumDate={new Date()}
+                onValueChange={(_, date) => { setShowDatePicker(false); setSelectedDate(date); }}
+                onDismiss={() => setShowDatePicker(false)}
+              />
+            )}
+            <TouchableOpacity
+              onPress={() => setShowTimePicker(true)}
+              activeOpacity={0.8}
+              style={[modalS.dateField, { marginTop: 8 }]}
+            >
+              <Text style={[modalS.dateFieldText, !selectedTime && { color: colors.muted }]}>
+                {selectedTime
+                  ? selectedTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                  : "add a time (optional)"}
+              </Text>
+            </TouchableOpacity>
+            {showTimePicker && (
+              <DateTimePicker
+                value={selectedTime ?? new Date()}
+                mode="time"
+                display="spinner"
+                onValueChange={(_, time) => { setShowTimePicker(false); setSelectedTime(time); }}
+                onDismiss={() => setShowTimePicker(false)}
+              />
+            )}
+
+            <View style={modalS.locationField}>
+              <Ionicons name="location-outline" size={15} color={colors.teal} />
+              <TextInput
+                style={[modalS.pillFieldText, { flex: 1 }]}
+                placeholder="where is it?"
+                placeholderTextColor={colors.muted}
+                value={postLocation}
+                onChangeText={setPostLocation}
+              />
             </View>
 
-            <TouchableOpacity style={modalS.locationField}>
-              <Ionicons name="location" size={15} color={colors.teal} />
-              <Text style={modalS.pillFieldText}>where is it?</Text>
-            </TouchableOpacity>
-
             <View style={modalS.spotsRow}>
-              <Text style={modalS.spotsLabel}>spots</Text>
+              <View>
+                <Text style={modalS.spotsLabel}>who's coming with you?</Text>
+                {postSpots > 2 && (
+                  <Text style={modalS.spotsGroupHint}>group activity</Text>
+                )}
+              </View>
               <View style={modalS.spotsControls}>
-                <TouchableOpacity style={modalS.spotsBtn}>
+                <TouchableOpacity
+                  style={modalS.spotsBtn}
+                  onPress={() => { setPostSpots(v => Math.max(1, v - 1)); setShowGroupNudge(false); }}
+                  activeOpacity={0.7}
+                >
                   <Text style={modalS.spotsBtnText}>−</Text>
                 </TouchableOpacity>
-                <Text style={modalS.spotsNum}>2</Text>
-                <TouchableOpacity style={modalS.spotsBtnPlus}>
+                <Text style={modalS.spotsNum}>{postSpots === 1 ? "just me + 1" : `me + ${postSpots} others`}</Text>
+                <TouchableOpacity
+                  style={[modalS.spotsBtnPlus, tier === "free" && postSpots >= maxCompanions ? { opacity: 0.4 } : {}]}
+                  onPress={() => {
+                    if (tier === "free" && postSpots >= maxCompanions) {
+                      setShowGroupNudge(true);
+                      return;
+                    }
+                    setShowGroupNudge(false);
+                    setPostSpots(v => v + 1);
+                  }}
+                  activeOpacity={0.7}
+                >
                   <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={modalS.spotsBtnPlusInner}>
                     <Text style={modalS.spotsBtnPlusText}>+</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Group activity row */}
-            <View style={modalS.groupRow}>
-              <Text style={modalS.groupLabel}>group activity</Text>
-              {tier === "free" ? (
-                <PremiumLock
-                  tier="go"
-                  featureName="group activity"
-                  onPress={() => {
-                    setShowPostModal(false);
-                    setShowGroupUpsell(true);
-                  }}
-                />
-              ) : (
-                <Switch
-                  value={isGroupActivity}
-                  onValueChange={setIsGroupActivity}
-                  trackColor={{ false: colors.border, true: colors.teal }}
-                  thumbColor={colors.white}
-                />
-              )}
-            </View>
+            {showGroupNudge && (
+              <View style={modalS.groupNudge}>
+                <Text style={modalS.groupNudgeText}>groups are a tandem go thing. </Text>
+                <TouchableOpacity onPress={() => { setShowPostModal(false); setShowGroupNudge(false); setShowGroupUpsell(true); }}>
+                  <Text style={[modalS.groupNudgeText, { color: colors.teal, textDecorationLine: "underline" }]}>upgrade →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TextInput
               style={modalS.descInput}
               placeholder="add any details..."
               placeholderTextColor={colors.muted}
               multiline
+              value={postDesc}
+              onChangeText={setPostDesc}
             />
 
             <TouchableOpacity style={modalS.postBtn} activeOpacity={0.88}
-              onPress={() => { setShowPostModal(false); showToast("posting is almost here. stay tuned."); }}>
+              onPress={handleSubmitPost}>
               <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={modalS.postBtnInner}>
                 <Text style={modalS.postBtnText}>post it →</Text>
               </LinearGradient>
@@ -777,12 +1470,147 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── Host Profile Overlay ─────────────────────────────── */}
+      <Modal
+        visible={showHostProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowHostProfile(false)}
+      >
+        {profileActivity && (() => {
+          const host = profileActivity.host;
+          return (
+            <View style={hostS.container}>
+              {/* Handle + close */}
+              <View style={hostS.handle} />
+              <View style={hostS.topBar}>
+                <TouchableOpacity onPress={() => setShowHostProfile(false)} style={hostS.closeBtn} activeOpacity={0.7}>
+                  <Ionicons name="close" size={20} color={colors.muted} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={hostS.scrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Avatar + name + location */}
+                <View style={hostS.heroSection}>
+                  <Image source={{ uri: host.photo }} style={hostS.avatar} />
+                  <Text style={hostS.name}>{host.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                    <Ionicons name="location-outline" size={13} color={colors.muted} />
+                    <Text style={hostS.location}>{profileActivity.location}</Text>
+                  </View>
+                </View>
+
+                {/* Bio quote */}
+                <Text style={hostS.bio}>"{host.bio}"</Text>
+
+                {/* Stat pills */}
+                <View style={hostS.statsRow}>
+                  <View style={hostS.statPill}>
+                    <Text style={hostS.statNum}>{host.activitiesCount}</Text>
+                    <Text style={hostS.statLabel}>activities</Text>
+                  </View>
+                  <View style={hostS.statPill}>
+                    <Text style={hostS.statNum}>{host.companionsCount}</Text>
+                    <Text style={hostS.statLabel}>companions</Text>
+                  </View>
+                </View>
+
+                {/* Shared interests */}
+                {host.sharedInterests && host.sharedInterests.length > 0 && (
+                  <View style={hostS.section}>
+                    <Text style={hostS.sectionLabel}>we're both into...</Text>
+                    <View style={hostS.interestRow}>
+                      {host.sharedInterests.map((interest) => (
+                        <LinearGradient
+                          key={interest}
+                          colors={gradients.brand}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={hostS.interestPill}
+                        >
+                          <Ionicons
+                            name={(CATEGORY_ICON[interest] || CATEGORY_ICON.default) as any}
+                            size={12}
+                            color={colors.white}
+                          />
+                          <Text style={hostS.interestText}>{interest}</Text>
+                        </LinearGradient>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Previous activities */}
+                {host.previousActivities && host.previousActivities.length > 0 && (
+                  <View style={hostS.section}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={hostS.sectionLabel}>previous activities</Text>
+                      <TouchableOpacity activeOpacity={0.7}>
+                        <Text style={hostS.viewAll}>view all</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 12, paddingRight: 4 }}
+                    >
+                      {host.previousActivities.map((act, i) => (
+                        <View key={i} style={hostS.prevCard}>
+                          <LinearGradient
+                            colors={CATEGORY_GRADIENT[act.category] || CATEGORY_GRADIENT.default}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={hostS.prevCardBlock}
+                          >
+                            <Ionicons
+                              name={(CATEGORY_ICON[act.category] || CATEGORY_ICON.default) as any}
+                              size={24}
+                              color={colors.white}
+                            />
+                          </LinearGradient>
+                          <Text style={hostS.prevCardTitle} numberOfLines={2}>{act.title}</Text>
+                          <Text style={hostS.prevCardMeta}>{act.location} · {act.date}</Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Sticky bottom bar */}
+              <View style={hostS.stickyBar}>
+                <TouchableOpacity
+                  style={hostS.msgBtn}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    // TODO: wire to messages table — check for existing convo between
+                    // user and host, create one if none exists, navigate to that chat.
+                    setShowHostProfile(false);
+                    if (onMessagesPress) {
+                      onMessagesPress();
+                    } else {
+                      showToast("messaging coming soon.");
+                    }
+                  }}
+                >
+                  <Text style={hostS.msgBtnText}>say hey 👋</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })()}
+      </Modal>
+
       {/* Upsell Sheet — i'm in limit */}
       <UpsellSheet
         visible={showUpsell}
         onDismiss={() => setShowUpsell(false)}
         onUpgrade={() => { setShowUpsell(false); onMembershipPress?.(); }}
-        headline="you've used your 3 free i'm ins."
+        headline="you've used your 5 free i'm ins."
         subtext="upgrade to tandem go for unlimited access to activities every month."
       />
 
@@ -795,6 +1623,15 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         subtext="upgrade to host adventures for more than one person."
       />
 
+      {/* Upsell Sheet — locked filters */}
+      <UpsellSheet
+        visible={showFilterUpsell}
+        onDismiss={() => setShowFilterUpsell(false)}
+        onUpgrade={() => { setShowFilterUpsell(false); setShowFilterSheet(false); onMembershipPress?.(); }}
+        headline="advanced filters are a tandem go thing."
+        subtext="filter by sexuality, religion, personality, and humor with tandem go."
+      />
+
       {/* Request Sheet */}
       <Modal
         visible={showRequestSheet}
@@ -805,7 +1642,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
         <View style={reqS.container}>
           <View style={reqS.handle} />
           <View style={reqS.header}>
-            <Text style={reqS.title} numberOfLines={1}>{requestSheetActivity?.title ?? ""}</Text>
+            <Text style={reqS.title} numberOfLines={1}>who wants in</Text>
             <TouchableOpacity onPress={() => setShowRequestSheet(false)} style={reqS.closeBtn} activeOpacity={0.7}>
               <Ionicons name="close" size={20} color={colors.muted} />
             </TouchableOpacity>
@@ -818,36 +1655,48 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress }: Dis
                 <Text style={reqS.emptyDesc}>when someone wants in, they'll show up here.</Text>
               </View>
             ) : (
-              requestSheetActivity?.pendingRequests.map(req => (
-                <View key={req.id} style={reqS.requesterRow}>
-                  <Image source={{ uri: req.photo }} style={reqS.requesterAvatar} />
-                  <View style={reqS.requesterInfo}>
-                    <Text style={reqS.requesterName}>{req.name}</Text>
-                    <Text style={reqS.requesterBio} numberOfLines={2}>{req.bio}</Text>
-                  </View>
-                  <View style={reqS.requesterActions}>
-                    <TouchableOpacity
-                      style={reqS.letInBtn}
-                      activeOpacity={0.88}
-                      onPress={() => handleLetIn(
-                        requestSheetActivity.id,
-                        req.id,
-                        req.name,
-                        requestSheetActivity.title,
+              requestSheetActivity?.pendingRequests.map(req => {
+                const atLimit = (approvedCounts[requestSheetActivity.id] ?? 0) >= getApprovalLimit();
+                return (
+                  <View key={req.id} style={reqS.requesterRow}>
+                    <Image source={{ uri: req.photo }} style={reqS.requesterAvatar} />
+                    <View style={reqS.requesterInfo}>
+                      <Text style={reqS.requesterName}>{req.name}</Text>
+                      <Text style={reqS.requesterBio} numberOfLines={2}>{req.bio}</Text>
+                    </View>
+                    <View style={reqS.requesterActions}>
+                      {atLimit ? (
+                        <View style={reqS.letInBtnLocked}>
+                          <Ionicons name="lock-closed-outline" size={11} color={colors.muted} />
+                          <Text style={reqS.letInBtnLockedText}>
+                            {tier === "free" ? "go" : "trail"}
+                          </Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={reqS.letInBtn}
+                          activeOpacity={0.88}
+                          onPress={() => handleLetIn(
+                            requestSheetActivity.id,
+                            req.id,
+                            req.name,
+                            requestSheetActivity.title,
+                          )}
+                        >
+                          <Text style={reqS.letInBtnText}>let them in</Text>
+                        </TouchableOpacity>
                       )}
-                    >
-                      <Text style={reqS.letInBtnText}>let them in</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={reqS.passBtn}
-                      activeOpacity={0.8}
-                      onPress={() => handlePass(requestSheetActivity.id, req.id)}
-                    >
-                      <Text style={reqS.passBtnText}>pass</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={reqS.passBtn}
+                        activeOpacity={0.8}
+                        onPress={() => handlePass(requestSheetActivity.id, req.id)}
+                      >
+                        <Text style={reqS.passBtnText}>pass</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </ScrollView>
         </View>
@@ -923,7 +1772,7 @@ const s = StyleSheet.create({
   requestBadgeText: { fontSize: 11, fontWeight: "700", color: colors.teal },
 
   // Card deck
-  deckContainer: { flex: 1, paddingHorizontal: 16 },
+  deckContainer: { flex: 1, paddingHorizontal: 16, paddingBottom: 80 },
   deckProgress: { fontSize: 12, color: colors.muted, paddingTop: 10, paddingBottom: 6 },
   deckDone: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingBottom: 80 },
   deckDoneTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground, textAlign: "center" },
@@ -931,78 +1780,136 @@ const s = StyleSheet.create({
 
   // Card scroll
   cardScroll: { flex: 1 },
-  cardScrollContent: { paddingTop: 4, paddingBottom: 12 },
+  cardScrollContent: { paddingTop: 4, paddingBottom: 8 },
 
   // Activity card
-  cardWrapper: { gap: 4 },
+  cardWrapper: { gap: 0 },
   card: {
     backgroundColor: colors.white, borderRadius: radius.lg,
     overflow: "hidden", ...shadows.card,
   },
+  cardSaved: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.teal,
+  },
+  savedPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: "#F0FDFB",
+  },
+  savedPillText: { fontSize: 11, fontWeight: "600", color: colors.teal },
+  bookmarkBtn: {
+    position: "absolute", top: 12, right: 12,
+    backgroundColor: "rgba(255,255,255,0.88)",
+    borderRadius: 20, padding: 6,
+  },
   photoWrap: { position: "relative" },
-  cardPhoto: { width: "100%", height: 240, backgroundColor: colors.surface },
+  cardPhoto: { width: "100%", height: 260, backgroundColor: colors.surface },
   categoryPill: {
     position: "absolute", bottom: 12, left: 12,
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(255,255,255,0.88)", borderRadius: radius.full,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.9)", borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 5,
   },
-  categoryPillEmoji: { fontSize: 13 },
   categoryPillText: { fontSize: 11, fontWeight: "700", color: colors.foreground },
   featuredBadge: {
     position: "absolute", top: 12, right: 12,
     borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4,
   },
   featuredBadgeText: { fontSize: 10, fontWeight: "700", color: colors.white },
-  cardBody: { padding: 14, gap: 6 },
-  cardTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground, letterSpacing: -0.3, marginBottom: 2 },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: 5 },
+
+  cardBody: { padding: 20, gap: 0 },
+  cardTitle: { fontSize: 20, fontWeight: "700", color: colors.foreground, letterSpacing: -0.3, marginBottom: 12 },
+  cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
   cardMetaTeal: { fontSize: 13, color: colors.teal, fontWeight: "600" },
   cardMetaGray: { fontSize: 13, color: colors.muted },
   vibeBox: {
     borderLeftWidth: 3, borderLeftColor: colors.teal,
     backgroundColor: "#F0FDFB", borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 10, marginTop: 2,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
-  vibeText: { fontSize: 13, fontStyle: "italic", color: colors.secondary, lineHeight: 19 },
-  cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
+  vibeText: { fontSize: 14, fontStyle: "italic", color: colors.secondary, lineHeight: 20 },
 
-  // Host strip (below card)
-  hostStrip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 },
-  hostStripAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surface },
-  hostStripText: { fontSize: 12, color: colors.muted },
-  hostStripName: { fontWeight: "700", color: colors.secondary },
-
-  // Going row
+  // Attendee row
   goingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   avatarStack: { flexDirection: "row" },
-  stackAvatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.white, backgroundColor: colors.surface },
+  stackAvatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.white, backgroundColor: colors.surface },
   goingText: { fontSize: 12, color: colors.muted, fontWeight: "500" },
+
+  // Host strip below card
+  hostStrip: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10,
+    gap: 10,
+  },
+  hostStripAvatarWrap: {
+    width: 34, height: 34, borderRadius: 17,
+    borderWidth: 1.5, borderColor: colors.teal,
+    padding: 1,
+  },
+  hostStripAvatar: { width: "100%", height: "100%", borderRadius: 15, backgroundColor: colors.surface },
+  hostStripInfo: { flex: 1 },
+  hostStripLabel: { fontSize: 13, color: colors.muted },
+  hostStripName: { fontWeight: "700", color: colors.foreground },
+  hostStripBio: { fontSize: 11, fontStyle: "italic", color: colors.muted, marginTop: 1 },
+  viewProfile: { fontSize: 13, fontWeight: "600", color: colors.teal },
 
   // Action buttons row
   actionRow: {
-    flexDirection: "row", gap: 12,
-    paddingTop: 12, paddingHorizontal: 0,
+    flexDirection: "row", gap: 8,
+    paddingTop: 8, paddingHorizontal: 16,
     backgroundColor: colors.background,
   },
   passBtn: {
-    height: 52, borderRadius: radius.full,
-    backgroundColor: colors.white, borderWidth: 1.5, borderColor: "#E5E7EB",
-    alignItems: "center", justifyContent: "center",
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
   },
   passBtnText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
   imInBtn: {
-    height: 52, borderRadius: radius.full,
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#2DD4BF", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#2DD4BF",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
   imInBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
   requestedBtn: {
-    height: 52, borderRadius: radius.full,
-    backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
-    alignItems: "center", justifyContent: "center",
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
   requestedBtnText: { fontSize: 15, fontWeight: "600", color: colors.muted },
+
+  // Vibe emoji tag pills
+  vibeTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  vibeTagPill: {
+    backgroundColor: colors.white, borderRadius: radius.full,
+    borderWidth: 1, borderColor: "#E5E7EB",
+    paddingHorizontal: 8, paddingVertical: 6,
+  },
+  vibeTagText: { fontSize: 12, color: colors.foreground },
+
+  // Prompt answer cards (on card)
+  promptCard: {
+    backgroundColor: "#FAFAFA", borderRadius: 10,
+    borderWidth: 1, borderColor: "#E5E7EB",
+    padding: 12, gap: 4,
+  },
+  promptCardQ: { fontSize: 10, fontWeight: "700", color: "#9CA3AF", letterSpacing: 0.8, textTransform: "uppercase" },
+  promptCardA: { fontSize: 14, fontWeight: "600", color: colors.foreground, lineHeight: 20 },
 
   // Toast
   toast: {
@@ -1011,6 +1918,27 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 10,
   },
   toastText: { fontSize: 13, color: colors.white, fontWeight: "500" },
+
+  saveToast: {
+    position: "absolute", bottom: 112, left: 24, right: 24,
+    backgroundColor: "#FAF7F0", borderRadius: 10,
+    borderWidth: 1, borderColor: "#E0D8C8",
+    paddingHorizontal: 16, paddingVertical: 10,
+    alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  saveToastText: { fontSize: 13, color: "#6B7280", textAlign: "center" },
+
+  // Locked filter indicator
+  lockedFilterPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    alignSelf: "flex-start", marginTop: 10,
+    backgroundColor: colors.tintTeal, borderRadius: radius.full,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: colors.teal,
+  },
+  lockedFilterText: { fontSize: 11, fontWeight: "600", color: colors.teal },
 });
 
 const notifS = StyleSheet.create({
@@ -1029,30 +1957,58 @@ const filterS = StyleSheet.create({
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
   title: { fontSize: 22, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   resetText: { fontSize: 14, fontWeight: "600", color: colors.teal },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, gap: 6, paddingBottom: 24 },
   sectionLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.2, marginTop: 16, marginBottom: 10 },
-  optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  option: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.full, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border },
-  optionSelected: { borderColor: colors.teal, backgroundColor: colors.tintTeal },
-  optionText: { fontSize: 14, fontWeight: "500", color: colors.foreground },
-  optionTextSelected: { color: colors.teal, fontWeight: "600" },
-  lockCard: { marginTop: 20, backgroundColor: colors.white, borderRadius: radius.lg, padding: 20, gap: 14, borderWidth: 1, borderColor: colors.border, ...shadows.card },
-  lockCardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  lockCardTitle: { fontSize: 16, fontWeight: "700", color: colors.foreground },
+  lockedSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, marginBottom: 10 },
   goBadge: { backgroundColor: colors.tintTeal, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 3 },
   goBadgeText: { fontSize: 11, fontWeight: "700", color: colors.teal },
-  lockedTags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  lockedTag: { backgroundColor: colors.surface, borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 6 },
-  lockedTagText: { fontSize: 12, fontWeight: "500", color: colors.muted },
-  unlockBtn: { height: 48, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
-  unlockBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  unlockBtnText: { fontSize: 14, fontWeight: "700", color: colors.white },
+
+  // Pill rows (free)
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border },
+  pillText: { fontSize: 13, fontWeight: "500", color: colors.foreground },
+  pillActive: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full },
+  pillActiveText: { fontSize: 13, fontWeight: "700", color: colors.white },
+
+  // Locked pills
+  pillLocked: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.full,
+    backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, opacity: 0.7,
+  },
+  pillLockedText: { fontSize: 13, fontWeight: "500", color: colors.muted },
+
+  // Age stepper
+  ageRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  ageStepper: { flex: 1, alignItems: "center", gap: 6 },
+  ageLabel: { fontSize: 11, fontWeight: "700", color: colors.muted, letterSpacing: 0.8 },
+  stepperRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stepBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  stepBtnText: { fontSize: 20, fontWeight: "300", color: colors.foreground, lineHeight: 24 },
+  stepValue: { fontSize: 20, fontWeight: "700", color: colors.foreground, minWidth: 32, textAlign: "center" },
+  ageDash: { fontSize: 18, color: colors.muted, paddingTop: 20 },
+
+  // Footer
   footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
-  showResultsBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
-  showResultsBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  showResultsBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  applyBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
+  applyBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  applyBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  option: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  optionSelected: { borderColor: colors.teal, backgroundColor: colors.tintTeal },
+  optionText: { fontSize: 13, fontWeight: "600", color: colors.secondary },
+  optionTextSelected: { color: colors.teal },
 });
 
 const modalS = StyleSheet.create({
@@ -1099,6 +2055,7 @@ const modalS = StyleSheet.create({
   spotsBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   spotsBtnText: { fontSize: 18, fontWeight: "300", color: colors.foreground, lineHeight: 22 },
   spotsNum: { fontSize: 18, fontWeight: "700", color: colors.foreground, minWidth: 24, textAlign: "center" },
+  spotsGroupHint: { fontSize: 11, color: colors.teal, fontWeight: "600", marginTop: 2 },
   spotsBtnPlus: { width: 32, height: 32, borderRadius: 16, overflow: "hidden" },
   spotsBtnPlusInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   spotsBtnPlusText: { fontSize: 18, fontWeight: "300", color: colors.white, lineHeight: 22 },
@@ -1113,18 +2070,56 @@ const modalS = StyleSheet.create({
   postBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
   postBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   postBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  groupNudge: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    backgroundColor: "#F0FDFB", borderRadius: 8,
+    borderLeftWidth: 3, borderLeftColor: colors.teal,
+    paddingHorizontal: 12, paddingVertical: 10,
+    marginTop: -8,
+  },
+  groupNudgeText: { fontSize: 13, color: colors.muted },
+  categoryPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  categoryPill: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100,
+    backgroundColor: colors.white, borderWidth: 1, borderColor: "#E0D8C8",
+  },
+  categoryPillActive: { backgroundColor: "#1D9E75", borderColor: "#1D9E75" },
+  categoryPillText: { fontSize: 14, color: "#444", fontFamily: "Caveat_400Regular" },
+  categoryPillTextActive: { color: colors.white },
+  customCategoryInput: {
+    marginTop: 10, borderWidth: 0.5, borderColor: "#E0D8C8",
+    borderRadius: 10, padding: 12,
+    fontSize: 15, color: colors.foreground,
+    backgroundColor: colors.white,
+  },
+  dateField: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 0.5, borderColor: "#E0D8C8",
+    borderRadius: 10, padding: 14,
+    backgroundColor: colors.white,
+  },
+  dateFieldText: { fontFamily: "Caveat_400Regular", fontSize: 16, color: colors.foreground },
+  dateFieldHint: { fontSize: 12, color: colors.muted },
 });
 
 const celebS = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
-  banner: { width: "100%", paddingVertical: 16, borderRadius: radius.lg, alignItems: "center", marginBottom: 16 },
-  bannerText: { fontSize: 20, fontWeight: "800", color: colors.white, letterSpacing: -0.5 },
-  card: { width: "100%", backgroundColor: colors.white, borderRadius: radius.xl, padding: 28, alignItems: "center", gap: 12, ...shadows.card },
-  headline: { fontSize: 26, fontWeight: "800", color: colors.foreground, letterSpacing: -0.8, marginTop: 4 },
-  sub: { fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22, maxWidth: 260 },
-  btn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden", marginTop: 8, ...shadows.brand },
-  btnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  btnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  backdrop: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: "100%", backgroundColor: colors.white,
+    borderRadius: radius.xl ?? 20,
+    paddingHorizontal: 24, paddingVertical: 28,
+    alignItems: "center", gap: 4,
+    ...shadows.float,
+  },
+  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, textAlign: "center", marginBottom: 6 },
+  subtitle: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: 16 },
+  keepGoingBtn: { width: "100%", height: 52, borderRadius: 26, overflow: "hidden" },
+  keepGoingInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  keepGoingText: { fontSize: 15, fontWeight: "700", color: colors.white },
 });
 
 const reqS = StyleSheet.create({
@@ -1159,4 +2154,95 @@ const reqS = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
   },
   passBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  letInBtnLocked: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: colors.surface, borderRadius: radius.full,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: colors.border, opacity: 0.6,
+  },
+  letInBtnLockedText: { fontSize: 11, fontWeight: "700", color: colors.muted },
+});
+
+const hostS = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  handle: {
+    width: 36, height: 4, backgroundColor: colors.border,
+    borderRadius: 2, alignSelf: "center", marginTop: 12,
+  },
+  topBar: {
+    flexDirection: "row", justifyContent: "flex-end",
+    paddingHorizontal: 20, paddingTop: 8,
+  },
+  closeBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
+  },
+  scrollContent: { padding: 24, gap: 20, paddingBottom: 120 },
+
+  // Hero
+  heroSection: { alignItems: "center", gap: 4 },
+  avatar: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: colors.surface, marginBottom: 8,
+  },
+  name: { fontSize: 22, fontWeight: "700", color: colors.foreground, letterSpacing: -0.4 },
+  location: { fontSize: 13, color: colors.muted },
+  ratingText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
+
+  // Bio
+  bio: {
+    fontStyle: "italic", color: colors.muted,
+    textAlign: "center", fontSize: 14, lineHeight: 20,
+  },
+
+  // Stats
+  statsRow: { flexDirection: "row", justifyContent: "center", gap: 12 },
+  statPill: {
+    paddingHorizontal: 20, paddingVertical: 10,
+    backgroundColor: colors.white, borderRadius: radius.full,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: "center", gap: 2,
+  },
+  statNum: { fontSize: 18, fontWeight: "700", color: colors.foreground },
+  statLabel: { fontSize: 11, color: colors.muted, fontWeight: "500" },
+
+  // Sections
+  section: { gap: 12 },
+  sectionLabel: { fontSize: 13, fontWeight: "700", color: colors.foreground, letterSpacing: -0.2 },
+
+  // Shared interests
+  interestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  interestPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full,
+  },
+  interestText: { fontSize: 13, fontWeight: "600", color: colors.white },
+
+  // Previous activities
+  viewAll: { fontSize: 13, fontWeight: "600", color: colors.teal },
+  prevCard: { width: 140 },
+  prevCardBlock: {
+    height: 90, borderRadius: radius.md,
+    alignItems: "center", justifyContent: "center", marginBottom: 8,
+  },
+  prevCardTitle: { fontSize: 13, fontWeight: "600", color: colors.foreground, lineHeight: 17 },
+  prevCardMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+
+  // Sticky bottom bar
+  stickyBar: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    flexDirection: "row", gap: 10,
+    paddingHorizontal: 20, paddingVertical: 16,
+    paddingBottom: 32,
+    borderTopWidth: 1, borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  msgBtn: {
+    flex: 1, height: 54, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.teal,
+    alignItems: "center", justifyContent: "center",
+  },
+  msgBtnText: {
+    fontSize: 15, fontWeight: "700", color: colors.teal,
+  },
 });

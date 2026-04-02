@@ -61,9 +61,6 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
   const [showLinkedAccounts, setShowLinkedAccounts] = useState(false);
   const [showTermsScreen, setShowTermsScreen] = useState(false);
   const [showPrivacyScreen, setShowPrivacyScreen] = useState(false);
-
-  if (showTermsScreen) return <TermsScreen onBack={() => setShowTermsScreen(false)} />;
-  if (showPrivacyScreen) return <PrivacyScreen onBack={() => setShowPrivacyScreen(false)} />;
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
@@ -72,6 +69,7 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
     toastTimer.current = setTimeout(() => setToast(""), 2400);
   };
 
+  // All hooks must be declared before any conditional returns
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles")
@@ -117,8 +115,9 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
           onPress: async () => {
             try {
               if (user) {
-                await supabase.from("profiles").delete().eq("user_id", user.id);
-                await supabase.auth.admin?.deleteUser?.(user.id);
+                await supabase.functions.invoke("delete-account", {
+                  body: { user_id: user.id },
+                });
               }
               await signOut();
             } catch {
@@ -131,6 +130,13 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
   };
 
   const backChevron = <Ionicons name="chevron-back" size={22} color={colors.teal} />;
+
+  if (showTermsScreen) {
+    return <TermsScreen onBack={() => { setShowTermsScreen(false); setShowPrivacyScreen(false); }} />;
+  }
+  if (showPrivacyScreen) {
+    return <PrivacyScreen onBack={() => { setShowPrivacyScreen(false); setShowTermsScreen(false); }} />;
+  }
 
   return (
     <View style={s.container}>
@@ -194,7 +200,13 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
             <ChevronRight />
           </TouchableOpacity>
           <View style={s.divider} />
-          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => Linking.openURL("mailto:tandemapp.hq@gmail.com?subject=Tandem%20App%20Feedback")}>
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={async () => {
+            try {
+              await Linking.openURL("mailto:tandemapp.hq@gmail.com?subject=Tandem%20App%20Feedback");
+            } catch {
+              Alert.alert("Contact us", "Reach us at tandemapp.hq@gmail.com");
+            }
+          }}>
             <Text style={s.rowLabel}>Help & Feedback</Text>
             <ChevronRight />
           </TouchableOpacity>

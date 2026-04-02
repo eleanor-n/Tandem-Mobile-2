@@ -1,31 +1,42 @@
 {
   "expo": {
-    "name": "Tandem",
+    "name": "Tandem - Never Go Alone",
     "slug": "tandem",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "jsEngine": "hermes",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0A0E1A"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.tandem.app"
+      "icon": "./assets/icon.png",
+      "supportsTablet": false,
+      "bundleIdentifier": "com.thetandemapp.app",
+      "buildNumber": "2",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Tandem uses your photo library so you can add a profile photo and share memories in your scrapbook.",
+        "NSCameraUsageDescription": "Tandem uses your camera so you can take a profile photo.",
+        "NSMicrophoneUsageDescription": "Tandem uses your microphone so you can record voice memo prompts."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0A0E1A"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tandem.app"
+      "package": "com.thetandemapp.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -50,6 +61,12 @@
           "microphonePermission": "Tandem needs microphone access for video prompts."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3e1f19ba-7221-4cff-a70e-c918cdda0506"
+      }
+    },
+    "owner": "tandem_never_go_alone"
   }
 }

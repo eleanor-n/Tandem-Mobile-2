@@ -13,7 +13,7 @@ export const TermsScreen = ({ onBack }: TermsScreenProps) => {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => { try { onBack(); } catch { /* no-op */ } }} style={s.backBtn} activeOpacity={0.7}>
           <View style={s.chevron} />
           <Text style={s.backText}>Settings</Text>
         </TouchableOpacity>

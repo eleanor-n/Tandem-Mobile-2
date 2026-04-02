@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
-import { useState, useEffect } from "react";
-import { View, ActivityIndicator, Linking, Alert } from "react-native";
+import { useState, useEffect, useRef } from "react";
+import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { WelcomeScreen } from "./src/screens/WelcomeScreen";
@@ -14,8 +14,13 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
+import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
+import { IntroScreen } from "./src/screens/IntroScreen";
+import { AppWalkthrough } from "./src/components/AppWalkthrough";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
+import { getSunnyResponse } from "./src/lib/sunny";
 
 type Tab = "Discover" | "Map" | "Scrapbook" | "Profile";
 type UnauthScreen = "welcome" | "auth";
@@ -24,10 +29,62 @@ const AppInner = () => {
   const { user, loading, onboardingCompleted, refreshOnboarding } = useAuth();
   const [unauthScreen, setUnauthScreen] = useState<UnauthScreen>("welcome");
   const [activeTab, setActiveTab] = useState<Tab>("Discover");
+  const [hasSeenIntro, setHasSeenIntro] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
-  const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string } | null>(null);
+  const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
+  const [showSplash, setShowSplash] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [showPost, setShowPost] = useState(false);
+  const [sunnyToast, setSunnyToast] = useState<string | null>(null);
+  const sunnyToastOpacity = useRef(new Animated.Value(0)).current;
+  const sunnyWelcomed = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("hasSeenIntro").then(val => {
+      setHasSeenIntro(val === "true");
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!onboardingCompleted || !user || showSplash || showWalkthrough || sunnyWelcomed.current) return;
+    const checkWelcome = async () => {
+      const seen = await AsyncStorage.getItem("tandem_sunny_welcomed");
+      if (seen) return;
+      sunnyWelcomed.current = true;
+      await AsyncStorage.setItem("tandem_sunny_welcomed", "true");
+      const text = await getSunnyResponse({ context: "firstLogin", userName: user.email?.split("@")[0] });
+      if (!text) return;
+      setSunnyToast(text);
+      sunnyToastOpacity.setValue(0);
+      Animated.timing(sunnyToastOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+      setTimeout(() => {
+        Animated.timing(sunnyToastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setSunnyToast(null));
+      }, 3500);
+    };
+    checkWelcome();
+  }, [onboardingCompleted, user, showSplash, showWalkthrough]);
+
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      const hasOnboarded = await AsyncStorage.getItem("tandem_has_onboarded");
+      if (!hasOnboarded) {
+        // Existing user who predates the splash feature — skip it all
+        await AsyncStorage.multiSet([
+          ["tandem_has_onboarded", "true"],
+          ["splash_seen", "true"],
+          ["walkthrough_complete", "true"],
+        ]);
+        return;
+      }
+      const seen = await AsyncStorage.getItem("splash_seen");
+      if (!seen) {
+        setShowSplash(true);
+      }
+    };
+    if (onboardingCompleted === true) checkFirstLaunch();
+  }, [onboardingCompleted]);
 
   // Deep link handler for Google OAuth callback
   useEffect(() => {
@@ -56,7 +113,7 @@ const AppInner = () => {
   }, []);
 
   // Loading state — checking session or profile (covers new-signup race)
-  if (loading || (user && onboardingCompleted === null)) {
+  if (loading || (user && onboardingCompleted === null) || hasSeenIntro === null) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.teal} size="large" />
@@ -78,8 +135,11 @@ const AppInner = () => {
     );
   }
 
-  // ── Logged in, onboarding not done → Sunny ─────────────────
+  // ── Logged in, onboarding not done → Intro then Sunny ────────
   if (onboardingCompleted === false) {
+    if (!hasSeenIntro) {
+      return <IntroScreen onDone={() => setHasSeenIntro(true)} />;
+    }
     return (
       <SunnyScreen
         onComplete={async (data) => {
@@ -105,12 +165,24 @@ const AppInner = () => {
                 ...(data.friend_who ? { friend_who: data.friend_who } : {}),
               },
               deep_prompts: deepPrompts,
+              photos: Array.isArray(data.photos) && data.photos.length > 0 ? data.photos : [],
               onboarding_completed: true,
             }, { onConflict: "user_id" });
             if (error) throw error;
           } catch (err: any) {
             Alert.alert("Something went wrong", err.message || "Could not save your profile. Please try again.");
             return;
+          }
+          // Send welcome email
+          try {
+            await supabase.functions.invoke("send-welcome-email", {
+              body: {
+                email: user.email,
+                name: data.name || data.first_name || "",
+              },
+            });
+          } catch {
+            // Non-blocking — don't fail onboarding if email fails
           }
           // Re-fetch profile so onboardingCompleted flips to true → routes to Discover
           await refreshOnboarding();
@@ -120,6 +192,18 @@ const AppInner = () => {
   }
 
   // ── Logged in, onboarding done → Main app ─────────────────
+  if (showSplash) {
+    return (
+      <SplashAnimationScreen
+        onComplete={async () => {
+          await AsyncStorage.setItem("splash_seen", "true");
+          setShowSplash(false);
+          const walkthroughSeen = await AsyncStorage.getItem("walkthrough_complete");
+          if (!walkthroughSeen) setShowWalkthrough(true);
+        }}
+      />
+    );
+  }
 
   // Overlay screens (highest priority first)
   if (activeChat) {
@@ -145,13 +229,15 @@ const AppInner = () => {
     return <MembershipScreen onBack={() => setShowMembership(false)} />;
   }
 
-  const tabProps = { activeTab, onTabPress: (t: string) => setActiveTab(t as Tab) };
+  const onPostPress = () => { setActiveTab("Discover"); setShowPost(true); };
+  const tabProps = { activeTab, onTabPress: (t: string) => setActiveTab(t as Tab), onPostPress };
 
+  let tabContent: React.ReactNode;
   switch (activeTab) {
-    case "Map":       return <MapScreen {...tabProps} />;
-    case "Scrapbook": return <ScrapbookScreen {...tabProps} onMembershipPress={() => setShowMembership(true)} />;
+    case "Map":       tabContent = <MapScreen {...tabProps} />; break;
+    case "Scrapbook": tabContent = <ScrapbookScreen {...tabProps} />; break;
     case "Profile":
-      return (
+      tabContent = (
         <ProfileScreen
           {...tabProps}
           onSettingsPress={() => setShowSettings(true)}
@@ -159,16 +245,66 @@ const AppInner = () => {
           onMessagesPress={() => setShowMessages(true)}
         />
       );
+      break;
     default:
-      return (
-        <DiscoverScreen
-          {...tabProps}
-          onMessagesPress={() => setShowMessages(true)}
-          onMembershipPress={() => setShowMembership(true)}
-        />
+      tabContent = (
+        <>
+          <DiscoverScreen
+            {...tabProps}
+            onMessagesPress={() => setShowMessages(true)}
+            onMembershipPress={() => setShowMembership(true)}
+            openPostModal={showPost}
+            onPostModalOpened={() => setShowPost(false)}
+          />
+          {showWalkthrough && (
+            <AppWalkthrough
+              onComplete={async () => {
+                await AsyncStorage.setItem("walkthrough_complete", "true");
+                setShowWalkthrough(false);
+              }}
+            />
+          )}
+        </>
       );
   }
+
+  return (
+    <View style={{ flex: 1 }}>
+      {tabContent}
+      {sunnyToast ? (
+        <Animated.View style={[appS.sunnyToast, { opacity: sunnyToastOpacity }]} pointerEvents="none">
+          <Text style={appS.sunnyToastText}>{sunnyToast}</Text>
+        </Animated.View>
+      ) : null}
+    </View>
+  );
 };
+
+const appS = StyleSheet.create({
+  sunnyToast: {
+    position: "absolute",
+    bottom: 100,
+    left: 24,
+    right: 24,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  sunnyToastText: {
+    fontStyle: "italic",
+    fontSize: 13,
+    color: "#888",
+    textAlign: "center",
+  },
+});
 
 export default function App() {
   return (

@@ -1,8 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image,
+  Image, Modal, Animated,
 } from "react-native";
+import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +11,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav } from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { useMembershipTier } from "../hooks/useMembershipTier";
 import { colors, radius, shadows, gradients } from "../theme";
+import { getSunnyResponse } from "../lib/sunny";
 
 const INITIAL_REGION = {
   latitude: 40.349,
@@ -23,50 +26,58 @@ const ACTIVITIES = [
   {
     id: "1",
     title: "tennis session",
+    category: "fitness",
     location: "public courts",
     distance: "0.4 mi",
-    emoji: "🎾",
-    photo: "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=400&h=300&fit=crop",
+    icon: "tennisball-outline",
+    photo: "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=800&h=500&fit=crop",
     date: "Sat · 10am",
     goingCount: 2,
+    vibe: "casual rallying, no scorekeeping. just good vibes and maybe a rematch.",
     coordinate: { latitude: 40.358, longitude: -74.668 },
-    host: { name: "maya", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face" },
+    host: { name: "maya", bio: "tennis casual, coffee serious", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face" },
   },
   {
     id: "2",
     title: "morning coffee",
+    category: "coffee",
     location: "blue bottle",
     distance: "1.2 mi",
-    emoji: "☕",
-    photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop",
+    icon: "cafe-outline",
+    photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=500&fit=crop",
     date: "Sun · 9am",
     goingCount: 3,
+    vibe: "slow morning, good espresso, zero agenda.",
     coordinate: { latitude: 40.342, longitude: -74.651 },
-    host: { name: "alex", photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" },
+    host: { name: "alex", bio: "third wave coffee person, not sorry about it", photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" },
   },
   {
     id: "3",
     title: "farmers market run",
+    category: "markets",
     location: "nassau st",
     distance: "0.8 mi",
-    emoji: "🛍",
-    photo: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=400&h=300&fit=crop",
+    icon: "bag-outline",
+    photo: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=500&fit=crop",
     date: "Sat · 9am",
     goingCount: 5,
+    vibe: "wandering stalls, buying things i don't need, eating something good.",
     coordinate: { latitude: 40.353, longitude: -74.662 },
-    host: { name: "sam", photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face" },
+    host: { name: "sam", bio: "local produce evangelist and weekend wanderer", photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face" },
   },
   {
     id: "4",
     title: "ridge hike",
+    category: "hiking",
     location: "sourland mountain",
     distance: "4.1 mi",
-    emoji: "🥾",
-    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&h=300&fit=crop",
+    icon: "walk-outline",
+    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=500&fit=crop",
     date: "Sun · 7am",
     goingCount: 4,
+    vibe: "early start, always worth it. bring snacks and layers.",
     coordinate: { latitude: 40.363, longitude: -74.673 },
-    host: { name: "riley", photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face" },
+    host: { name: "riley", bio: "trail runner, always chasing the sunrise", photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face" },
   },
 ];
 
@@ -95,11 +106,11 @@ const ActivityPin = ({
     <View style={pinS.wrapper}>
       {selected ? (
         <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={pinS.pinSelected}>
-          <Text style={pinS.emoji} allowFontScaling={false}>{item.emoji}</Text>
+          <Ionicons name={item.icon as any} size={16} color={colors.white} />
         </LinearGradient>
       ) : (
         <View style={pinS.pin}>
-          <Text style={pinS.emoji} allowFontScaling={false}>{item.emoji}</Text>
+          <Ionicons name={item.icon as any} size={16} color={colors.teal} />
         </View>
       )}
       <View style={[pinS.tail, selected && pinS.tailSelected]} />
@@ -110,15 +121,34 @@ const ActivityPin = ({
 interface MapScreenProps {
   activeTab: string;
   onTabPress: (tab: string) => void;
+  onPostPress?: () => void;
 }
 
-export const MapScreen = ({ activeTab, onTabPress }: MapScreenProps) => {
+export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps) => {
   const insets = useSafeAreaInsets();
+  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [imInSet, setImInSet] = useState<Set<string>>(new Set());
+  const [selectedActivity, setSelectedActivity] = useState<typeof ACTIVITIES[0] | null>(null);
   const { user } = useAuth();
+  const { isLimited, incrementImIn } = useMembershipTier();
+  const [requestedSet, setRequestedSet] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sunnyText = useRef<string | null>(null);
+  const [sunnyVisible, setSunnyVisible] = useState(false);
+  const sunnyOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (ACTIVITIES.length === 0) {
+      getSunnyResponse({ context: "mapEmpty" }).then(text => {
+        sunnyText.current = text;
+        setTimeout(() => {
+          setSunnyVisible(true);
+          Animated.timing(sunnyOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        }, 700);
+      });
+    }
+  }, []);
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -126,27 +156,42 @@ export const MapScreen = ({ activeTab, onTabPress }: MapScreenProps) => {
     toastTimer.current = setTimeout(() => setToast(""), 2400);
   };
 
+  const handleImIn = async (activityId: string) => {
+    if (isLimited) {
+      showToast("you've hit your monthly limit. upgrade to tandem go for more.");
+      return;
+    }
+    try {
+      if (user) {
+        await supabase.from("join_requests").insert({
+          activity_id: activityId,
+          requester_id: user.id,
+          status: "pending",
+        } as any);
+      }
+    } catch { /* join_requests table may not exist yet */ }
+    await incrementImIn();
+    setRequestedSet(prev => new Set([...prev, activityId]));
+    const act = ACTIVITIES.find(a => a.id === activityId);
+    const subtitle = await getSunnyResponse({
+      context: "imIn",
+      activityTitle: act?.title ?? "the activity",
+      hostName: act?.host.name ?? "them",
+    });
+    showToast(subtitle);
+    setSelectedActivity(null);
+  };
+
   const saveActivityForLater = async (act: typeof ACTIVITIES[0]) => {
+    showToast("saved for later.");
     if (!user) return;
     try {
       const { data } = await supabase.from("profiles").select("saved_activities").eq("user_id", user.id).single();
       const existing: any[] = (data?.saved_activities as any[]) || [];
       if (existing.some((a: any) => a.id === act.id)) return;
-      const entry = { id: act.id, name: act.title, activity: act.emoji, location: act.location, saved_at: new Date().toISOString() };
+      const entry = { id: act.id, name: act.title, activity: act.title, location: act.location, saved_at: new Date().toISOString() };
       await supabase.from("profiles").update({ saved_activities: [...existing, entry] } as any).eq("user_id", user.id);
     } catch { /* saved_activities column may not exist yet */ }
-  };
-
-  const handleImIn = (actId: string) => {
-    if (imInSet.has(actId)) return;
-    setImInSet(prev => new Set([...prev, actId]));
-    const act = ACTIVITIES.find(a => a.id === actId);
-    showToast(`you're in for ${act?.title ?? "it"}! 🎉`);
-  };
-
-  const handleLater = (act: typeof ACTIVITIES[0]) => {
-    saveActivityForLater(act);
-    showToast("saved for later.");
   };
 
   return (
@@ -212,13 +257,15 @@ export const MapScreen = ({ activeTab, onTabPress }: MapScreenProps) => {
           contentContainerStyle={s.cardsContent}
         >
           {ACTIVITIES.map(act => {
-            const isIn = imInSet.has(act.id);
             const isSelected = selectedId === act.id;
             return (
               <TouchableOpacity
                 key={act.id}
                 style={[s.nearbyCard, isSelected && s.nearbyCardSelected]}
-                onPress={() => setSelectedId(prev => prev === act.id ? null : act.id)}
+                onPress={() => {
+                  setSelectedId(act.id);
+                  setSelectedActivity(act);
+                }}
                 activeOpacity={0.9}
               >
                 <Image source={{ uri: act.photo }} style={s.nearbyPhoto} resizeMode="cover" />
@@ -226,21 +273,6 @@ export const MapScreen = ({ activeTab, onTabPress }: MapScreenProps) => {
                   <Text style={s.nearbyDistance}>{act.distance}</Text>
                   <Text style={s.nearbyTitle} numberOfLines={1}>{act.title}</Text>
                   <Text style={s.nearbyLocation} numberOfLines={1}>{act.location}</Text>
-                  <TouchableOpacity
-                    onPress={() => isIn ? handleLater(act) : handleImIn(act.id)}
-                    activeOpacity={0.88}
-                    style={s.imInWrap}
-                  >
-                    <LinearGradient
-                      colors={isIn ? ["#E5E7EB", "#E5E7EB"] : gradients.brand}
-                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                      style={s.imInBtn}
-                    >
-                      <Text style={[s.imInText, isIn && { color: colors.muted }]}>
-                        {isIn ? "going ✓" : "i'm in"}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
@@ -254,7 +286,115 @@ export const MapScreen = ({ activeTab, onTabPress }: MapScreenProps) => {
         </View>
       )}
 
-      <BottomNav activeTab={activeTab} onTabPress={onTabPress} />
+      {sunnyVisible && sunnyText.current ? (
+        <Animated.Text style={[ms.sunnyLine, { opacity: sunnyOpacity, bottom: 80 + insets.bottom }]} numberOfLines={2}>
+          {sunnyText.current}
+        </Animated.Text>
+      ) : null}
+
+      <BottomNav activeTab={activeTab} onTabPress={onTabPress} onPostPress={onPostPress} />
+
+      {/* Activity detail modal */}
+      <Modal
+        visible={!!selectedActivity}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedActivity(null)}
+      >
+        {selectedActivity && (() => {
+          const act = selectedActivity;
+          return (
+            <View style={m.container}>
+              {/* Handle + close */}
+              <View style={m.handle} />
+              <TouchableOpacity
+                style={m.closeBtn}
+                onPress={() => setSelectedActivity(null)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={colors.muted} />
+              </TouchableOpacity>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+                {/* Photo */}
+                <View style={m.photoWrap}>
+                  <Image source={{ uri: act.photo }} style={m.photo} resizeMode="cover" />
+                  {/* Category pill */}
+                  <View style={m.categoryPill}>
+                    <Ionicons name={act.icon as any} size={12} color={colors.foreground} />
+                    <Text style={m.categoryPillText}>{act.category}</Text>
+                  </View>
+                </View>
+
+                {/* Body */}
+                <View style={m.body}>
+                  <Text style={m.title}>{act.title}</Text>
+
+                  <View style={m.metaRow}>
+                    <Ionicons name="location-outline" size={14} color={colors.teal} />
+                    <Text style={m.metaText}>{act.location} · {act.distance}</Text>
+                  </View>
+                  <View style={m.metaRow}>
+                    <Ionicons name="calendar-outline" size={14} color={colors.muted} />
+                    <Text style={m.metaText}>{act.date}</Text>
+                  </View>
+
+                  {/* Vibe */}
+                  <View style={m.vibeBox}>
+                    <Text style={m.vibeText}>"{act.vibe}"</Text>
+                  </View>
+
+                  {/* Going */}
+                  <View style={m.goingRow}>
+                    <Ionicons name="people-outline" size={14} color={colors.muted} />
+                    <Text style={m.goingText}>{act.goingCount} going</Text>
+                  </View>
+
+                  {/* Host strip */}
+                  <View style={m.hostStrip}>
+                    <Image source={{ uri: act.host.photo }} style={m.hostAvatar} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={m.hostLabel}>posted by <Text style={m.hostName}>{act.host.name}</Text></Text>
+                      <Text style={m.hostBio} numberOfLines={1}>{act.host.bio}</Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* Sticky action bar */}
+              <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 28, gap: 10, borderTopWidth: 0.5, borderTopColor: "#E0D8C8", backgroundColor: "#FAFAF8" }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedActivity(null)}
+                  activeOpacity={0.8}
+                  style={{ flex: 1, height: 52, borderRadius: 100, borderWidth: 1, borderColor: "#E0D8C8", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#888" }}>pass</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { saveActivityForLater(act); setSelectedActivity(null); }}
+                  activeOpacity={0.8}
+                  style={{ flex: 1.4, height: 52, borderRadius: 100, borderWidth: 1.5, borderColor: "#1D9E75", alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#1D9E75" }}>save for later</Text>
+                </TouchableOpacity>
+                {!requestedSet.has(act.id) ? (
+                  <TouchableOpacity
+                    onPress={() => handleImIn(act.id)}
+                    activeOpacity={0.88}
+                    style={{ flex: 2, height: 52, borderRadius: 100, backgroundColor: "#1D9E75", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Text style={{ fontFamily: fontsLoaded ? "Caveat_700Bold" : undefined, fontSize: 18, color: "white" }}>i'm in</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ flex: 2, height: 52, borderRadius: 100, borderWidth: 1, borderColor: "#E0D8C8", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#888" }}>requested</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })()}
+      </Modal>
     </View>
   );
 };
@@ -328,9 +468,6 @@ const s = StyleSheet.create({
   nearbyDistance: { fontSize: 10, fontWeight: "700", color: colors.teal, letterSpacing: 0.4 },
   nearbyTitle: { fontSize: 13, fontWeight: "700", color: colors.foreground, letterSpacing: -0.2 },
   nearbyLocation: { fontSize: 11, color: colors.muted },
-  imInWrap: { marginTop: 6, borderRadius: radius.full, overflow: "hidden" },
-  imInBtn: { paddingVertical: 6, alignItems: "center", justifyContent: "center", borderRadius: radius.full },
-  imInText: { fontSize: 12, fontWeight: "700", color: colors.white },
 
   // Toast
   toast: {
@@ -339,4 +476,65 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 10, zIndex: 50,
   },
   toastText: { fontSize: 13, color: colors.white, fontWeight: "500" },
+});
+
+// Modal styles
+const m = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  handle: {
+    width: 36, height: 4, backgroundColor: colors.border,
+    borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4,
+  },
+  closeBtn: {
+    position: "absolute", top: 16, right: 16, zIndex: 10,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.surface,
+    alignItems: "center", justifyContent: "center",
+  },
+
+  // Photo
+  photoWrap: { position: "relative" },
+  photo: { width: "100%", height: 260, backgroundColor: colors.surface },
+  categoryPill: {
+    position: "absolute", bottom: 12, left: 12,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  categoryPillText: { fontSize: 12, fontWeight: "700", color: colors.foreground },
+
+  // Body
+  body: { padding: 16, gap: 10 },
+  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  metaText: { fontSize: 13, color: colors.muted },
+
+  vibeBox: {
+    backgroundColor: "#F0FDFB",
+    borderLeftWidth: 3, borderLeftColor: colors.teal,
+    borderRadius: 6, padding: 12,
+  },
+  vibeText: { fontSize: 13, fontStyle: "italic", color: colors.secondary, lineHeight: 20 },
+
+  goingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  goingText: { fontSize: 13, color: colors.muted },
+
+  hostStrip: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  hostAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface },
+  hostLabel: { fontSize: 12, color: colors.muted },
+  hostName: { fontWeight: "700", color: colors.foreground },
+  hostBio: { fontSize: 12, color: colors.muted, marginTop: 1 },
+
+});
+
+const ms = StyleSheet.create({
+  sunnyLine: {
+    position: "absolute", left: 0, right: 0,
+    textAlign: "center", fontStyle: "italic",
+    fontSize: 13, color: "#888",
+    paddingHorizontal: 24,
+  },
 });

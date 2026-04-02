@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, TextInput, KeyboardAvoidingView,
-  Platform, ScrollView,
+  Platform, ScrollView, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { TandemLogo } from "../components/TandemLogo";
 import { GradientButton } from "../components/GradientButton";
+import { AntDesign } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { colors, radius, shadows } from "../theme";
 
@@ -150,17 +151,17 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
       >
         {/* Back */}
         <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>back</Text>
         </TouchableOpacity>
 
         {/* Logo + hero */}
         <View style={styles.heroBlock}>
           <TandemLogo size="lg" showWordmark />
           <Text style={styles.heroText}>
-            {mode === "signin" ? "Welcome\nback." : "Create your\naccount."}
+            {mode === "signin" ? "welcome\nback." : "let's get\nyou in."}
           </Text>
           <Text style={styles.subText}>
-            {mode === "signin" ? "Sign in to find your people." : "Join Tandem. It's free."}
+            {mode === "signin" ? "find your people. never go alone." : "join tandem. it's free."}
           </Text>
         </View>
 
@@ -175,8 +176,8 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
             <ActivityIndicator color={colors.foreground} />
           ) : (
             <>
-              <Text style={styles.googleG}>G</Text>
-              <Text style={styles.googleBtnText}>Continue with Google</Text>
+              <AntDesign name="google" size={18} color="#4285F4" />
+              <Text style={styles.googleBtnText}>continue with google</Text>
             </>
           )}
         </TouchableOpacity>
@@ -184,7 +185,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         {/* Divider */}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
+          <Text style={styles.dividerText}>or</Text>
           <View style={styles.dividerLine} />
         </View>
 
@@ -192,7 +193,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         <View style={styles.inputs}>
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="email"
             placeholderTextColor={colors.muted}
             value={email}
             onChangeText={setEmail}
@@ -202,7 +203,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           />
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder="password"
             placeholderTextColor={colors.muted}
             value={password}
             onChangeText={setPassword}
@@ -213,7 +214,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
 
         {/* Submit */}
         <GradientButton
-          label={loading ? "..." : mode === "signin" ? "Sign in" : "Create account"}
+          label={loading ? "..." : mode === "signin" ? "welcome back" : "let's go"}
           onPress={handleEmailAuth}
           disabled={loading || googleLoading}
           style={styles.submitBtn}
@@ -226,15 +227,41 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           activeOpacity={0.7}
         >
           <Text style={styles.toggleText}>
-            {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
+            {mode === "signin" ? "new here? " : "been here before? "}
             <Text style={styles.toggleTextBold}>
-              {mode === "signin" ? "Sign up" : "Sign in"}
+              {mode === "signin" ? "join tandem" : "sign in"}
             </Text>
           </Text>
         </TouchableOpacity>
 
         <Text style={styles.legal}>
-          By continuing, you agree to Tandem's Terms of Service and Privacy Policy.
+          By continuing, you agree to Tandem's{" "}
+          <Text
+            style={styles.legalLink}
+            onPress={async () => {
+              try {
+                await Linking.openURL("https://thetandemweb.com/terms");
+              } catch {
+                Alert.alert("Coming soon", "Our terms of service will be available at thetandemweb.com");
+              }
+            }}
+          >
+            Terms of Service
+          </Text>
+          {" "}and{" "}
+          <Text
+            style={styles.legalLink}
+            onPress={async () => {
+              try {
+                await Linking.openURL("https://thetandemweb.com/privacy");
+              } catch {
+                Alert.alert("Coming soon", "Our privacy policy will be available at thetandemweb.com");
+              }
+            }}
+          >
+            Privacy Policy
+          </Text>
+          .
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -275,7 +302,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  googleG: { fontSize: 15, fontWeight: "700", color: "#4285F4" },
   googleBtnText: { fontSize: 14, fontWeight: "500", color: colors.foreground },
 
   divider: { flexDirection: "row", alignItems: "center", gap: 12 },
@@ -311,5 +337,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
     paddingTop: 8,
+  },
+  legalLink: {
+    color: colors.teal,
+    textDecorationLine: "underline",
   },
 });
