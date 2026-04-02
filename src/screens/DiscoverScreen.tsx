@@ -300,9 +300,10 @@ interface DiscoverScreenProps {
   onMembershipPress?: () => void;
   openPostModal?: boolean;
   onPostModalOpened?: () => void;
+  startOnMyActivity?: boolean;
 }
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened, startOnMyActivity }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -563,6 +564,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   }, [discoverMode, user]);
 
   useEffect(() => {
+    if (startOnMyActivity) {
+      setDiscoverMode("myActivity");
+    }
+  }, [startOnMyActivity]);
+
+  useEffect(() => {
     if (myActivityTab === "saved" && discoverMode === "myActivity") {
       fetchSaved();
     }
@@ -820,6 +827,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         </View>
       </View>
 
+      {/* My Activity hint */}
+      {discoverMode === "myActivity" && (
+        <Text style={s.myActivityHint}>your posts, requests, and saved activities</Text>
+      )}
+
       {/* Sub-tab: my posts / saved (only in My Activity) */}
       {discoverMode === "myActivity" && (
         <>
@@ -916,8 +928,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                       <Text style={s.myPostDate}>{post.date}</Text>
                     </View>
                     {post.pendingRequests.length > 0 && (
-                      <View style={s.requestBadge}>
-                        <Text style={s.requestBadgeText}>{post.pendingRequests.length} wants to tandem</Text>
+                      <View style={[s.requestBadge, { backgroundColor: colors.teal }]}>
+                        <Text style={[s.requestBadgeText, { color: colors.white }]}>
+                          {post.pendingRequests.length} waiting
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -1860,6 +1874,14 @@ const s = StyleSheet.create({
   avatarBtn: {},
   avatarRing: { width: 38, height: 38, borderRadius: 19, padding: 2 },
   avatarInner: { flex: 1, borderRadius: 17, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
+
+  myActivityHint: {
+    fontSize: 11,
+    color: colors.muted,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    fontWeight: "500",
+  },
 
   // Sub-tabs (my posts / saved)
   subTabRow: {

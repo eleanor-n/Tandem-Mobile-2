@@ -15,7 +15,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { getCardRotation } from "../theme/scrapbookTheme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getSunnyResponse } from "../lib/sunny";
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -109,9 +108,10 @@ interface ProfileScreenProps {
   onMembershipPress?: () => void;
   onMessagesPress?: () => void;
   onPostPress?: () => void;
+  onMyActivityPress?: () => void;
 }
 
-export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress }: ProfileScreenProps) => {
+export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
@@ -128,7 +128,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const caveat = (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined;
   const [memories, setMemories] = useState<any[]>([]);
-  const [savedActivities, setSavedActivities] = useState<{ title: string; date: string; host: string; category: string }[]>([]);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const audioRef = useRef<Audio.Sound | null>(null);
   const [profilePublic, setProfilePublic] = useState(true);
@@ -199,11 +198,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       .then(({ data }) => { if (data) setMemories(data); });
   }, [user]);
 
-  useEffect(() => {
-    AsyncStorage.getItem("saved_activities_meta").then(val => {
-      if (val) setSavedActivities(Object.values(JSON.parse(val)));
-    });
-  }, []);
 
   useEffect(() => {
     if (!profile || sunnyFetched.current) return;
@@ -443,11 +437,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             <Text style={s.statNum}>8</Text>
             <Text style={s.statLabel}>companions</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onMyActivityPress?.()}>
             <Text style={s.statNum}>3</Text>
             <Text style={s.statLabel}>hosting</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity onPress={() => onMyActivityPress?.()} activeOpacity={0.7} style={s.myActivityLink}>
+          <Text style={s.myActivityLinkText}>view your posts & saved activities →</Text>
+        </TouchableOpacity>
 
         {/* Bio */}
         <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
@@ -470,29 +468,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             {sunnyText.current}
           </Animated.Text>
         ) : null}
-
-        {/* Saved activities */}
-        <View style={s.section}>
-          <Text style={[s.memoriesHeader, { fontFamily: caveat(true) }]}>saved</Text>
-          {savedActivities.length === 0 ? (
-            <Text style={ms.emptyHint}>activities you save show up here</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
-              {savedActivities.map((a, i) => (
-                <View key={i} style={[s.actCard, { width: 140 }]}>
-                  <View style={[s.actPhoto, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }]}>
-                    <Ionicons name="bookmark" size={22} color={colors.teal} />
-                  </View>
-                  <View style={s.actBody}>
-                    <Text style={s.actTitle} numberOfLines={2}>{a.title}</Text>
-                    <Text style={s.actDate}>{a.date}</Text>
-                    <Text style={[s.actDate, { color: colors.muted }]}>{a.host}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
 
         {/* Hosting now */}
         <View style={s.section}>
@@ -1024,6 +999,10 @@ const s = StyleSheet.create({
   locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   location: { fontSize: 13, color: colors.muted, fontWeight: "500" },
   ageText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
+
+  // My Activity link
+  myActivityLink: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 16 },
+  myActivityLinkText: { fontSize: 12, color: colors.teal, fontWeight: "600" },
 
   // Stat pills
   statsRow: { flexDirection: "row", justifyContent: "center", gap: 10 },

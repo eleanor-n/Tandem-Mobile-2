@@ -37,6 +37,7 @@ const AppInner = () => {
   const [showSplash, setShowSplash] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showPost, setShowPost] = useState(false);
+  const [showMyActivity, setShowMyActivity] = useState(false);
   const [sunnyToast, setSunnyToast] = useState<string | null>(null);
   const sunnyToastOpacity = useRef(new Animated.Value(0)).current;
   const sunnyWelcomed = useRef(false);
@@ -243,6 +244,7 @@ const AppInner = () => {
           onSettingsPress={() => setShowSettings(true)}
           onMembershipPress={() => setShowMembership(true)}
           onMessagesPress={() => setShowMessages(true)}
+          onMyActivityPress={() => { setActiveTab("Discover"); setShowMyActivity(true); }}
         />
       );
       break;
@@ -255,6 +257,7 @@ const AppInner = () => {
             onMembershipPress={() => setShowMembership(true)}
             openPostModal={showPost}
             onPostModalOpened={() => setShowPost(false)}
+            startOnMyActivity={showMyActivity}
           />
           {showWalkthrough && (
             <AppWalkthrough
