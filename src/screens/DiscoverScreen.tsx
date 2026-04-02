@@ -314,6 +314,9 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     ? fullName.split(" ")[0].toLowerCase()
     : emailPrefix.toLowerCase() || "there";
   const [discoverMode, setDiscoverMode] = useState<"browse" | "myActivity">("browse");
+  const [myActivityTab, setMyActivityTab] = useState<"posts" | "saved">("posts");
+  const [savedActivities, setSavedActivities] = useState<any[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNotifications, setShowNotifications] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
@@ -558,6 +561,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     return () => { cancelled = true; };
   }, [discoverMode, user]);
 
+  useEffect(() => {
+    if (myActivityTab === "saved" && discoverMode === "myActivity") {
+      fetchSaved();
+    }
+  }, [myActivityTab, discoverMode]);
+
   // Reset deck index when filter or mode changes
   useEffect(() => {
     setCurrentIndex(0);
@@ -612,6 +621,54 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
   const handleSkip = () => {
     setCurrentIndex(prev => prev + 1);
+  };
+
+  const handleMaybeLater = async () => {
+    if (!currentCard) return;
+    try {
+      if (user) {
+        await supabase.from("activity_interactions").insert({
+          activity_id: currentCard.id,
+          user_id: user.id,
+          action: "save",
+        });
+      }
+    } catch {
+      // non-blocking
+    }
+    showToast("saved to your private list.");
+    setCurrentIndex(prev => prev + 1);
+  };
+
+  const fetchSaved = async () => {
+    if (!user) return;
+    setLoadingSaved(true);
+    try {
+      const { data } = await supabase
+        .from("activity_interactions")
+        .select("activity_id, activities(id, title, activity_date, tags, location_name)")
+        .eq("user_id", user.id)
+        .eq("action", "save")
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        setSavedActivities(
+          data
+            .filter((d: any) => d.activities)
+            .map((d: any) => ({
+              id: d.activities.id,
+              title: d.activities.title,
+              date: d.activities.activity_date,
+              location: d.activities.location_name,
+              photo: FALLBACK_PHOTOS[d.activities.tags?.[0]] || FALLBACK_PHOTOS.default,
+            }))
+        );
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setLoadingSaved(false);
+    }
   };
 
   // My Activity — request sheet handlers
@@ -762,6 +819,31 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         </View>
       </View>
 
+      {/* Sub-tab: my posts / saved (only in My Activity) */}
+      {discoverMode === "myActivity" && (
+        <>
+          <View style={s.subTabRow}>
+            {(["posts", "saved"] as const).map(t => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setMyActivityTab(t)}
+                activeOpacity={0.8}
+                style={[s.subTab, myActivityTab === t && s.subTabActive]}
+              >
+                <Text style={[s.subTabText, myActivityTab === t && s.subTabTextActive]}>
+                  {t === "posts" ? "my posts" : "saved"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {myActivityTab === "saved" && (
+            <Text style={{ fontSize: 11, color: colors.muted, paddingHorizontal: 16, paddingBottom: 4 }}>
+              only visible to you
+            </Text>
+          )}
+        </>
+      )}
+
       {/* Filter pills */}
       {discoverMode === "browse" && (
         <ScrollView
@@ -799,47 +881,81 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       {/* Main content area */}
       {discoverMode === "myActivity" ? (
         /* ── My Activity Tab ── */
-        loadingMyPosts ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator color={colors.teal} size="large" />
-          </View>
-        ) : (
-        <ScrollView
-          style={s.feed}
-          contentContainerStyle={[s.feedContent, { paddingBottom: 100 + insets.bottom }]}
-          showsVerticalScrollIndicator={false}
-        >
-          {myPostsState.length === 0 ? (
-            <View style={s.myActivityEmpty}>
-              <SunnyAvatar expression="warm" size={60} />
-              <Text style={s.myActivityEmptyTitle}>nothing on the calendar yet.</Text>
-              <Text style={s.myActivityEmptyDesc}>post something or hit i'm in. sunny's waiting.</Text>
+        myActivityTab === "posts" ? (
+          loadingMyPosts ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <ActivityIndicator color={colors.teal} size="large" />
             </View>
           ) : (
-            myPostsState.map(post => (
-              <TouchableOpacity
-                key={post.id}
-                style={s.myPostRow}
-                activeOpacity={0.85}
-                onPress={() => {
-                  setRequestSheetActivity(post);
-                  setShowRequestSheet(true);
-                }}
-              >
-                <Image source={{ uri: post.photo }} style={s.myPostPhoto} resizeMode="cover" />
-                <View style={s.myPostInfo}>
-                  <Text style={s.myPostTitle} numberOfLines={2}>{post.title}</Text>
-                  <Text style={s.myPostDate}>{post.date}</Text>
+            <ScrollView
+              style={s.feed}
+              contentContainerStyle={[s.feedContent, { paddingBottom: 100 + insets.bottom }]}
+              showsVerticalScrollIndicator={false}
+            >
+              {myPostsState.length === 0 ? (
+                <View style={s.myActivityEmpty}>
+                  <SunnyAvatar expression="warm" size={60} />
+                  <Text style={s.myActivityEmptyTitle}>nothing on the calendar yet.</Text>
+                  <Text style={s.myActivityEmptyDesc}>post something or hit i'm in. sunny's waiting.</Text>
                 </View>
-                {post.pendingRequests.length > 0 && (
-                  <View style={s.requestBadge}>
-                    <Text style={s.requestBadgeText}>{post.pendingRequests.length} wants to tandem</Text>
+              ) : (
+                myPostsState.map(post => (
+                  <TouchableOpacity
+                    key={post.id}
+                    style={s.myPostRow}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setRequestSheetActivity(post);
+                      setShowRequestSheet(true);
+                    }}
+                  >
+                    <Image source={{ uri: post.photo }} style={s.myPostPhoto} resizeMode="cover" />
+                    <View style={s.myPostInfo}>
+                      <Text style={s.myPostTitle} numberOfLines={2}>{post.title}</Text>
+                      <Text style={s.myPostDate}>{post.date}</Text>
+                    </View>
+                    {post.pendingRequests.length > 0 && (
+                      <View style={s.requestBadge}>
+                        <Text style={s.requestBadgeText}>{post.pendingRequests.length} wants to tandem</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          )
+        ) : (
+          /* ── Saved Tab ── */
+          <ScrollView
+            style={s.feed}
+            contentContainerStyle={[s.feedContent, { paddingBottom: 100 + insets.bottom }]}
+            showsVerticalScrollIndicator={false}
+          >
+            {loadingSaved ? (
+              <ActivityIndicator color={colors.teal} style={{ marginTop: 40 }} />
+            ) : savedActivities.length === 0 ? (
+              <View style={s.myActivityEmpty}>
+                <SunnyAvatar expression="warm" size={60} />
+                <Text style={s.myActivityEmptyTitle}>nothing saved yet.</Text>
+                <Text style={s.myActivityEmptyDesc}>
+                  tap "maybe later" on any activity to save it here. only you can see this.
+                </Text>
+              </View>
+            ) : (
+              savedActivities.map(act => (
+                <View key={act.id} style={s.myPostRow}>
+                  <Image source={{ uri: act.photo }} style={s.myPostPhoto} resizeMode="cover" />
+                  <View style={s.myPostInfo}>
+                    <Text style={s.myPostTitle} numberOfLines={2}>{act.title}</Text>
+                    <Text style={s.myPostDate}>{act.date} · {act.location}</Text>
                   </View>
-                )}
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
+                  <View style={s.requestBadge}>
+                    <Text style={s.requestBadgeText}>saved</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
         )
       ) : (
         /* ── Browse Tab — Card Deck ── */
@@ -1017,13 +1133,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                         <Text style={s.passBtnText}>pass</Text>
                       </View>
                     </TouchableOpacity>
-                    <TouchableOpacity style={{ flex: 1 }} onPress={handleSkip} activeOpacity={0.8}>
+                    <TouchableOpacity style={{ flex: 1.2 }} onPress={handleMaybeLater} activeOpacity={0.8}>
                       <View style={s.passBtn}>
-                        <Text style={s.passBtnText}>skip</Text>
+                        <Text style={s.passBtnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>maybe later</Text>
                       </View>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flex: 2 }}
+                      style={{ flex: 1.6 }}
                       onPress={() => handleImIn(currentCard.id)}
                       activeOpacity={0.88}
                     >
@@ -1725,6 +1841,34 @@ const s = StyleSheet.create({
   avatarRing: { width: 38, height: 38, borderRadius: 19, padding: 2 },
   avatarInner: { flex: 1, borderRadius: 17, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
 
+  // Sub-tabs (my posts / saved)
+  subTabRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  subTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  subTabActive: {
+    borderColor: colors.teal,
+    backgroundColor: colors.tintTeal,
+  },
+  subTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  subTabTextActive: {
+    color: colors.teal,
+  },
+
   // Browse / My Activity toggle
   modeToggleRow: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, backgroundColor: colors.background },
   modeToggle: { flexDirection: "row", backgroundColor: "#F3F4F6", borderRadius: radius.full, padding: 3 },
@@ -1868,8 +2012,9 @@ const s = StyleSheet.create({
     borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 8,
   },
-  passBtnText: { fontSize: 15, fontWeight: "600", color: "#6B7280" },
+  passBtnText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   imInBtn: {
     height: 52,
     borderRadius: 26,
