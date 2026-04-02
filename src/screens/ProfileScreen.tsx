@@ -435,15 +435,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Stat pills */}
         <View style={s.statsRow}>
-          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("your activity history — coming soon.")}>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
             <Text style={s.statNum}>12</Text>
             <Text style={s.statLabel}>activities</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("people you've tandem'd with — coming soon.")}>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("your tandem companions — coming soon.")}>
             <Text style={s.statNum}>8</Text>
             <Text style={s.statLabel}>companions</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => profileScrollRef.current?.scrollTo({ y: 400, animated: true })}>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
             <Text style={s.statNum}>3</Text>
             <Text style={s.statLabel}>hosting</Text>
           </TouchableOpacity>
@@ -511,7 +511,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               renderItem={({ item: h }) => (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => showToast("tap to manage your activity — coming soon.")}
+                  onPress={() => showToast("go to discover → my activity to manage this.")}
                   style={s.actCard}
                 >
                   <Image source={{ uri: h.photo }} style={s.actPhoto} resizeMode="cover" />
@@ -552,7 +552,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               renderItem={({ item: b }) => (
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => showToast("activity memories live in your scrapbook.")}
+                  onPress={() => onTabPress("Scrapbook")}
                   style={[s.actCard, s.beenCard]}
                 >
                   <Image source={{ uri: b.photo }} style={s.actPhoto} resizeMode="cover" />

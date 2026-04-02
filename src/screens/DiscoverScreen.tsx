@@ -951,7 +951,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 renderItem={({ item: act }) => (
                   <TouchableOpacity
                     activeOpacity={0.85}
-                    onPress={() => showToast("you saved this one.")}
+                    onPress={() => {
+                      const idx = (liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES)
+                        .findIndex((a: any) => a.id === act.id);
+                      if (idx !== -1) {
+                        setDiscoverMode("browse");
+                        setCurrentIndex(idx);
+                      } else {
+                        showToast("this activity may no longer be available.");
+                      }
+                    }}
                     style={s.myPostRow}
                   >
                     <Image source={{ uri: act.photo }} style={s.myPostPhoto} resizeMode="cover" />
