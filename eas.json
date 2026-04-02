@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -11,17 +11,18 @@
       "distribution": "internal"
     },
     "production": {
-      "ios": {
-        "buildConfiguration": "Release"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
+    "preview": {
+      "ios": {
+        "ascAppId": "6761485692"
+      }
+    },
     "production": {
       "ios": {
-        "appleId": "eleanornayden@gmail.com",
-        "ascAppId": "6761485692",
-        "appleTeamId": "R2S8FJC7C6"
+        "ascAppId": "6761485692"
       }
     }
   }
