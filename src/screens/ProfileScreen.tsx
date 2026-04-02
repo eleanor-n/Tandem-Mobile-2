@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, Switch, ActivityIndicator, Modal, TextInput, Alert, Animated, Linking,
-  KeyboardAvoidingView, Platform,
+  Image, Switch, ActivityIndicator, Modal, TextInput, Alert, Animated,
+  KeyboardAvoidingView, Platform, Share,
 } from "react-native";
 import { Audio, Video, ResizeMode } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
@@ -132,7 +132,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const audioRef = useRef<Audio.Sound | null>(null);
   const [profilePublic, setProfilePublic] = useState(true);
-  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
   const [editBio, setEditBio] = useState("");
@@ -141,6 +141,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const sunnyText = useRef<string | null>(null);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
   const sunnyFetched = useRef(false);
+  const profileScrollRef = useRef<ScrollView>(null);
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -165,6 +166,26 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       }
       setLoading(false);
     });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setProfile(data);
+          setVisibility(
+            (data.profile_visibility as Record<string, boolean>) || {
+              gender: true, sexuality: true, religion: true,
+              relationship_status: true, occupation: true, mbti: true, humor_type: true,
+            }
+          );
+        }
+      });
   }, [user]);
 
   useEffect(() => {
@@ -202,56 +223,96 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     if (user) await supabase.from("profiles").update({ is_public: next } as any).eq("user_id", user.id);
   };
 
-  const uploadAvatar = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "photo access needed",
-        "please go to Settings > Tandem and allow photo library access.",
-        [
-          { text: "cancel", style: "cancel" },
-          { text: "open settings", onPress: () => Linking.openSettings() },
-        ]
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"] as any,
-      allowsEditing: true,
-      aspect: [1, 1] as [number, number],
-      quality: 0.85,
-      allowsMultipleSelection: false,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const localUri = result.assets[0].uri;
-    setAvatarUploading(true);
+  const handlePhotoUpload = async () => {
+    // SUPABASE SETUP REQUIRED:
+    // 1. Go to Supabase dashboard → Storage → Create bucket
+    //    Name: "avatars"
+    //    Public: true (so avatar URLs are publicly accessible)
+    // 2. Add storage policy: allow authenticated users to upload to their own folder
+    //    Policy name: "Users can upload their own avatar"
+    //    Operation: INSERT
+    //    Target roles: authenticated
+    //    WITH CHECK: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+    // 3. Add storage policy: allow public read
+    //    Policy name: "Public avatar read"
+    //    Operation: SELECT
+    //    Target roles: public (anon)
+    //    USING: bucket_id = 'avatars'
     try {
-      const ext = localUri.split(".").pop() ?? "jpg";
-      const fileName = `${user?.id}/profile_${Date.now()}.${ext}`;
-      const response = await fetch(localUri);
-      const blob = await response.blob();
-      const mimeExt = ext.toLowerCase() === "jpg" ? "jpeg" : ext.toLowerCase();
-      const { error: uploadError } = await supabase.storage
-        .from("profile-photos")
-        .upload(fileName, blob, { contentType: `image/${mimeExt}`, upsert: true });
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Photo library access needed",
+          "Please allow photo access in Settings to upload a profile picture."
+        );
         return;
       }
-      const { data: { publicUrl } } = supabase.storage.from("profile-photos").getPublicUrl(fileName);
-      console.log("Uploaded profile photo:", publicUrl);
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"] as any,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+
+      setUploadingPhoto(true);
+
+      const ext = asset.uri.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${user!.id}/avatar.${ext}`;
+
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, blob, {
+          contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(path);
+
+      const publicUrl = urlData.publicUrl;
+      if (!publicUrl) throw new Error("Could not get public URL");
+
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ photos: [publicUrl] } as any)
+        .update({ avatar_url: publicUrl, photos: [publicUrl] })
         .eq("user_id", user!.id);
-      if (updateError) { console.error("Profile update error:", updateError); }
-      // Force fresh fetch
-      const { data: refreshed } = await supabase.from("profiles").select("*").eq("user_id", user!.id).single();
+
+      if (updateError) throw updateError;
+
+      const { data: refreshed } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user!.id)
+        .single();
+
       if (refreshed) setProfile(refreshed);
-    } catch (e) {
-      console.warn("Avatar upload failed:", e);
+    } catch (err: any) {
+      Alert.alert("Upload failed", err.message || "Could not upload photo. Please try again.");
     } finally {
-      setAvatarUploading(false);
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleShareProfile = async () => {
+    try {
+      const name = profile?.first_name || "someone";
+      await Share.share({
+        title: `${name} is on Tandem`,
+        message: `${name} is on Tandem — the app where you find people to do things with. never go alone: https://thetandemweb.com`,
+      });
+    } catch (err: any) {
+      console.warn("Share failed:", err.message);
     }
   };
 
@@ -323,6 +384,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       </TouchableOpacity>
 
       <ScrollView
+        ref={profileScrollRef}
         style={s.scroll}
         contentContainerStyle={[s.content, { paddingTop: insets.top + 16, paddingBottom: 100 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
@@ -339,12 +401,14 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Profile photo with gradient ring */}
         <View style={s.avatarSection}>
-          <TouchableOpacity onPress={uploadAvatar} activeOpacity={0.85} style={{ position: "relative" }}>
+          <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.85} disabled={uploadingPhoto}>
             <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatarRing}>
               <View style={s.avatarGap}>
                 <View style={s.avatarInner}>
-                  {profile?.photos?.[0] ? (
-                    <Image source={{ uri: profile.photos[0] }} style={s.avatarImage} />
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color={colors.teal} size="small" />
+                  ) : profile?.avatar_url || profile?.photos?.[0] ? (
+                    <Image source={{ uri: profile.avatar_url || profile.photos[0] }} style={s.avatarImage} />
                   ) : (
                     <View style={s.avatarPlaceholder}>
                       <Ionicons name="person" size={40} color={colors.teal} />
@@ -353,11 +417,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                 </View>
               </View>
             </LinearGradient>
-            <View style={s.avatarCameraBtn}>
-              <Ionicons name={avatarUploading ? "hourglass-outline" : "camera-outline"} size={13} color="#fff" />
-            </View>
           </TouchableOpacity>
-          <Text style={s.name}>{profile?.first_name || "Your name"}</Text>
+          <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.7} disabled={uploadingPhoto}>
+            <Text style={s.photoHint}>{uploadingPhoto ? "uploading..." : "tap to change photo"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
+            <Text style={s.name}>{profile?.first_name || "Your name"}</Text>
+          </TouchableOpacity>
           {profile?.birthday && (
             <Text style={s.ageText}>{calculateAge(profile.birthday)} years old</Text>
           )}
@@ -369,24 +435,26 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Stat pills */}
         <View style={s.statsRow}>
-          {[
-            { num: "12", label: "activities" },
-            { num: "8", label: "companions" },
-            { num: "3", label: "hosting" },
-          ].map(stat => (
-            <View key={stat.label} style={s.statPill}>
-              <Text style={s.statNum}>{stat.num}</Text>
-              <Text style={s.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("your activity history — coming soon.")}>
+            <Text style={s.statNum}>12</Text>
+            <Text style={s.statLabel}>activities</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("people you've tandem'd with — coming soon.")}>
+            <Text style={s.statNum}>8</Text>
+            <Text style={s.statLabel}>companions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => profileScrollRef.current?.scrollTo({ y: 400, animated: true })}>
+            <Text style={s.statNum}>3</Text>
+            <Text style={s.statLabel}>hosting</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Bio */}
-        {profile?.bio ? (
-          <Text style={s.bio}>"{profile.bio}"</Text>
-        ) : (
-          <Text style={s.bio}>"always looking for a morning trail run or a quiet corner for chess and coffee."</Text>
-        )}
+        <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
+          <Text style={[s.bio, !profile?.bio && { color: colors.muted }]}>
+            "{profile?.bio || "tap to add a bio"}"
+          </Text>
+        </TouchableOpacity>
 
         {/* Public profile banner */}
         <TouchableOpacity style={[s.publicBanner, profilePublic ? s.publicBannerOn : s.publicBannerOff]} onPress={toggleProfilePublic} activeOpacity={0.8}>
@@ -429,43 +497,65 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Hosting now */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>HOSTING NOW</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
-            {MOCK_HOSTING.map(h => (
-              <View key={h.id} style={s.actCard}>
-                <Image source={{ uri: h.photo }} style={s.actPhoto} resizeMode="cover" />
-                {h.open && (
-                  <View style={s.openBadge}>
-                    <Text style={s.openText}>open</Text>
+          {MOCK_HOSTING.length === 0 ? (
+            <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
+              <Text style={s.emptyCardCtaText}>+ post an activity</Text>
+            </TouchableOpacity>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
+              {MOCK_HOSTING.map(h => (
+                <TouchableOpacity
+                  key={h.id}
+                  activeOpacity={0.85}
+                  onPress={() => showToast("tap to manage your activity — coming soon.")}
+                  style={s.actCard}
+                >
+                  <Image source={{ uri: h.photo }} style={s.actPhoto} resizeMode="cover" />
+                  {h.open && (
+                    <View style={s.openBadge}>
+                      <Text style={s.openText}>open</Text>
+                    </View>
+                  )}
+                  {h.spots > 0 && (
+                    <View style={s.spotsBadge}>
+                      <Text style={s.spotsText}>{h.spots === 1 ? "1 companion spot open" : `${h.spots} companion spots open`}</Text>
+                    </View>
+                  )}
+                  <View style={s.actBody}>
+                    <Text style={s.actTitle} numberOfLines={2}>{h.title}</Text>
+                    <Text style={s.actDate}>{h.date}</Text>
                   </View>
-                )}
-                {h.spots > 0 && (
-                  <View style={s.spotsBadge}>
-                    <Text style={s.spotsText}>{h.spots === 1 ? "1 companion spot open" : `${h.spots} companion spots open`}</Text>
-                  </View>
-                )}
-                <View style={s.actBody}>
-                  <Text style={s.actTitle} numberOfLines={2}>{h.title}</Text>
-                  <Text style={s.actDate}>{h.date}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* Been to */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>BEEN TO</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
-            {MOCK_BEEN_TO.map(b => (
-              <View key={b.id} style={[s.actCard, s.beenCard]}>
-                <Image source={{ uri: b.photo }} style={s.actPhoto} resizeMode="cover" />
-                <View style={s.actBody}>
-                  <Text style={s.actTitle} numberOfLines={2}>{b.title}</Text>
-                  <Text style={s.actDate}>{b.date}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+          {MOCK_BEEN_TO.length === 0 ? (
+            <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
+              <Text style={s.emptyCardCtaText}>go find something to join →</Text>
+            </TouchableOpacity>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
+              {MOCK_BEEN_TO.map(b => (
+                <TouchableOpacity
+                  key={b.id}
+                  activeOpacity={0.85}
+                  onPress={() => showToast("activity memories live in your scrapbook.")}
+                  style={[s.actCard, s.beenCard]}
+                >
+                  <Image source={{ uri: b.photo }} style={s.actPhoto} resizeMode="cover" />
+                  <View style={s.actBody}>
+                    <Text style={s.actTitle} numberOfLines={2}>{b.title}</Text>
+                    <Text style={s.actDate}>{b.date}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* About chips from real profile */}
@@ -473,9 +563,21 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           <View style={s.card}>
             <Text style={s.cardLabel}>ABOUT</Text>
             <View style={s.chips}>
-              {profile?.occupation && <View style={s.chip}><Text style={s.chipText}>{profile.occupation}</Text></View>}
-              {profile?.personality_type && <View style={[s.chip, { backgroundColor: colors.tintBlue }]}><Text style={s.chipText}>{profile.personality_type}</Text></View>}
-              {profile?.humor_type?.map((h: string) => <View key={h} style={[s.chip, { backgroundColor: colors.surface }]}><Text style={s.chipText}>{h}</Text></View>)}
+              {profile?.occupation && (
+                <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8} style={s.chip}>
+                  <Text style={s.chipText}>{profile.occupation}</Text>
+                </TouchableOpacity>
+              )}
+              {profile?.personality_type && (
+                <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8} style={[s.chip, { backgroundColor: colors.tintBlue }]}>
+                  <Text style={s.chipText}>{profile.personality_type}</Text>
+                </TouchableOpacity>
+              )}
+              {profile?.humor_type?.map((h: string) => (
+                <TouchableOpacity key={h} onPress={() => setShowEditSheet(true)} activeOpacity={0.8} style={[s.chip, { backgroundColor: colors.surface }]}>
+                  <Text style={s.chipText}>{h}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         )}
@@ -521,10 +623,10 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Prompts */}
         {Object.entries(quickPrompts).map(([key, value]) => (
-          <View key={key} style={s.promptBlock}>
+          <TouchableOpacity key={key} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
             <Text style={s.promptLabel}>{(PROMPT_LABELS[key] || key).toUpperCase()}</Text>
             <Text style={s.promptAnswer}>"{String(value)}"</Text>
-          </View>
+          </TouchableOpacity>
         ))}
         {Object.entries(deepPrompts).map(([prompt, answer]) => {
           const deepMedia = (profile?.deep_prompt_media as Record<string, { uri: string; type: "voice" | "video" }> | null)?.[prompt];
@@ -596,10 +698,10 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             );
           }
           return (
-            <View key={prompt} style={s.promptBlock}>
+            <TouchableOpacity key={prompt} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
               <Text style={s.promptLabel}>{prompt.toUpperCase()}</Text>
               <Text style={s.promptAnswer}>"{String(answer)}"</Text>
-            </View>
+            </TouchableOpacity>
           );
         })}
 
@@ -678,7 +780,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Privacy */}
         <TouchableOpacity onPress={() => setShowPrivacy(!showPrivacy)} style={s.privacyToggle} activeOpacity={0.7}>
-          <Text style={s.privacyToggleText}>choose what others see</Text>
+          <Text style={s.privacyToggleText}>manage what others see →</Text>
           <Ionicons name={showPrivacy ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
         </TouchableOpacity>
         {showPrivacy && (
@@ -698,16 +800,22 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </View>
         )}
 
-        {/* Edit + Upgrade */}
-        <View style={s.actionRow}>
-          <TouchableOpacity style={s.outlineBtn} activeOpacity={0.85} onPress={() => setShowEditSheet(true)}>
-            <Text style={s.outlineBtnText}>edit profile</Text>
+        {/* Share + Edit + Upgrade */}
+        <View style={{ gap: 10 }}>
+          <TouchableOpacity onPress={handleShareProfile} activeOpacity={0.7} style={s.shareProfileBtn}>
+            <Ionicons name="share-outline" size={15} color={colors.muted} />
+            <Text style={s.shareProfileText}>share your profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.upgradeWrap} activeOpacity={0.85} onPress={onMembershipPress}>
-            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.upgradeInner}>
-              <Text style={s.upgradeText}>upgrade</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={s.actionRow}>
+            <TouchableOpacity style={s.outlineBtn} activeOpacity={0.85} onPress={() => setShowEditSheet(true)}>
+              <Text style={s.outlineBtnText}>edit profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.upgradeWrap} activeOpacity={0.85} onPress={onMembershipPress}>
+              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.upgradeInner}>
+                <Text style={s.upgradeText}>upgrade</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
@@ -903,6 +1011,7 @@ const s = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   avatarInitial: { fontSize: 32, fontWeight: "700", color: colors.muted },
   avatarPlaceholder: { flex: 1, borderRadius: 43, backgroundColor: "#F0FDFB", alignItems: "center", justifyContent: "center" },
+  photoHint: { fontSize: 12, color: colors.teal, fontWeight: "600", marginTop: -4 },
   name: { fontSize: 22, fontWeight: "700", color: colors.foreground, letterSpacing: -0.4 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   location: { fontSize: 13, color: colors.muted, fontWeight: "500" },
@@ -929,6 +1038,22 @@ const s = StyleSheet.create({
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionHint: { fontSize: 11, color: colors.muted },
   hScroll: { gap: 12, paddingBottom: 4 },
+
+  // Empty card CTAs
+  emptyCardCta: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    alignItems: "center" as const,
+  },
+  emptyCardCtaText: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: colors.teal,
+  },
 
   // Activity cards
   actCard: {
@@ -1009,6 +1134,12 @@ const s = StyleSheet.create({
   privacyLabel: { fontSize: 14, color: colors.foreground },
 
   // Actions
+  shareProfileBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 10, borderRadius: radius.full, borderWidth: 1.5,
+    borderColor: colors.border, backgroundColor: colors.white,
+  },
+  shareProfileText: { fontSize: 13, fontWeight: "600", color: colors.muted },
   actionRow: { flexDirection: "row", gap: 12 },
   outlineBtn: { flex: 1, height: 48, borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   outlineBtnText: { fontSize: 14, fontWeight: "600", color: colors.foreground },
