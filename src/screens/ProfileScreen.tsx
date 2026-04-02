@@ -502,11 +502,21 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               <Text style={s.emptyCardCtaText}>+ post an activity</Text>
             </TouchableOpacity>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.hScroll}
+              scrollEventThrottle={16}
+              decelerationRate="fast"
+              snapToInterval={152}
+              disableIntervalMomentum={true}
+              directionalLockEnabled={true}
+            >
               {MOCK_HOSTING.map(h => (
                 <TouchableOpacity
                   key={h.id}
                   activeOpacity={0.85}
+                  delayPressIn={50}
                   onPress={() => showToast("tap to manage your activity — coming soon.")}
                   style={s.actCard}
                 >
@@ -539,11 +549,21 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               <Text style={s.emptyCardCtaText}>go find something to join →</Text>
             </TouchableOpacity>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.hScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.hScroll}
+              scrollEventThrottle={16}
+              decelerationRate="fast"
+              snapToInterval={152}
+              disableIntervalMomentum={true}
+              directionalLockEnabled={true}
+            >
               {MOCK_BEEN_TO.map(b => (
                 <TouchableOpacity
                   key={b.id}
                   activeOpacity={0.85}
+                  delayPressIn={50}
                   onPress={() => showToast("activity memories live in your scrapbook.")}
                   style={[s.actCard, s.beenCard]}
                 >
