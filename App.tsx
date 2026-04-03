@@ -83,63 +83,32 @@ const AppInner = () => {
   useEffect(() => {
     const handleUrl = async ({ url }: { url: string }) => {
       if (!url) return;
-      console.log("Deep link received:", url);
-
       try {
-        if (url.includes("access_token") || url.includes("code=") || url.startsWith("tandem://")) {
-
-          // PKCE code exchange
-          if (url.includes("code=")) {
-            const { error } = await supabase.auth.exchangeCodeForSession(url);
-            if (error) console.error("Code exchange error:", error.message);
-            return;
-          }
-
-          // Hash fragment tokens (implicit flow)
-          const hashIndex = url.indexOf("#");
-          if (hashIndex !== -1) {
-            const hashParams = new URLSearchParams(url.substring(hashIndex + 1));
-            const accessToken = hashParams.get("access_token");
-            const refreshToken = hashParams.get("refresh_token");
-            if (accessToken && refreshToken) {
-              const { error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              if (error) console.error("Set session error:", error.message);
-              return;
-            }
-          }
-
-          // Query param tokens
-          const queryIndex = url.indexOf("?");
-          if (queryIndex !== -1) {
-            const queryParams = new URLSearchParams(url.substring(queryIndex + 1));
-            const accessToken = queryParams.get("access_token");
-            const refreshToken = queryParams.get("refresh_token");
-            const code = queryParams.get("code");
-            if (accessToken && refreshToken) {
-              await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
-              return;
-            }
-            if (code) {
-              await supabase.auth.exchangeCodeForSession(url);
-              return;
-            }
-          }
+        if (url.includes("code=")) {
+          await supabase.auth.exchangeCodeForSession(url);
+          return;
+        }
+        const hashIndex = url.indexOf("#");
+        if (hashIndex !== -1) {
+          const params = new URLSearchParams(url.substring(hashIndex + 1));
+          const at = params.get("access_token");
+          const rt = params.get("refresh_token");
+          if (at && rt) { await supabase.auth.setSession({ access_token: at, refresh_token: rt }); return; }
+        }
+        const qIndex = url.indexOf("?");
+        if (qIndex !== -1) {
+          const params = new URLSearchParams(url.substring(qIndex + 1));
+          const at = params.get("access_token");
+          const rt = params.get("refresh_token");
+          const code = params.get("code");
+          if (at && rt) { await supabase.auth.setSession({ access_token: at, refresh_token: rt }); return; }
+          if (code) { await supabase.auth.exchangeCodeForSession(url); return; }
         }
       } catch (e: any) {
         console.error("Deep link error:", e.message);
       }
     };
-
-    Linking.getInitialURL().then(url => {
-      if (url) handleUrl({ url });
-    });
-
+    Linking.getInitialURL().then(url => { if (url) handleUrl({ url }); });
     const sub = Linking.addEventListener("url", handleUrl);
     return () => sub.remove();
   }, []);

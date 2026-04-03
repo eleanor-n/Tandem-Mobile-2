@@ -1611,9 +1611,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             />
 
             <TouchableOpacity style={modalS.postBtn} activeOpacity={0.88}
-              onPress={handleSubmitPost}>
+              onPress={handleSubmitPost} disabled={isPosting}>
               <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={modalS.postBtnInner}>
-                <Text style={modalS.postBtnText}>post it →</Text>
+                {isPosting ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={modalS.postBtnText}>post it →</Text>
+                )}
               </LinearGradient>
             </TouchableOpacity>
           </ScrollView>

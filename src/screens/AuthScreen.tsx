@@ -75,8 +75,6 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
     setGoogleLoading(true);
     try {
       const redirectUrl = "tandem://";
-      console.log("Starting Google OAuth...");
-      console.log("Redirect URL:", redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -85,67 +83,62 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           skipBrowserRedirect: true,
         },
       });
+
       if (error) throw error;
-      if (!data?.url) throw new Error("No auth URL returned");
-      console.log("Auth URL received:", data.url);
+      if (!data?.url) throw new Error("No auth URL returned from Supabase");
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        "tandem://",
+        redirectUrl,
         { preferEphemeralSession: true }
       );
 
-      console.log("Browser result type:", result.type);
-      if (result.type === "success") {
-        console.log("Callback URL:", result.url);
-      }
+      if (result.type === "cancel") return;
+
       if (result.type === "success" && result.url) {
-        // Try hash params first (implicit flow), then query params (PKCE flow)
-        let accessToken: string | null = null;
-        let refreshToken: string | null = null;
-        let code: string | null = null;
+        const url = result.url;
 
-        try {
-          const parsedUrl = new URL(result.url);
+        // Try PKCE code exchange first
+        if (url.includes("code=")) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(url);
+          if (exchangeError) throw exchangeError;
+          return;
+        }
 
-          // Hash fragment (implicit flow)
-          if (parsedUrl.hash && parsedUrl.hash.length > 1) {
-            const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
-            accessToken = hashParams.get("access_token");
-            refreshToken = hashParams.get("refresh_token");
-          }
-
-          // Query params (PKCE/code flow)
-          if (!accessToken) {
-            const queryParams = new URLSearchParams(parsedUrl.search);
-            code = queryParams.get("code");
-            accessToken = queryParams.get("access_token");
-            refreshToken = queryParams.get("refresh_token");
-          }
-        } catch {
-          // URL parsing failed — try raw string approach
-          const hashIndex = result.url.indexOf("#");
-          if (hashIndex !== -1) {
-            const hashParams = new URLSearchParams(result.url.substring(hashIndex + 1));
-            accessToken = hashParams.get("access_token");
-            refreshToken = hashParams.get("refresh_token");
+        // Try hash fragment
+        const hashIndex = url.indexOf("#");
+        if (hashIndex !== -1) {
+          const params = new URLSearchParams(url.substring(hashIndex + 1));
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (sessionError) throw sessionError;
+            return;
           }
         }
 
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-        } else if (code) {
-          await supabase.auth.exchangeCodeForSession(result.url);
-        } else {
-          throw new Error("Could not extract auth tokens from redirect URL.");
+        // Try query params
+        const queryIndex = url.indexOf("?");
+        if (queryIndex !== -1) {
+          const params = new URLSearchParams(url.substring(queryIndex + 1));
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          const code = params.get("code");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            return;
+          }
+          if (code) {
+            await supabase.auth.exchangeCodeForSession(url);
+            return;
+          }
         }
-      } else if (result.type === "cancel") {
-        // User closed the browser — no error needed
-      } else {
-        throw new Error("Google sign in was not completed.");
+
+        throw new Error("Could not extract auth tokens from redirect URL: " + url);
       }
     } catch (err: any) {
       Alert.alert("Google sign in failed", err.message || "Something went wrong.");

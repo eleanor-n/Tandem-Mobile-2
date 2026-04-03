@@ -1,3 +1,7 @@
+// SUPABASE: Run this SQL if video_url column does not exist:
+// ALTER TABLE profiles ADD COLUMN IF NOT EXISTS video_url text;
+// NOTIFY pgrst, 'reload schema';
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -555,11 +559,12 @@ const PromptInput = ({
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
-        "Microphone access needed",
-        "Please allow microphone access in Settings to record a voice memo."
+        "microphone access needed",
+        "go to Settings → Tandem → allow Microphone, then try again."
       );
       return;
     }
+
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -569,8 +574,7 @@ const PromptInput = ({
         playThroughEarpieceAndroid: false,
       });
 
-      // Wait for audio session to activate
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
@@ -580,68 +584,73 @@ const PromptInput = ({
       setIsRecording(true);
       timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
     } catch (err: any) {
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
       Alert.alert(
         "couldn't start recording",
-        "try removing headphones or closing other audio apps, then try again."
+        "close other apps using the microphone and try again."
       );
-      return;
     }
   };
 
   const handleVideo = async () => {
     try {
-      const { status: micStatus } = await Audio.requestPermissionsAsync();
-      if (micStatus !== "granted") {
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraPermission.status !== "granted") {
+        Alert.alert(
+          "camera access needed",
+          "go to Settings → Tandem → allow Camera, then try again."
+        );
+        return;
+      }
+
+      const micPermission = await Audio.requestPermissionsAsync();
+      if (micPermission.status !== "granted") {
         Alert.alert(
           "microphone access needed",
-          "please allow microphone access in Settings to record video with audio."
+          "go to Settings → Tandem → allow Microphone, then try again."
         );
         return;
       }
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Camera access needed",
-          "Please allow camera access in Settings to record a video."
-        );
-        return;
-      }
+
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
         videoMaxDuration: 30,
         allowsEditing: false,
         quality: 0.7,
       });
+
       if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
 
-      let videoSubmitUri = asset.uri;
+      // Upload to Supabase storage
       if (userId) {
         try {
           const timestamp = Date.now();
           const path = `${userId}/${timestamp}.mp4`;
           const response = await fetch(asset.uri);
           const blob = await response.blob();
-          const { error } = await supabase.storage
-            .from("deep-prompt-media")
+          await supabase.storage
+            .from("videos")
             .upload(path, blob, { contentType: "video/mp4", upsert: true });
-          if (!error) {
-            const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
-            videoSubmitUri = urlData.publicUrl;
-          } else {
-            console.warn("Video upload failed:", error.message);
+
+          const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+          if (urlData?.publicUrl) {
+            await supabase
+              .from("profiles")
+              .update({ video_url: urlData.publicUrl } as any)
+              .eq("user_id", userId);
           }
         } catch (uploadErr) {
           console.warn("Video upload error:", uploadErr);
         }
       }
 
-      onSubmit(videoSubmitUri, "video");
+      onSubmit(asset.uri, "video");
     } catch (err: any) {
       Alert.alert(
-        "Video recording failed",
-        err.message || "Could not save your video. Type your answer instead."
+        "video recording failed",
+        err.message || "something went wrong. try again."
       );
     }
   };

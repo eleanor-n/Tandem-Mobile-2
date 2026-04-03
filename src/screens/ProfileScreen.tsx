@@ -1,3 +1,9 @@
+// SUPABASE SQL — run these if not already done:
+// ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+// ALTER TABLE profiles ADD COLUMN IF NOT EXISTS photos text[];
+// ALTER TABLE profiles ADD COLUMN IF NOT EXISTS video_url text;
+// NOTIFY pgrst, 'reload schema';
+
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
@@ -130,6 +136,9 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [memories, setMemories] = useState<any[]>([]);
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const audioRef = useRef<Audio.Sound | null>(null);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
   const [profilePublic, setProfilePublic] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
@@ -146,6 +155,32 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(msg);
     toastTimer.current = setTimeout(() => setToast(""), 2400);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (sound) sound.unloadAsync();
+    };
+  }, [sound]);
+
+  const playVoiceMemo = async (uri: string) => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+        setIsPlayingAudio(false);
+      }
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri });
+      setSound(newSound);
+      setIsPlayingAudio(true);
+      await newSound.playAsync();
+      newSound.setOnPlaybackStatusUpdate(status => {
+        if (status.isLoaded && status.didJustFinish) setIsPlayingAudio(false);
+      });
+    } catch (err: any) {
+      Alert.alert("couldn't play audio", err.message);
+    }
   };
 
   useEffect(() => {
@@ -218,32 +253,19 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   };
 
   const handlePhotoUpload = async () => {
-    // SUPABASE SETUP REQUIRED:
-    // 1. Go to Supabase dashboard → Storage → Create bucket
-    //    Name: "avatars"
-    //    Public: true (so avatar URLs are publicly accessible)
-    // 2. Add storage policy: allow authenticated users to upload to their own folder
-    //    Policy name: "Users can upload their own avatar"
-    //    Operation: INSERT
-    //    Target roles: authenticated
-    //    WITH CHECK: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
-    // 3. Add storage policy: allow public read
-    //    Policy name: "Public avatar read"
-    //    Operation: SELECT
-    //    Target roles: public (anon)
-    //    USING: bucket_id = 'avatars'
+    if (!user) return;
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
+      const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permResult.status !== "granted") {
         Alert.alert(
-          "Photo library access needed",
-          "Please allow photo access in Settings to upload a profile picture."
+          "photo library access needed",
+          "go to Settings → Tandem → allow Photos, then try again."
         );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"] as any,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -255,54 +277,61 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
       setUploadingPhoto(true);
 
-      const ext = asset.uri.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${user!.id}/avatar.${ext}`;
-
       const response = await fetch(asset.uri);
       const blob = await response.blob();
 
+      const fileExt = asset.uri.split(".").pop()?.toLowerCase() || "jpg";
+      const mimeType = fileExt === "png" ? "image/png" : "image/jpeg";
+      const fileName = `avatar_${Date.now()}.${fileExt}`;
+      const storagePath = `${user.id}/${fileName}`;
+
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, blob, {
-          contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+        .upload(storagePath, blob, {
+          contentType: mimeType,
           upsert: true,
+          cacheControl: "0",
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
       const { data: urlData } = supabase.storage
         .from("avatars")
-        .getPublicUrl(path);
+        .getPublicUrl(storagePath);
+
+      if (!urlData?.publicUrl) throw new Error("Could not get public URL after upload");
 
       const publicUrl = urlData.publicUrl;
-      if (!publicUrl) throw new Error("Could not get public URL");
 
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl, photos: [publicUrl] })
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id);
 
-      if (updateError) throw updateError;
+      if (updateError) throw new Error(`Profile update failed: ${updateError.message}`);
 
-      // Wait briefly for Supabase to propagate the update
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for Supabase to propagate
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       const { data: refreshed, error: fetchError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) throw new Error(`Re-fetch failed: ${fetchError.message}`);
+
       if (refreshed) {
-        setProfile({ ...refreshed, _cacheKey: Date.now() });
-        setEditFirstName(refreshed.first_name || "");
-        setEditBio(refreshed.bio || "");
-        setEditOccupation(refreshed.occupation || "");
+        setProfile({ ...refreshed, _avatarCacheBust: Date.now() });
+        if (refreshed.first_name) setEditFirstName(refreshed.first_name);
+        if (refreshed.bio) setEditBio(refreshed.bio);
+        if (refreshed.occupation) setEditOccupation(refreshed.occupation);
       }
+
       showToast("photo updated.");
+
     } catch (err: any) {
-      Alert.alert("Upload failed", err.message || "Could not upload photo. Please try again.");
+      Alert.alert("upload failed", err.message || "something went wrong. try again.");
     } finally {
       setUploadingPhoto(false);
     }
@@ -411,11 +440,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                 <View style={s.avatarInner}>
                   {uploadingPhoto ? (
                     <ActivityIndicator color={colors.teal} size="small" />
-                  ) : profile?.avatar_url || profile?.photos?.[0] ? (
+                  ) : (profile?.avatar_url || profile?.photos?.[0]) ? (
                     <Image
-                      source={{ uri: `${profile.avatar_url || profile.photos?.[0]}?cachebust=${profile._cacheKey || Date.now()}` }}
+                      key={profile._avatarCacheBust || profile.avatar_url}
+                      source={{
+                        uri: (profile.avatar_url || profile.photos[0]) + `?v=${profile._avatarCacheBust || 1}`,
+                        cache: "reload",
+                      }}
                       style={s.avatarImage}
-                      onError={(e) => console.warn("Avatar load error:", e.nativeEvent.error)}
+                      onError={(e) => console.warn("Avatar image failed to load:", e.nativeEvent.error)}
                     />
                   ) : (
                     <View style={s.avatarPlaceholder}>
@@ -626,81 +659,57 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </TouchableOpacity>
         ))}
         {Object.entries(deepPrompts).map(([prompt, answer]) => {
-          const deepMedia = (profile?.deep_prompt_media as Record<string, { uri: string; type: "voice" | "video" }> | null)?.[prompt];
-          if (deepMedia?.type === "video") {
-            return (
-              <View key={prompt} style={{ width: "100%", borderRadius: 16, overflow: "hidden", marginBottom: 12, backgroundColor: "#000" }}>
-                <Video
-                  source={{ uri: deepMedia.uri }}
-                  style={{ width: "100%", height: 320 }}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay={playingKey === prompt}
-                  useNativeControls={false}
-                  isLooping={false}
-                />
-                <TouchableOpacity
-                  onPress={() => setPlayingKey(k => k === prompt ? null : prompt)}
-                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
-                  activeOpacity={0.9}
-                >
-                  {playingKey !== prompt && (
-                    <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" }}>
-                      <View style={{ width: 0, height: 0, borderTopWidth: 10, borderBottomWidth: 10, borderLeftWidth: 18, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: "#1D9E75", marginLeft: 4 }} />
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.45)", padding: 14 }}>
-                  <Text style={{ color: "white", fontFamily: caveat(true), fontSize: 16 }}>{prompt}</Text>
-                </View>
-              </View>
-            );
-          }
-          if (deepMedia?.type === "voice") {
-            return (
-              <View key={prompt} style={{ width: "100%", borderRadius: 16, backgroundColor: "#FAF7F0", borderWidth: 0.5, borderColor: "#E0D8C8", padding: 16, marginBottom: 12 }}>
-                <Text style={{ fontFamily: caveat(true), fontSize: 15, color: "#1a1a1a", marginBottom: 12 }}>{prompt}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <TouchableOpacity
-                    onPress={async () => {
-                      if (playingKey === prompt) {
-                        await audioRef.current?.pauseAsync();
-                        setPlayingKey(null);
-                      } else {
-                        if (audioRef.current) { await audioRef.current.unloadAsync(); }
-                        const { sound } = await Audio.Sound.createAsync({ uri: deepMedia.uri }, { shouldPlay: true });
-                        audioRef.current = sound;
-                        setPlayingKey(prompt);
-                        sound.setOnPlaybackStatusUpdate(status => {
-                          if ((status as any).didJustFinish) setPlayingKey(null);
-                        });
-                      }
-                    }}
-                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#1D9E75", alignItems: "center", justifyContent: "center" }}
-                    activeOpacity={0.8}
-                  >
-                    {playingKey === prompt ? (
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <View style={{ width: 4, height: 16, backgroundColor: "white", borderRadius: 2 }} />
-                        <View style={{ width: 4, height: 16, backgroundColor: "white", borderRadius: 2 }} />
-                      </View>
-                    ) : (
-                      <View style={{ width: 0, height: 0, borderTopWidth: 8, borderBottomWidth: 8, borderLeftWidth: 14, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: "white", marginLeft: 3 }} />
-                    )}
-                  </TouchableOpacity>
-                  <View style={{ flex: 1, height: 3, backgroundColor: "#E0D8C8", borderRadius: 2 }}>
-                    <View style={{ height: 3, borderRadius: 2, backgroundColor: "#1D9E75", width: playingKey === prompt ? "60%" : "0%" }} />
-                  </View>
-                </View>
-              </View>
-            );
-          }
+          const answerStr = String(answer);
+          const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos");
+          const isVideo = answerStr.endsWith(".mp4") || answerStr.includes("videos/");
+
           return (
-            <TouchableOpacity key={prompt} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
+            <View key={prompt} style={s.promptBlock}>
               <Text style={s.promptLabel}>{prompt.toUpperCase()}</Text>
-              <Text style={s.promptAnswer}>"{String(answer)}"</Text>
-            </TouchableOpacity>
+              {isVoice ? (
+                <TouchableOpacity
+                  onPress={() => playVoiceMemo(answerStr)}
+                  activeOpacity={0.8}
+                  style={s.mediaPlayBtn}
+                >
+                  <Ionicons
+                    name={isPlayingAudio ? "pause-circle" : "play-circle"}
+                    size={24}
+                    color={colors.teal}
+                  />
+                  <Text style={s.mediaPlayText}>
+                    {isPlayingAudio ? "playing..." : "play voice memo"}
+                  </Text>
+                </TouchableOpacity>
+              ) : isVideo ? (
+                <TouchableOpacity
+                  onPress={() => setShowVideo(true)}
+                  activeOpacity={0.8}
+                  style={s.mediaPlayBtn}
+                >
+                  <Ionicons name="videocam" size={24} color={colors.teal} />
+                  <Text style={s.mediaPlayText}>play video</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={s.promptAnswer}>"{answerStr}"</Text>
+              )}
+            </View>
           );
         })}
+
+        {/* Also show profile video_url if it exists */}
+        {profile?.video_url && (
+          <View style={s.promptBlock}>
+            <Text style={s.promptLabel}>VIDEO</Text>
+            <Video
+              source={{ uri: profile.video_url }}
+              style={{ width: "100%", height: 200, borderRadius: 12 }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={false}
+            />
+          </View>
+        )}
 
         {/* Memories section */}
         {memories.length > 0 ? (
@@ -1105,6 +1114,21 @@ const s = StyleSheet.create({
   promptBlock: { backgroundColor: colors.tintTeal, borderRadius: radius.md, padding: 16, borderLeftWidth: 3, borderLeftColor: colors.teal },
   promptLabel: { fontSize: 10, fontWeight: "700", color: colors.teal, letterSpacing: 1.2, marginBottom: 6 },
   promptAnswer: { fontSize: 15, fontWeight: "500", color: colors.foreground, fontStyle: "italic", lineHeight: 22 },
+  mediaPlayBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 10,
+    backgroundColor: colors.tintTeal,
+    borderRadius: radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  mediaPlayText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: colors.teal,
+  },
 
   // Comments
   commentRow: {
