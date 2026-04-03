@@ -21,9 +21,10 @@
       "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Tandem uses your photo library so you can add a profile photo and share memories in your scrapbook.",
-        "NSCameraUsageDescription": "Tandem uses your camera so you can take a profile photo.",
-        "NSMicrophoneUsageDescription": "Tandem uses your microphone so you can record voice memo prompts."
+        "NSPhotoLibraryUsageDescription": "Tandem needs photo library access to let you upload a profile photo.",
+        "NSPhotoLibraryAddUsageDescription": "Tandem needs photo library access to save photos.",
+        "NSCameraUsageDescription": "Tandem needs camera access to record video responses during onboarding.",
+        "NSMicrophoneUsageDescription": "Tandem needs microphone access to record voice memos during onboarding."
       }
     },
     "android": {
@@ -46,7 +47,9 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow Tandem to access your camera to record a video response."
+          "photosPermission": "Tandem needs photo library access to let you upload a profile photo.",
+          "cameraPermission": "Tandem needs camera access to record video responses during onboarding.",
+          "microphonePermission": "Tandem needs microphone access to record voice memos during onboarding."
         }
       ],
       [

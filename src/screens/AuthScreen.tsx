@@ -63,10 +63,20 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   // SUPABASE SETUP REQUIRED:
   // Dashboard → Authentication → URL Configuration → Redirect URLs
   // Must include BOTH: tandem://  AND  tandem://auth/callback
+  //
+  // GOOGLE CLOUD CONSOLE SETUP REQUIRED:
+  // Go to console.cloud.google.com → APIs & Services → Credentials
+  // Click on your OAuth 2.0 Client ID (Web application type)
+  // Under "Authorized redirect URIs" add EXACTLY:
+  //   https://ccntlaunczirvntnsjbm.supabase.co/auth/v1/callback
+  // Without this, Google blocks the redirect to Supabase and OAuth fails.
+  // This is a one-time manual step — no code change needed.
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
       const redirectUrl = "tandem://";
+      console.log("Starting Google OAuth...");
+      console.log("Redirect URL:", redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -77,6 +87,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
       });
       if (error) throw error;
       if (!data?.url) throw new Error("No auth URL returned");
+      console.log("Auth URL received:", data.url);
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
@@ -84,6 +95,10 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         { preferEphemeralSession: true }
       );
 
+      console.log("Browser result type:", result.type);
+      if (result.type === "success") {
+        console.log("Callback URL:", result.url);
+      }
       if (result.type === "success" && result.url) {
         // Try hash params first (implicit flow), then query params (PKCE flow)
         let accessToken: string | null = null;

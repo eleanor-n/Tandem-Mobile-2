@@ -284,6 +284,9 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
       if (updateError) throw updateError;
 
+      // Wait briefly for Supabase to propagate the update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       const { data: refreshed, error: fetchError } = await supabase
         .from("profiles")
         .select("*")
@@ -292,7 +295,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
       if (fetchError) throw fetchError;
       if (refreshed) {
-        setProfile(refreshed);
+        setProfile({ ...refreshed, _cacheKey: Date.now() });
         setEditFirstName(refreshed.first_name || "");
         setEditBio(refreshed.bio || "");
         setEditOccupation(refreshed.occupation || "");
@@ -409,7 +412,11 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   {uploadingPhoto ? (
                     <ActivityIndicator color={colors.teal} size="small" />
                   ) : profile?.avatar_url || profile?.photos?.[0] ? (
-                    <Image source={{ uri: (profile.avatar_url || profile.photos?.[0]) + "?t=" + Date.now() }} style={s.avatarImage} />
+                    <Image
+                      source={{ uri: `${profile.avatar_url || profile.photos?.[0]}?cachebust=${profile._cacheKey || Date.now()}` }}
+                      style={s.avatarImage}
+                      onError={(e) => console.warn("Avatar load error:", e.nativeEvent.error)}
+                    />
                   ) : (
                     <View style={s.avatarPlaceholder}>
                       <Ionicons name="person" size={40} color={colors.teal} />

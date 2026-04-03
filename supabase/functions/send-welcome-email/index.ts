@@ -1,6 +1,27 @@
+// SUPABASE SETUP REQUIRED TO AUTO-TRIGGER ON SIGNUP:
+// Go to Supabase dashboard → Database → Webhooks
+// Click "Create a new hook"
+// Name: send-welcome-email-on-signup
+// Table: auth.users
+// Events: INSERT
+// Type: Supabase Edge Function
+// Function: send-welcome-email
+// This will automatically call this function whenever a new user signs up.
+
 Deno.serve(async (req) => {
   try {
-    const { email, name } = await req.json();
+    const body = await req.json();
+
+    // Handle both direct call and webhook formats
+    const email = body.email || body.record?.email;
+    const name = body.name || body.firstName || body.record?.raw_user_meta_data?.full_name?.split(" ")[0] || "";
+
+    if (!email) {
+      return new Response(
+        JSON.stringify({ error: "No email provided" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
 
@@ -66,10 +87,14 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(err);
+      console.error("Resend error:", err);
+      return new Response(
+        JSON.stringify({ error: "Failed to send email", details: err }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, email }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
