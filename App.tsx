@@ -79,33 +79,65 @@ const AppInner = () => {
     if (onboardingCompleted === true) checkFirstLaunch();
   }, [onboardingCompleted]);
 
-  // Deep link handler for Google OAuth callback
+  // Deep link handler for OAuth callbacks (Google, Apple)
   useEffect(() => {
     const handleUrl = async ({ url }: { url: string }) => {
       if (!url) return;
+      // Only process tandem:// deep links
+      if (!url.startsWith("tandem://")) return;
+      console.log("[OAuth] deep link received:", url);
       try {
-        if (url.includes("code=")) {
-          await supabase.auth.exchangeCodeForSession(url);
-          return;
+        // 1. PKCE code in query string (most common with Supabase PKCE flow)
+        const qIndex = url.indexOf("?");
+        if (qIndex !== -1) {
+          const params = new URLSearchParams(url.substring(qIndex + 1));
+          const code = params.get("code");
+          const at = params.get("access_token");
+          const rt = params.get("refresh_token");
+          if (code) {
+            console.log("[OAuth] exchanging PKCE code");
+            const { error } = await supabase.auth.exchangeCodeForSession(url);
+            if (error) console.error("[OAuth] exchangeCodeForSession error:", error.message);
+            else console.log("[OAuth] PKCE exchange success");
+            return;
+          }
+          if (at && rt) {
+            console.log("[OAuth] setting session from query tokens");
+            const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            if (error) console.error("[OAuth] setSession error:", error.message);
+            else console.log("[OAuth] setSession success");
+            return;
+          }
         }
+        // 2. Hash fragment tokens (implicit flow fallback)
         const hashIndex = url.indexOf("#");
         if (hashIndex !== -1) {
           const params = new URLSearchParams(url.substring(hashIndex + 1));
           const at = params.get("access_token");
           const rt = params.get("refresh_token");
-          if (at && rt) { await supabase.auth.setSession({ access_token: at, refresh_token: rt }); return; }
-        }
-        const qIndex = url.indexOf("?");
-        if (qIndex !== -1) {
-          const params = new URLSearchParams(url.substring(qIndex + 1));
-          const at = params.get("access_token");
-          const rt = params.get("refresh_token");
           const code = params.get("code");
-          if (at && rt) { await supabase.auth.setSession({ access_token: at, refresh_token: rt }); return; }
-          if (code) { await supabase.auth.exchangeCodeForSession(url); return; }
+          if (at && rt) {
+            console.log("[OAuth] setting session from hash tokens");
+            const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            if (error) console.error("[OAuth] setSession error:", error.message);
+            else console.log("[OAuth] setSession success");
+            return;
+          }
+          if (code) {
+            console.log("[OAuth] exchanging PKCE code from hash");
+            await supabase.auth.exchangeCodeForSession(url);
+            return;
+          }
         }
+        // 3. Code in path (e.g. tandem://auth/callback?code=...)
+        if (url.includes("code=")) {
+          console.log("[OAuth] exchanging code (path match)");
+          await supabase.auth.exchangeCodeForSession(url);
+          return;
+        }
+        console.log("[OAuth] deep link had no recognizable auth params:", url);
       } catch (e: any) {
-        console.error("Deep link error:", e.message);
+        console.error("[OAuth] deep link error:", e.message);
       }
     };
     Linking.getInitialURL().then(url => { if (url) handleUrl({ url }); });

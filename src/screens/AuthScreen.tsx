@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { TandemLogo } from "../components/TandemLogo";
 import { GradientButton } from "../components/GradientButton";
 import { AntDesign } from "@expo/vector-icons";
@@ -26,6 +27,12 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  React.useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -74,7 +81,8 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const redirectUrl = "tandem://";
+      const redirectUrl = "tandem://auth/callback";
+      console.log("[OAuth] starting Google sign-in, redirectUrl:", redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -84,8 +92,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         },
       });
 
-      if (error) throw error;
+      if (error) { console.error("[OAuth] signInWithOAuth error:", error.message); throw error; }
       if (!data?.url) throw new Error("No auth URL returned from Supabase");
+      console.log("[OAuth] opening browser with url:", data.url.substring(0, 80) + "...");
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
@@ -93,16 +102,32 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
         { preferEphemeralSession: true }
       );
 
+      console.log("[OAuth] browser result type:", result.type);
       if (result.type === "cancel") return;
 
       if (result.type === "success" && result.url) {
         const url = result.url;
+        console.log("[OAuth] callback url:", url);
 
         // Try PKCE code exchange first
-        if (url.includes("code=")) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(url);
-          if (exchangeError) throw exchangeError;
-          return;
+        const qIndex = url.indexOf("?");
+        if (qIndex !== -1) {
+          const params = new URLSearchParams(url.substring(qIndex + 1));
+          const code = params.get("code");
+          const at = params.get("access_token");
+          const rt = params.get("refresh_token");
+          if (code) {
+            console.log("[OAuth] exchanging PKCE code");
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(url);
+            if (exchangeError) throw exchangeError;
+            return;
+          }
+          if (at && rt) {
+            console.log("[OAuth] setting session from query tokens");
+            const { error: sessionError } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            if (sessionError) throw sessionError;
+            return;
+          }
         }
 
         // Try hash fragment
@@ -111,7 +136,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           const params = new URLSearchParams(url.substring(hashIndex + 1));
           const accessToken = params.get("access_token");
           const refreshToken = params.get("refresh_token");
+          const code = params.get("code");
           if (accessToken && refreshToken) {
+            console.log("[OAuth] setting session from hash tokens");
             const { error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -119,31 +146,51 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
             if (sessionError) throw sessionError;
             return;
           }
-        }
-
-        // Try query params
-        const queryIndex = url.indexOf("?");
-        if (queryIndex !== -1) {
-          const params = new URLSearchParams(url.substring(queryIndex + 1));
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
-          const code = params.get("code");
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-            return;
-          }
           if (code) {
+            console.log("[OAuth] exchanging PKCE code from hash");
             await supabase.auth.exchangeCodeForSession(url);
             return;
           }
         }
 
+        // Fallback: code anywhere in URL
+        if (url.includes("code=")) {
+          console.log("[OAuth] exchanging code (fallback)");
+          await supabase.auth.exchangeCodeForSession(url);
+          return;
+        }
+
         throw new Error("Could not extract auth tokens from redirect URL: " + url);
       }
     } catch (err: any) {
+      console.error("[OAuth] Google sign-in failed:", err.message);
       Alert.alert("Google sign in failed", err.message || "Something went wrong.");
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error("No identity token returned from Apple");
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      if (err.code === "ERR_REQUEST_CANCELED") return; // user dismissed the sheet
+      console.error("[Apple] sign-in failed:", err.message);
+      Alert.alert("Apple sign in failed", err.message || "Something went wrong.");
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -176,10 +223,29 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           </Text>
         </View>
 
+        {/* Apple button */}
+        {appleAvailable && (
+          <TouchableOpacity
+            onPress={handleAppleSignIn}
+            disabled={appleLoading || loading || googleLoading}
+            activeOpacity={0.88}
+            style={styles.appleBtn}
+          >
+            {appleLoading ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <>
+                <AntDesign name="apple" size={18} color={colors.white} />
+                <Text style={styles.appleBtnText}>continue with apple</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* Google button */}
         <TouchableOpacity
           onPress={handleGoogleSignIn}
-          disabled={googleLoading || loading}
+          disabled={googleLoading || loading || appleLoading}
           activeOpacity={0.88}
           style={styles.googleBtn}
         >
@@ -296,6 +362,17 @@ const styles = StyleSheet.create({
     lineHeight: 40,
   },
   subText: { fontSize: 15, color: colors.muted, textAlign: "center" },
+
+  appleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    height: 52,
+    borderRadius: radius.full,
+    backgroundColor: "#000000",
+  },
+  appleBtnText: { fontSize: 14, fontWeight: "500", color: colors.white },
 
   googleBtn: {
     flexDirection: "row",
