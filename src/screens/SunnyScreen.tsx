@@ -781,6 +781,9 @@ interface SunnyScreenProps {
 export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const [showWalkthrough, setShowWalkthrough] = useState<boolean | null>(null);
+  const [walkthroughSlide, setWalkthroughSlide] = useState(0);
+  const walkthroughFade = useRef(new Animated.Value(1)).current;
   const [showSplash, setShowSplash] = useState<boolean | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [pendingCompleteData, setPendingCompleteData] = useState<Record<string, any> | null>(null);
@@ -801,10 +804,46 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const progressAnim = useRef(new Animated.Value(8)).current;
 
   useEffect(() => {
+    AsyncStorage.getItem("hasSeenWalkthrough").then(val => {
+      if (val === "true") {
+        setShowWalkthrough(false);
+      } else {
+        setShowWalkthrough(true);
+        AsyncStorage.setItem("hasSeenWalkthrough", "true");
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     AsyncStorage.getItem("splash_shown").then(val => {
       setShowSplash(!val);
     });
   }, []);
+
+  const WALKTHROUGH_SLIDES = [
+    { headline: "Never Go Alone." },
+    { headline: "The activity is the icebreaker." },
+    { headline: "The companion makes the memory." },
+  ];
+
+  const advanceWalkthrough = () => {
+    Animated.timing(walkthroughFade, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start(() => {
+      if (walkthroughSlide >= WALKTHROUGH_SLIDES.length - 1) {
+        setShowWalkthrough(false);
+      } else {
+        setWalkthroughSlide(prev => prev + 1);
+        Animated.timing(walkthroughFade, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }).start();
+      }
+    });
+  };
 
   const step = STEPS[stepIndex];
   const isShowingInput = messagesShown >= step.messages.length;
@@ -1095,6 +1134,72 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     }
     return true;
   };
+
+  if (showWalkthrough === null) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
+
+  if (showWalkthrough) {
+    const slide = WALKTHROUGH_SLIDES[walkthroughSlide];
+    return (
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        activeOpacity={1}
+        onPress={advanceWalkthrough}
+      >
+        <LinearGradient
+          colors={['#2DD4BF', '#3B82F6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
+        >
+          <Animated.View style={{ opacity: walkthroughFade, alignItems: 'center', gap: 20 }}>
+            <SunnyAvatar expression="warm" size={80} />
+            <Text style={{
+              fontSize: walkthroughSlide === 0 ? 48 : 32,
+              fontWeight: '800',
+              color: '#FFFFFF',
+              textAlign: 'center',
+              letterSpacing: -1.5,
+              lineHeight: walkthroughSlide === 0 ? 54 : 40,
+            }}>
+              {slide.headline}
+            </Text>
+            <Text style={{
+              fontSize: 14,
+              color: 'rgba(255,255,255,0.7)',
+              textAlign: 'center',
+              marginTop: 8,
+            }}>
+              tap to continue
+            </Text>
+          </Animated.View>
+
+          {/* Dot indicators */}
+          <View style={{
+            position: 'absolute',
+            bottom: 60,
+            flexDirection: 'row',
+            gap: 8,
+          }}>
+            {WALKTHROUGH_SLIDES.map((_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: i === walkthroughSlide
+                    ? '#FFFFFF'
+                    : 'rgba(255,255,255,0.4)',
+                }}
+              />
+            ))}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
 
   if (showSplash === null) return null; // waiting for AsyncStorage check
   if (showSplash) {
