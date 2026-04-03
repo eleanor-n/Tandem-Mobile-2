@@ -1069,6 +1069,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   };
 
   const handlePhotoUpload = async () => {
+    console.log("[Avatar] handlePhotoUpload called");
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(
@@ -1085,42 +1086,54 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
       mediaTypes: ["images"] as any,
       allowsEditing: true,
       aspect: [1, 1] as [number, number],
-      quality: 0.5,       // lower quality forces a compressed local copy, avoids iCloud full-res download
-      exif: false,        // skip metadata download — major cause of "Downloading from iCloud" stall
+      quality: 0.5,
+      exif: false,
       base64: false,
       allowsMultipleSelection: false,
     });
     if (result.canceled || !result.assets?.[0]) return;
     const uri = result.assets[0].uri;
+    console.log("[Avatar] starting upload, uri:", uri);
     setProfilePhotoUri(uri);   // local URI for preview only — never saved to DB
     setPhotoUploading(true);
     try {
+      if (!user?.id) {
+        console.error("[Avatar] no user id, skipping upload");
+        throw new Error("not signed in — cannot upload photo");
+      }
+
       const response = await fetch(uri);
       const blob = await response.blob();
       const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
-      // Use 'avatars' bucket — same as ProfileScreen, known to be public
-      const path = `${user?.id}/avatar_${Date.now()}.${ext}`;
+      const path = `${user.id}/avatar_${Date.now()}.${ext}`;
+      console.log("[Avatar] uploading to avatars bucket, path:", path);
+
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(path, blob, { contentType: `image/${ext}`, upsert: true, cacheControl: "0" });
+      console.log("[Avatar] upload error:", uploadError?.message ?? "none");
       if (uploadError) throw new Error(uploadError.message);
 
       const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
+      console.log("[Avatar] public url:", publicUrl);
 
-      // Immediately persist avatar_url so it's in the DB regardless of
-      // what happens in the App.tsx onComplete upsert later
-      await supabase
+      const { error: upsertError } = await supabase
         .from("profiles")
-        .upsert({ user_id: user!.id, avatar_url: publicUrl, photos: [publicUrl] }, { onConflict: "user_id" });
+        .upsert(
+          { user_id: user.id, avatar_url: publicUrl, photos: [publicUrl] },
+          { onConflict: "user_id" }
+        );
+      console.log("[Avatar] upsert error:", upsertError?.message ?? "none");
+      if (upsertError) throw new Error(upsertError.message);
 
-      // Also carry the URL forward through profileData so App.tsx has it
+      // Carry the URL forward through profileData so App.tsx onComplete has it too
       setProfileData({ ...profileData, photos: [publicUrl] });
       addUserMessage("photo added ✓");
       advanceWithReaction("photo added", "photo", true);
     } catch (e: any) {
+      console.warn("[Avatar] handlePhotoUpload failed:", e?.message || e);
       Alert.alert("photo upload failed", "couldn't save your photo. check your connection and try again.");
-      console.warn("Photo upload failed:", e?.message || e);
     } finally {
       setPhotoUploading(false);
     }
