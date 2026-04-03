@@ -16,6 +16,7 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
 import { LinearGradient } from "expo-linear-gradient";
@@ -421,6 +422,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [postSelectedCategory, setPostSelectedCategory] = useState("");
   const [postCustomCategory, setPostCustomCategory] = useState("");
   const [postLocation, setPostLocation] = useState("");
+  const [postLocationLat, setPostLocationLat] = useState<number | null>(null);
+  const [postLocationLng, setPostLocationLng] = useState<number | null>(null);
   const [postDesc, setPostDesc] = useState("");
   const [isPosting, setIsPosting] = useState(false);
   const [showHostProfile, setShowHostProfile] = useState(false);
@@ -744,6 +747,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           ? selectedTime.toTimeString().split(" ")[0]
           : null,
         location_name: postLocation.trim() || null,
+        location_lat: postLocationLat,
+        location_lng: postLocationLng,
         tags: finalCategory ? [finalCategory] : [],
         max_participants: postSpots,
         is_group: postSpots > 1,
@@ -762,6 +767,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setPostSelectedCategory("");
       setPostCustomCategory("");
       setPostLocation("");
+      setPostLocationLat(null);
+      setPostLocationLng(null);
       setPostDesc("");
       setPostSpots(1);
       setShowGroupNudge(false);
@@ -1547,16 +1554,49 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               />
             )}
 
-            <View style={modalS.locationField}>
-              <Ionicons name="location-outline" size={15} color={colors.teal} />
-              <TextInput
-                style={[modalS.pillFieldText, { flex: 1 }]}
-                placeholder="where is it?"
-                placeholderTextColor={colors.muted}
-                value={postLocation}
-                onChangeText={setPostLocation}
-              />
-            </View>
+            <GooglePlacesAutocomplete
+              placeholder="where is it?"
+              onPress={(data, details = null) => {
+                setPostLocation(data.description);
+                if (details?.geometry?.location) {
+                  setPostLocationLat(details.geometry.location.lat);
+                  setPostLocationLng(details.geometry.location.lng);
+                }
+              }}
+              query={{
+                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                language: "en",
+              }}
+              fetchDetails={true}
+              enablePoweredByContainer={false}
+              keyboardShouldPersistTaps="handled"
+              listViewDisplayed="auto"
+              styles={{
+                container: { flex: 0, zIndex: 999 },
+                textInput: {
+                  height: 50,
+                  borderRadius: 999,
+                  borderWidth: 1.5,
+                  borderColor: colors.border,
+                  backgroundColor: colors.white,
+                  paddingHorizontal: 16,
+                  fontSize: 14,
+                  color: colors.foreground,
+                  marginBottom: 0,
+                },
+                listView: {
+                  backgroundColor: colors.white,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginTop: 4,
+                  zIndex: 999,
+                },
+                row: { padding: 12, backgroundColor: colors.white },
+                description: { fontSize: 14, color: colors.foreground },
+                poweredContainer: { display: "none" },
+              }}
+            />
 
             <View style={modalS.spotsRow}>
               <View>

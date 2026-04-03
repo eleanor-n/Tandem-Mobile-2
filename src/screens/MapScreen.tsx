@@ -129,6 +129,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<typeof ACTIVITIES[0] | null>(null);
+  const [mapActivities, setMapActivities] = useState<any[]>([]);
   const { user } = useAuth();
   const { isLimited, incrementImIn } = useMembershipTier();
   const [requestedSet, setRequestedSet] = useState<Set<string>>(new Set());
@@ -137,6 +138,19 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
   const sunnyText = useRef<string | null>(null);
   const [sunnyVisible, setSunnyVisible] = useState(false);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const fetchMapActivities = async () => {
+      const { data } = await supabase
+        .from("activities")
+        .select("id, title, location_name, location_lat, location_lng, activity_date, activity_time, tags")
+        .eq("status", "active")
+        .not("location_lat", "is", null)
+        .not("location_lng", "is", null);
+      if (data) setMapActivities(data);
+    };
+    fetchMapActivities();
+  }, []);
 
   useEffect(() => {
     if (ACTIVITIES.length === 0) {
@@ -213,6 +227,17 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
             item={act}
             selected={selectedId === act.id}
             onPress={() => setSelectedId(prev => (prev === act.id ? null : act.id))}
+          />
+        ))}
+        {mapActivities.map(activity => (
+          <Marker
+            key={activity.id}
+            coordinate={{
+              latitude: activity.location_lat,
+              longitude: activity.location_lng,
+            }}
+            title={activity.title}
+            description={`${activity.location_name} · ${activity.activity_date}`}
           />
         ))}
       </MapView>

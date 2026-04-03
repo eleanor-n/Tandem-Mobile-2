@@ -19,6 +19,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.thetandemapp.app",
       "buildNumber": "5",
+      "config": {
+        "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Tandem needs microphone access to record voice memos.",
@@ -34,6 +37,11 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thetandemapp.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+        }
+      },
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
