@@ -10,7 +10,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    flowType: "pkce",
+    // Do not set flowType: 'pkce' explicitly — expo-crypto (which PKCE requires)
+    // is not available in Expo Go. Let Supabase pick the flow automatically.
   },
 });
 
