@@ -613,10 +613,10 @@ const PromptInput = ({
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ["videos"] as any,
         videoMaxDuration: 30,
         allowsEditing: false,
-        quality: 0.7,
+        quality: 0.5,
       });
 
       if (result.canceled) return;
@@ -1092,27 +1092,38 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     });
     if (result.canceled || !result.assets?.[0]) return;
     const uri = result.assets[0].uri;
-    setProfilePhotoUri(uri);
+    setProfilePhotoUri(uri);   // local URI for preview only — never saved to DB
     setPhotoUploading(true);
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
       const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
-      const path = `${user?.id}/profile.${ext}`;
-      const { error } = await supabase.storage.from("profile-photos").upload(path, blob, { contentType: `image/${ext}`, upsert: true });
-      if (!error) {
-        const { data: urlData } = supabase.storage.from("profile-photos").getPublicUrl(path);
-        console.log("Profile photo saved:", urlData.publicUrl);
-        const data = { ...profileData, photos: [urlData.publicUrl] };
-        setProfileData(data);
-      }
-    } catch (e) {
-      console.warn("Photo upload failed:", e);
+      // Use 'avatars' bucket — same as ProfileScreen, known to be public
+      const path = `${user?.id}/avatar_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, blob, { contentType: `image/${ext}`, upsert: true, cacheControl: "0" });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+
+      // Immediately persist avatar_url so it's in the DB regardless of
+      // what happens in the App.tsx onComplete upsert later
+      await supabase
+        .from("profiles")
+        .upsert({ user_id: user!.id, avatar_url: publicUrl, photos: [publicUrl] }, { onConflict: "user_id" });
+
+      // Also carry the URL forward through profileData so App.tsx has it
+      setProfileData({ ...profileData, photos: [publicUrl] });
+      addUserMessage("photo added ✓");
+      advanceWithReaction("photo added", "photo", true);
+    } catch (e: any) {
+      Alert.alert("photo upload failed", "couldn't save your photo. check your connection and try again.");
+      console.warn("Photo upload failed:", e?.message || e);
     } finally {
       setPhotoUploading(false);
     }
-    addUserMessage("photo added ✓");
-    advanceWithReaction("photo added", "photo", true);
   };
 
   const handleSkip = () => {
