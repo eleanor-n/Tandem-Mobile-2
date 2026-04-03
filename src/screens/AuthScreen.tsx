@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Application from "expo-application";
-import { makeRedirectUri } from "expo-auth-session";
 import { TandemLogo } from "../components/TandemLogo";
 import { GradientButton } from "../components/GradientButton";
 import { AntDesign } from "@expo/vector-icons";
@@ -83,9 +82,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      // makeRedirectUri keeps the PKCE flow state bound to this component lifecycle,
-      // which prevents the "invalid flow state" error on callback.
-      const redirectUrl = makeRedirectUri({ scheme: "tandem", path: "auth/callback" });
+      const redirectUrl = "tandem://auth/callback";
       console.log("[OAuth] starting Google sign-in, redirectUrl:", redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
