@@ -7,6 +7,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as Application from "expo-application";
+import { makeRedirectUri } from "expo-auth-session";
 import { TandemLogo } from "../components/TandemLogo";
 import { GradientButton } from "../components/GradientButton";
 import { AntDesign } from "@expo/vector-icons";
@@ -81,7 +83,9 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const redirectUrl = "tandem://auth/callback";
+      // makeRedirectUri keeps the PKCE flow state bound to this component lifecycle,
+      // which prevents the "invalid flow state" error on callback.
+      const redirectUrl = makeRedirectUri({ scheme: "tandem", path: "auth/callback" });
       console.log("[OAuth] starting Google sign-in, redirectUrl:", redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -171,6 +175,16 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   };
 
   const handleAppleSignIn = async () => {
+    // Apple Sign In sends the bundle ID as audience in the id_token.
+    // In Expo Go the bundle ID is host.exp.Exponent, which Apple rejects.
+    // Guard against this so the error is clean instead of cryptic.
+    if (Application.applicationId === "host.exp.Exponent") {
+      Alert.alert(
+        "not available in development",
+        "Apple Sign In requires a native build. use email or Google to sign in for now."
+      );
+      return;
+    }
     setAppleLoading(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -223,8 +237,8 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           </Text>
         </View>
 
-        {/* Apple button */}
-        {appleAvailable && (
+        {/* Apple button — hidden in Expo Go (wrong bundle ID causes Apple to reject the token) */}
+        {appleAvailable && Application.applicationId !== "host.exp.Exponent" && (
           <TouchableOpacity
             onPress={handleAppleSignIn}
             disabled={appleLoading || loading || googleLoading}
