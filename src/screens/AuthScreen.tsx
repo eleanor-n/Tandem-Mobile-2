@@ -60,10 +60,13 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
     }
   };
 
+  // SUPABASE SETUP REQUIRED:
+  // Dashboard → Authentication → URL Configuration → Redirect URLs
+  // Must include BOTH: tandem://  AND  tandem://auth/callback
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const redirectUrl = "tandem://auth/callback";
+      const redirectUrl = "tandem://";
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -77,7 +80,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        redirectUrl,
+        "tandem://",
         { preferEphemeralSession: true }
       );
 

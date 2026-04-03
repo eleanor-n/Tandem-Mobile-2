@@ -552,16 +552,26 @@ const PromptInput = ({
     }
 
     // Start recording
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Microphone access needed",
+        "Please allow microphone access in Settings to record a voice memo."
+      );
+      return;
+    }
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Microphone access needed",
-          "Please allow microphone access in Settings to record a voice memo."
-        );
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Wait for audio session to activate
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
@@ -570,12 +580,24 @@ const PromptInput = ({
       setIsRecording(true);
       timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
     } catch (err: any) {
-      Alert.alert("Could not start recording", err.message || "Something went wrong.");
+      Alert.alert(
+        "couldn't start recording",
+        "try removing headphones or closing other audio apps, then try again."
+      );
+      return;
     }
   };
 
   const handleVideo = async () => {
     try {
+      const { status: micStatus } = await Audio.requestPermissionsAsync();
+      if (micStatus !== "granted") {
+        Alert.alert(
+          "microphone access needed",
+          "please allow microphone access in Settings to record video with audio."
+        );
+        return;
+      }
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(

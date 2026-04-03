@@ -284,13 +284,20 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
       if (updateError) throw updateError;
 
-      const { data: refreshed } = await supabase
+      const { data: refreshed, error: fetchError } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", user!.id)
         .single();
 
-      if (refreshed) setProfile(refreshed);
+      if (fetchError) throw fetchError;
+      if (refreshed) {
+        setProfile(refreshed);
+        setEditFirstName(refreshed.first_name || "");
+        setEditBio(refreshed.bio || "");
+        setEditOccupation(refreshed.occupation || "");
+      }
+      showToast("photo updated.");
     } catch (err: any) {
       Alert.alert("Upload failed", err.message || "Could not upload photo. Please try again.");
     } finally {
@@ -402,7 +409,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   {uploadingPhoto ? (
                     <ActivityIndicator color={colors.teal} size="small" />
                   ) : profile?.avatar_url || profile?.photos?.[0] ? (
-                    <Image source={{ uri: profile.avatar_url || profile.photos[0] }} style={s.avatarImage} />
+                    <Image source={{ uri: (profile.avatar_url || profile.photos?.[0]) + "?t=" + Date.now() }} style={s.avatarImage} />
                   ) : (
                     <View style={s.avatarPlaceholder}>
                       <Ionicons name="person" size={40} color={colors.teal} />

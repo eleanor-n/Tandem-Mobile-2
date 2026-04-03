@@ -3,6 +3,7 @@
     "name": "Tandem - Never Go Alone",
     "slug": "tandem",
     "version": "1.0.0",
+    "scheme": "tandem",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

@@ -15,7 +15,6 @@ import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
-import { IntroScreen } from "./src/screens/IntroScreen";
 import { AppWalkthrough } from "./src/components/AppWalkthrough";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
@@ -29,7 +28,6 @@ const AppInner = () => {
   const { user, loading, onboardingCompleted, refreshOnboarding } = useAuth();
   const [unauthScreen, setUnauthScreen] = useState<UnauthScreen>("welcome");
   const [activeTab, setActiveTab] = useState<Tab>("Discover");
-  const [hasSeenIntro, setHasSeenIntro] = useState<boolean | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
@@ -41,12 +39,6 @@ const AppInner = () => {
   const [sunnyToast, setSunnyToast] = useState<string | null>(null);
   const sunnyToastOpacity = useRef(new Animated.Value(0)).current;
   const sunnyWelcomed = useRef(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem("hasSeenIntro").then(val => {
-      setHasSeenIntro(val === "true");
-    });
-  }, []);
 
   useEffect(() => {
     if (!onboardingCompleted || !user || showSplash || showWalkthrough || sunnyWelcomed.current) return;
@@ -90,31 +82,70 @@ const AppInner = () => {
   // Deep link handler for Google OAuth callback
   useEffect(() => {
     const handleUrl = async ({ url }: { url: string }) => {
-      if (!url.startsWith("tandem://")) return;
+      if (!url) return;
+      console.log("Deep link received:", url);
+
       try {
-        const parsedUrl = new URL(url);
-        const hash = parsedUrl.hash.substring(1);
-        const params = new URLSearchParams(hash || parsedUrl.search);
-        const accessToken = params.get("access_token");
-        const refreshToken = params.get("refresh_token");
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        } else {
-          const code = params.get("code");
-          if (code) await supabase.auth.exchangeCodeForSession(url);
+        if (url.includes("access_token") || url.includes("code=") || url.startsWith("tandem://")) {
+
+          // PKCE code exchange
+          if (url.includes("code=")) {
+            const { error } = await supabase.auth.exchangeCodeForSession(url);
+            if (error) console.error("Code exchange error:", error.message);
+            return;
+          }
+
+          // Hash fragment tokens (implicit flow)
+          const hashIndex = url.indexOf("#");
+          if (hashIndex !== -1) {
+            const hashParams = new URLSearchParams(url.substring(hashIndex + 1));
+            const accessToken = hashParams.get("access_token");
+            const refreshToken = hashParams.get("refresh_token");
+            if (accessToken && refreshToken) {
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (error) console.error("Set session error:", error.message);
+              return;
+            }
+          }
+
+          // Query param tokens
+          const queryIndex = url.indexOf("?");
+          if (queryIndex !== -1) {
+            const queryParams = new URLSearchParams(url.substring(queryIndex + 1));
+            const accessToken = queryParams.get("access_token");
+            const refreshToken = queryParams.get("refresh_token");
+            const code = queryParams.get("code");
+            if (accessToken && refreshToken) {
+              await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              return;
+            }
+            if (code) {
+              await supabase.auth.exchangeCodeForSession(url);
+              return;
+            }
+          }
         }
-      } catch (e) {
-        console.error("Deep link error:", e);
+      } catch (e: any) {
+        console.error("Deep link error:", e.message);
       }
     };
 
-    Linking.getInitialURL().then(url => { if (url) handleUrl({ url }); });
+    Linking.getInitialURL().then(url => {
+      if (url) handleUrl({ url });
+    });
+
     const sub = Linking.addEventListener("url", handleUrl);
     return () => sub.remove();
   }, []);
 
   // Loading state — checking session or profile (covers new-signup race)
-  if (loading || (user && onboardingCompleted === null) || hasSeenIntro === null) {
+  if (loading || (user && onboardingCompleted === null)) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
         <ActivityIndicator color={colors.teal} size="large" />
@@ -136,11 +167,8 @@ const AppInner = () => {
     );
   }
 
-  // ── Logged in, onboarding not done → Intro then Sunny ────────
+  // ── Logged in, onboarding not done → Sunny ────────
   if (onboardingCompleted === false) {
-    if (!hasSeenIntro) {
-      return <IntroScreen onDone={() => setHasSeenIntro(true)} />;
-    }
     return (
       <SunnyScreen
         onComplete={async (data) => {
