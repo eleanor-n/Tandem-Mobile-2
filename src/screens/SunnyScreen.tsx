@@ -1085,7 +1085,9 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
       mediaTypes: ["images"] as any,
       allowsEditing: true,
       aspect: [1, 1] as [number, number],
-      quality: 0.85,
+      quality: 0.5,       // lower quality forces a compressed local copy, avoids iCloud full-res download
+      exif: false,        // skip metadata download — major cause of "Downloading from iCloud" stall
+      base64: false,
       allowsMultipleSelection: false,
     });
     if (result.canceled || !result.assets?.[0]) return;

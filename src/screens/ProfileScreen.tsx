@@ -660,8 +660,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         ))}
         {Object.entries(deepPrompts).map(([prompt, answer]) => {
           const answerStr = String(answer);
-          const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos");
-          const isVideo = answerStr.endsWith(".mp4") || answerStr.includes("videos/");
+          const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos") || answerStr.includes("deep-prompt-media");
+          const isVideo = answerStr.endsWith(".mp4") || answerStr.includes("videos/") || answerStr.includes(".mov");
 
           return (
             <View key={prompt} style={s.promptBlock}>

@@ -196,6 +196,9 @@ const AppInner = () => {
               },
               deep_prompts: deepPrompts,
               photos: Array.isArray(data.photos) && data.photos.length > 0 ? data.photos : [],
+              // avatar_url is the primary field ProfileScreen reads; photos[] is the fallback.
+              // Both must be set here so the profile photo shows immediately after onboarding.
+              avatar_url: (Array.isArray(data.photos) && data.photos[0]) ? data.photos[0] : null,
               onboarding_completed: true,
             }, { onConflict: "user_id" });
             if (error) throw error;
