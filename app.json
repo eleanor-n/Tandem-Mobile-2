@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.thetandemapp.app",
-      "buildNumber": "9",
+      "buildNumber": "20",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
