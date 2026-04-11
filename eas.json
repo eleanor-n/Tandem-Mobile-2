@@ -8,6 +8,7 @@
       "distribution": "internal"
     },
     "preview": {
+      "autoIncrement": true,
       "distribution": "internal"
     },
     "production": {

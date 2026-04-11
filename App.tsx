@@ -1,5 +1,12 @@
 import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
+import {
+  useFonts,
+  Quicksand_400Regular,
+  Quicksand_500Medium,
+  Quicksand_600SemiBold,
+  Quicksand_700Bold,
+} from "@expo-google-fonts/quicksand";
 import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
@@ -20,6 +27,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
 import { getSunnyResponse } from "./src/lib/sunny";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 
 type Tab = "Discover" | "Map" | "Scrapbook" | "Profile";
 type UnauthScreen = "welcome" | "auth";
@@ -36,6 +45,7 @@ const AppInner = () => {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showPost, setShowPost] = useState(false);
   const [showMyActivity, setShowMyActivity] = useState(false);
+  const [postPrefill, setPostPrefill] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [sunnyToast, setSunnyToast] = useState<string | null>(null);
   const sunnyToastOpacity = useRef(new Animated.Value(0)).current;
   const sunnyWelcomed = useRef(false);
@@ -77,6 +87,27 @@ const AppInner = () => {
       }
     };
     if (onboardingCompleted === true) checkFirstLaunch();
+  }, [onboardingCompleted]);
+
+  // Request location + notification permissions once after onboarding completes
+  useEffect(() => {
+    if (onboardingCompleted !== true) return;
+    const requestPermissions = async () => {
+      const seen = await AsyncStorage.getItem("tandem_permissions_requested");
+      if (seen) return;
+      await AsyncStorage.setItem("tandem_permissions_requested", "true");
+
+      const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+      if (locStatus !== "granted") {
+        await Location.requestForegroundPermissionsAsync();
+      }
+
+      const { status: notifStatus } = await Notifications.getPermissionsAsync();
+      if (notifStatus !== "granted") {
+        await Notifications.requestPermissionsAsync();
+      }
+    };
+    requestPermissions();
   }, [onboardingCompleted]);
 
   // Deep link handler for OAuth callbacks (Google, Apple)
@@ -181,6 +212,8 @@ const AppInner = () => {
               ? { prompt: deepPrompt }
               : {};
 
+            console.log("[Onboarding] deepPrompts being saved:", JSON.stringify(deepPrompts));
+            console.log("[Onboarding] full data received:", JSON.stringify(data));
             const { error } = await supabase.from("profiles").upsert({
               user_id: user.id,
               first_name: data.name || data.first_name,
@@ -267,7 +300,18 @@ const AppInner = () => {
 
   let tabContent: React.ReactNode;
   switch (activeTab) {
-    case "Map":       tabContent = <MapScreen {...tabProps} />; break;
+    case "Map":
+      tabContent = (
+        <MapScreen
+          {...tabProps}
+          onPostPressWithLocation={(loc) => {
+            setPostPrefill(loc);
+            setActiveTab("Discover");
+            setShowPost(true);
+          }}
+        />
+      );
+      break;
     case "Scrapbook": tabContent = <ScrapbookScreen {...tabProps} />; break;
     case "Profile":
       tabContent = (
@@ -290,6 +334,8 @@ const AppInner = () => {
             openPostModal={showPost}
             onPostModalOpened={() => setShowPost(false)}
             startOnMyActivity={showMyActivity}
+            postPrefill={postPrefill}
+            onPostPrefillConsumed={() => setPostPrefill(null)}
           />
           {showWalkthrough && (
             <AppWalkthrough
@@ -342,6 +388,15 @@ const appS = StyleSheet.create({
 });
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Quicksand_400Regular,
+    Quicksand_500Medium,
+    Quicksand_600SemiBold,
+    Quicksand_700Bold,
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />

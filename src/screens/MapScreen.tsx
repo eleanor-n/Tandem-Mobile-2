@@ -5,14 +5,13 @@ import {
 } from "react-native";
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav } from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useMembershipTier } from "../hooks/useMembershipTier";
-import { colors, radius, shadows, gradients } from "../theme";
+import { colors, radius, shadows } from "../theme";
 import { getSunnyResponse } from "../lib/sunny";
 
 const INITIAL_REGION = {
@@ -22,64 +21,6 @@ const INITIAL_REGION = {
   longitudeDelta: 0.10,
 };
 
-const ACTIVITIES = [
-  {
-    id: "1",
-    title: "tennis session",
-    category: "fitness",
-    location: "public courts",
-    distance: "0.4 mi",
-    icon: "tennisball-outline",
-    photo: "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=800&h=500&fit=crop",
-    date: "Sat · 10am",
-    goingCount: 2,
-    vibe: "casual rallying, no scorekeeping. just good vibes and maybe a rematch.",
-    coordinate: { latitude: 40.358, longitude: -74.668 },
-    host: { name: "maya", bio: "tennis casual, coffee serious", photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face" },
-  },
-  {
-    id: "2",
-    title: "morning coffee",
-    category: "coffee",
-    location: "blue bottle",
-    distance: "1.2 mi",
-    icon: "cafe-outline",
-    photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=500&fit=crop",
-    date: "Sun · 9am",
-    goingCount: 3,
-    vibe: "slow morning, good espresso, zero agenda.",
-    coordinate: { latitude: 40.342, longitude: -74.651 },
-    host: { name: "alex", bio: "third wave coffee person, not sorry about it", photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face" },
-  },
-  {
-    id: "3",
-    title: "farmers market run",
-    category: "markets",
-    location: "nassau st",
-    distance: "0.8 mi",
-    icon: "bag-outline",
-    photo: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=500&fit=crop",
-    date: "Sat · 9am",
-    goingCount: 5,
-    vibe: "wandering stalls, buying things i don't need, eating something good.",
-    coordinate: { latitude: 40.353, longitude: -74.662 },
-    host: { name: "sam", bio: "local produce evangelist and weekend wanderer", photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face" },
-  },
-  {
-    id: "4",
-    title: "ridge hike",
-    category: "hiking",
-    location: "sourland mountain",
-    distance: "4.1 mi",
-    icon: "walk-outline",
-    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=500&fit=crop",
-    date: "Sun · 7am",
-    goingCount: 4,
-    vibe: "early start, always worth it. bring snacks and layers.",
-    coordinate: { latitude: 40.363, longitude: -74.673 },
-    host: { name: "riley", bio: "trail runner, always chasing the sunrise", photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face" },
-  },
-];
 
 const MAP_STYLE = [
   { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
@@ -93,43 +34,21 @@ const MAP_STYLE = [
 ];
 
 // Emoji gradient pin
-const ActivityPin = ({
-  item,
-  selected,
-  onPress,
-}: {
-  item: typeof ACTIVITIES[0];
-  selected: boolean;
-  onPress: () => void;
-}) => (
-  <Marker coordinate={item.coordinate} onPress={onPress} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
-    <View style={pinS.wrapper}>
-      {selected ? (
-        <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={pinS.pinSelected}>
-          <Ionicons name={item.icon as any} size={16} color={colors.white} />
-        </LinearGradient>
-      ) : (
-        <View style={pinS.pin}>
-          <Ionicons name={item.icon as any} size={16} color={colors.teal} />
-        </View>
-      )}
-      <View style={[pinS.tail, selected && pinS.tailSelected]} />
-    </View>
-  </Marker>
-);
 
 interface MapScreenProps {
   activeTab: string;
   onTabPress: (tab: string) => void;
   onPostPress?: () => void;
+  onPostPressWithLocation?: (loc: { name: string; lat: number; lng: number }) => void;
 }
 
-export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps) => {
+export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithLocation }: MapScreenProps) => {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedActivity, setSelectedActivity] = useState<typeof ACTIVITIES[0] | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
   const [mapActivities, setMapActivities] = useState<any[]>([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const { user } = useAuth();
   const { isLimited, incrementImIn } = useMembershipTier();
   const [requestedSet, setRequestedSet] = useState<Set<string>>(new Set());
@@ -147,13 +66,15 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
         .eq("status", "active")
         .not("location_lat", "is", null)
         .not("location_lng", "is", null);
-      if (data) setMapActivities(data);
+      setMapActivities(data ?? []);
+      setMapLoaded(true);
     };
     fetchMapActivities();
   }, []);
 
   useEffect(() => {
-    if (ACTIVITIES.length === 0) {
+    if (!mapLoaded) return;
+    if (mapActivities.length === 0) {
       getSunnyResponse({ context: "mapEmpty" }).then(text => {
         sunnyText.current = text;
         setTimeout(() => {
@@ -161,8 +82,10 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
           Animated.timing(sunnyOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
         }, 700);
       });
+    } else {
+      setSunnyVisible(false);
     }
-  }, []);
+  }, [mapLoaded, mapActivities]);
 
   const showToast = (msg: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -186,17 +109,17 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
     } catch { /* join_requests table may not exist yet */ }
     await incrementImIn();
     setRequestedSet(prev => new Set([...prev, activityId]));
-    const act = ACTIVITIES.find(a => a.id === activityId);
+    const act = mapActivities.find((a: any) => a.id === activityId);
     const subtitle = await getSunnyResponse({
       context: "imIn",
       activityTitle: act?.title ?? "the activity",
-      hostName: act?.host.name ?? "them",
+      hostName: act?.host?.name ?? "them",
     });
     showToast(subtitle);
     setSelectedActivity(null);
   };
 
-  const saveActivityForLater = async (act: typeof ACTIVITIES[0]) => {
+  const saveActivityForLater = async (act: any) => {
     showToast("saved for later.");
     if (!user) return;
     try {
@@ -221,15 +144,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
         showsCompass={false}
         toolbarEnabled={false}
       >
-        {ACTIVITIES.map(act => (
-          <ActivityPin
-            key={act.id}
-            item={act}
-            selected={selectedId === act.id}
-            onPress={() => setSelectedId(prev => (prev === act.id ? null : act.id))}
-          />
-        ))}
-        {mapActivities.map(activity => (
+        {mapActivities.map((activity: any) => (
           <Marker
             key={activity.id}
             coordinate={{
@@ -281,23 +196,29 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.cardsContent}
         >
-          {ACTIVITIES.map(act => {
+          {mapActivities.map((act: any) => {
             const isSelected = selectedId === act.id;
             return (
               <TouchableOpacity
                 key={act.id}
                 style={[s.nearbyCard, isSelected && s.nearbyCardSelected]}
                 onPress={() => {
-                  setSelectedId(act.id);
-                  setSelectedActivity(act);
+                  if (onPostPressWithLocation && act.location_lat != null && act.location_lng != null) {
+                    onPostPressWithLocation({
+                      name: act.location_name ?? act.title,
+                      lat: act.location_lat,
+                      lng: act.location_lng,
+                    });
+                  } else if (act?.id && act?.title) {
+                    setSelectedId(act.id);
+                    setSelectedActivity(act);
+                  }
                 }}
                 activeOpacity={0.9}
               >
-                <Image source={{ uri: act.photo }} style={s.nearbyPhoto} resizeMode="cover" />
                 <View style={s.nearbyBody}>
-                  <Text style={s.nearbyDistance}>{act.distance}</Text>
                   <Text style={s.nearbyTitle} numberOfLines={1}>{act.title}</Text>
-                  <Text style={s.nearbyLocation} numberOfLines={1}>{act.location}</Text>
+                  <Text style={s.nearbyLocation} numberOfLines={1}>{act.location_name}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -311,7 +232,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
         </View>
       )}
 
-      {sunnyVisible && sunnyText.current ? (
+      {sunnyVisible && sunnyText.current && mapActivities.length === 0 ? (
         <Animated.Text style={[ms.sunnyLine, { opacity: sunnyOpacity, bottom: 80 + insets.bottom }]} numberOfLines={2}>
           {sunnyText.current}
         </Animated.Text>
@@ -326,7 +247,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
         presentationStyle="pageSheet"
         onRequestClose={() => setSelectedActivity(null)}
       >
-        {selectedActivity && (() => {
+        {selectedActivity && selectedActivity.id && selectedActivity.title && (() => {
           const act = selectedActivity;
           return (
             <View style={m.container}>
@@ -376,13 +297,15 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
                   </View>
 
                   {/* Host strip */}
-                  <View style={m.hostStrip}>
-                    <Image source={{ uri: act.host.photo }} style={m.hostAvatar} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={m.hostLabel}>posted by <Text style={m.hostName}>{act.host.name}</Text></Text>
-                      <Text style={m.hostBio} numberOfLines={1}>{act.host.bio}</Text>
+                  {act.host && (
+                    <View style={m.hostStrip}>
+                      <Image source={{ uri: act.host.photo }} style={m.hostAvatar} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={m.hostLabel}>posted by <Text style={m.hostName}>{act.host.name}</Text></Text>
+                        <Text style={m.hostBio} numberOfLines={1}>{act.host.bio}</Text>
+                      </View>
                     </View>
-                  </View>
+                  )}
                 </View>
               </ScrollView>
 
@@ -424,26 +347,6 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress }: MapScreenProps
   );
 };
 
-const pinS = StyleSheet.create({
-  wrapper: { alignItems: "center" },
-  pin: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.white,
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18, shadowRadius: 8, elevation: 8,
-    borderWidth: 2, borderColor: colors.white,
-  },
-  pinSelected: {
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: "center", justifyContent: "center",
-    shadowColor: colors.teal, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 12, elevation: 12,
-  },
-  emoji: { fontSize: 20, fontFamily: undefined },
-  tail: { width: 2, height: 6, backgroundColor: colors.white, marginTop: -1 },
-  tailSelected: { backgroundColor: colors.teal },
-});
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -456,7 +359,7 @@ const s = StyleSheet.create({
     paddingLeft: 16, paddingRight: 8, paddingVertical: 12,
     ...shadows.float,
   },
-  searchText: { flex: 1, fontSize: 14, color: colors.muted, fontWeight: "500" },
+  searchText: { flex: 1, fontSize: 14, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
   filterBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
 
   // Side buttons
@@ -477,8 +380,8 @@ const s = StyleSheet.create({
     shadowOpacity: 0.08, shadowRadius: 16, elevation: 12,
   },
   panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 12 },
-  panelTitle: { fontSize: 18, fontWeight: "800", color: colors.foreground, letterSpacing: -0.4 },
-  seeAll: { fontSize: 14, fontWeight: "600", color: colors.teal },
+  panelTitle: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
+  seeAll: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   cardsContent: { paddingHorizontal: 16, paddingBottom: 8, gap: 12, flexDirection: "row" },
 
   // Nearby card
@@ -490,8 +393,8 @@ const s = StyleSheet.create({
   nearbyCardSelected: { borderColor: colors.teal },
   nearbyPhoto: { width: "100%", height: 88, backgroundColor: colors.surface },
   nearbyBody: { padding: 10, gap: 3 },
-  nearbyDistance: { fontSize: 10, fontWeight: "700", color: colors.teal, letterSpacing: 0.4 },
-  nearbyTitle: { fontSize: 13, fontWeight: "700", color: colors.foreground, letterSpacing: -0.2 },
+  nearbyDistance: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal, letterSpacing: 0.4 },
+  nearbyTitle: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.2 },
   nearbyLocation: { fontSize: 11, color: colors.muted },
 
   // Toast
@@ -500,7 +403,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.85)", borderRadius: radius.full,
     paddingHorizontal: 20, paddingVertical: 10, zIndex: 50,
   },
-  toastText: { fontSize: 13, color: colors.white, fontWeight: "500" },
+  toastText: { fontSize: 13, color: colors.white, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 });
 
 // Modal styles
@@ -526,11 +429,11 @@ const m = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.92)",
     borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 5,
   },
-  categoryPillText: { fontSize: 12, fontWeight: "700", color: colors.foreground },
+  categoryPillText: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
 
   // Body
   body: { padding: 16, gap: 10 },
-  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontSize: 13, color: colors.muted },
 
@@ -550,7 +453,7 @@ const m = StyleSheet.create({
   },
   hostAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface },
   hostLabel: { fontSize: 12, color: colors.muted },
-  hostName: { fontWeight: "700", color: colors.foreground },
+  hostName: { fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   hostBio: { fontSize: 12, color: colors.muted, marginTop: 1 },
 
 });

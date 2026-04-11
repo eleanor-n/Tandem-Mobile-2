@@ -161,6 +161,17 @@ EXPO_PUBLIC_ONESIGNAL_APP_ID=6ff11a5c-9d87-4370-86ba-d28e4e9a1b31
 
 Stripe and Resend keys live in Supabase Edge Function secrets — never in the `.env` file.
 
+### External Service Config Checklist
+
+When any environment variable, API key, or external service config is added or changed, always verify all four of these before assuming the code is correct:
+
+1. **`.env` has the correct value** — check for double-pasting, trailing spaces, or stale values
+2. **The service is enabled in the external dashboard** — e.g. Google Maps API enabled, Supabase Auth provider toggled on, Stripe webhook active
+3. **The key in code matches `.env` exactly** — variable name, casing, `EXPO_PUBLIC_` prefix
+4. **Key restrictions allow the current environment** — some keys are scoped to prod bundle IDs or specific IP ranges; dev builds may be blocked silently
+
+Silent failures (code looks correct, service is misconfigured) are the hardest bugs to diagnose. Run this checklist first before investigating the code.
+
 ---
 
 ## Supabase Schema

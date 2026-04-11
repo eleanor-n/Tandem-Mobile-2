@@ -195,6 +195,7 @@ const s = StyleSheet.create({
   hero: {
     fontSize: 52,
     fontWeight: "800",
+    fontFamily: "Quicksand_700Bold",
     color: "#1C1410",
     letterSpacing: -2,
     lineHeight: 56,
@@ -204,10 +205,12 @@ const s = StyleSheet.create({
     color: "#8B7355",
     lineHeight: 24,
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
   subTeal: {
     color: colors.teal,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
   },
   ctaWrapper: {
     height: 56,
@@ -228,6 +231,7 @@ const s = StyleSheet.create({
   ctaText: {
     fontSize: 17,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
     color: colors.white,
     letterSpacing: 0.2,
   },
@@ -239,9 +243,11 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: "#A08060",
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
   signInBold: {
     color: colors.teal,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
   },
 });

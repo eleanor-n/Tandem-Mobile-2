@@ -47,50 +47,6 @@ interface ScrapbookMemory {
 
 // ── Mock data ─────────────────────────────────────────────────────────────
 
-const MOCK_MEMORIES: ScrapbookMemory[] = [
-  {
-    id: "1", user_id: "", title: "farmer's market", partner_name: "alex",
-    activity_date: "2026-03-22", location: "nassau st", is_public: true,
-    stickers: ["heart", "pinned"], caption: "we bought way too much cheese.",
-    cover_photo_url: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=600&fit=crop",
-    tags: ["market"], created_at: "2026-03-22T10:00:00Z",
-    photos: [
-      { photo_url: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=600&fit=crop", display_order: 0 },
-      { photo_url: "https://images.unsplash.com/photo-1506617564039-2f3b650b7010?w=400&h=400&fit=crop", display_order: 1 },
-    ],
-  },
-  {
-    id: "2", user_id: "", title: "slow morning coffee", partner_name: "maya",
-    activity_date: "2026-03-15", location: "blue bottle", is_public: false,
-    stickers: ["star"], caption: "",
-    cover_photo_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop",
-    tags: ["coffee"], created_at: "2026-03-15T09:00:00Z",
-    photos: [
-      { photo_url: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop", display_order: 0 },
-      { photo_url: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop", display_order: 1 },
-    ],
-  },
-  {
-    id: "3", user_id: "", title: "morning hike", partner_name: "riley",
-    activity_date: "2026-03-08", location: "sourland mountain", is_public: true,
-    stickers: ["sunny", "pinned"], caption: "worth every step.",
-    cover_photo_url: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=600&fit=crop",
-    tags: ["hiking"], created_at: "2026-03-08T07:00:00Z",
-    photos: [
-      { photo_url: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=600&fit=crop", display_order: 0 },
-      { photo_url: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400&h=400&fit=crop", display_order: 1 },
-      { photo_url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop", display_order: 2 },
-    ],
-  },
-  {
-    id: "4", user_id: "", title: "garden harvest", partner_name: "sam",
-    activity_date: "2026-02-20", location: undefined, is_public: false,
-    stickers: [], caption: "",
-    cover_photo_url: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop",
-    tags: ["nature"], created_at: "2026-02-20T14:00:00Z",
-    photos: [{ photo_url: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=600&fit=crop", display_order: 0 }],
-  },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -247,7 +203,7 @@ const mc = StyleSheet.create({
   meta: { fontSize: 12, color: SB.inkMuted },
   stickerRow: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
   stickerPill: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
-  stickerText: { fontSize: 11, fontWeight: "600" },
+  stickerText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
 });
 
 // ── Memory Detail Modal ───────────────────────────────────────────────────
@@ -554,9 +510,9 @@ const dm = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: SB.border,
   },
-  backBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", minWidth: 60 },
+  backBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", minWidth: 60 },
   topTitle: { flex: 1, fontSize: 16, color: SB.ink, textAlign: "center", marginHorizontal: 8 },
-  shareBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", minWidth: 60, textAlign: "right" },
+  shareBtn: { fontSize: 13, color: SB.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", minWidth: 60, textAlign: "right" },
   scroll: { paddingHorizontal: 20, paddingTop: 16, gap: 14 },
   captureZone: { backgroundColor: SB.cream, borderRadius: 8, overflow: "hidden" },
   captureFooter: { padding: 14, gap: 4 },
@@ -566,12 +522,12 @@ const dm = StyleSheet.create({
   captureStampText: { fontSize: 9, color: SB.inkMuted, letterSpacing: 1 },
   captureStickers: { flexDirection: "row", gap: 6, paddingHorizontal: 14, paddingTop: 10, flexWrap: "wrap" },
   captureStickerPill: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
-  captureStickerText: { fontSize: 11, fontWeight: "600" },
+  captureStickerText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
   visibilityBanner: {
     flexDirection: "row", alignItems: "center",
     borderWidth: 0.5, borderRadius: 12, padding: 14, gap: 12,
   },
-  visLabel: { fontSize: 13, fontWeight: "500", color: SB.ink },
+  visLabel: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: SB.ink },
   visSub: { fontSize: 10, color: SB.inkMuted, marginTop: 2 },
   visConfirm: { fontSize: 12, color: SB.teal, fontStyle: "italic", marginTop: -8, paddingHorizontal: 2 },
   card: { backgroundColor: "#fff", borderWidth: 1, borderColor: SB.border, borderRadius: 8, padding: 14, gap: 6 },
@@ -579,10 +535,10 @@ const dm = StyleSheet.create({
   savedTick: { fontSize: 11, color: SB.teal },
   metaSub: { fontSize: 12, color: SB.inkMuted },
   captionInput: { fontSize: 14, color: SB.inkMid, lineHeight: 22, minHeight: 60 },
-  sectionLabel: { fontSize: 10, color: SB.inkMuted, fontWeight: "600", letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 10, color: SB.inkMuted, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", letterSpacing: 0.5 },
   stickerStrip: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   stickerBtn: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  stickerLabel: { fontSize: 12, fontWeight: "600" },
+  stickerLabel: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
   fullPhotoOverlay: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
   fullPhoto: { width: W, height: W * 1.2 },
   sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 20, paddingVertical: 4 },
@@ -709,7 +665,7 @@ const em = StyleSheet.create({
   desc: { fontSize: 13, color: SB.inkMuted, textAlign: "center" },
   btn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden" },
   btnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  btnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  btnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#fff" },
   sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 8 },
 });
 
@@ -725,7 +681,7 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
-  const [memories, setMemories] = useState<ScrapbookMemory[]>(MOCK_MEMORIES);
+  const [memories, setMemories] = useState<ScrapbookMemory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<ScrapbookMemory | null>(null);
   const sunnyEmptyText = useRef<string | null>(null);
   const [sunnyEmptyVisible, setSunnyEmptyVisible] = useState(false);
@@ -876,7 +832,7 @@ const sc = StyleSheet.create({
     borderRadius: 20, borderWidth: 1, borderColor: SB.border,
   },
   timelineBtnActive: { backgroundColor: SB.tealLight, borderColor: SB.teal },
-  timelineBtnText: { fontSize: 13, color: SB.inkMuted, fontWeight: "600" },
+  timelineBtnText: { fontSize: 13, color: SB.inkMuted, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
   timelineBtnTextActive: { color: SB.tealText },
   addBtn: {
     width: 32, height: 32, borderRadius: 16,

@@ -99,6 +99,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 15,
     fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
     letterSpacing: -0.2,
   },
   outlineBtn: {
@@ -120,6 +121,7 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: 14,
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
   darkBtn: {
     height: 52,
@@ -133,10 +135,12 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
   ghostText: {
     color: colors.muted,
     fontSize: 14,
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
 });

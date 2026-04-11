@@ -14,6 +14,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Audio } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import * as Application from "expo-application";
 import SunnyAvatar, { SunnyExpression } from "../components/SunnyAvatar";
 import { SplashAnimationScreen } from "./SplashAnimationScreen";
 import { registerForPushNotifications } from "../lib/notifications";
@@ -525,24 +527,52 @@ const PromptInput = ({
         }
 
         let submitUri = uri;
+        const isVideoFile = uri.includes(".mov") || uri.includes(".mp4");
         if (userId) {
           try {
             const timestamp = Date.now();
-            const path = `${userId}/${timestamp}.m4a`;
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            const { error } = await supabase.storage
-              .from("deep-prompt-media")
-              .upload(path, blob, { contentType: "audio/m4a", upsert: true });
-            if (!error) {
-              const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
-              submitUri = urlData.publicUrl;
+            if (isVideoFile) {
+              const path = `${userId}/${timestamp}.mp4`;
+              console.log("[Voice/video] detected video file, uploading to videos bucket:", path);
+              const formData = new FormData();
+              formData.append("file", { uri, name: `${timestamp}.mp4`, type: "video/mp4" } as any);
+              const { error } = await supabase.storage
+                .from("videos")
+                .upload(path, formData, { contentType: "video/mp4", upsert: true });
+              if (!error) {
+                const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+                const publicUrl = urlData.publicUrl;
+                console.log("[Voice/video] upload success:", publicUrl);
+                await supabase
+                  .from("profiles")
+                  .update({ video_url: publicUrl } as any)
+                  .eq("user_id", userId);
+                // Don't call onSubmit for deep_prompts — video is saved to video_url
+                return;
+              } else {
+                console.warn("[Voice/video] upload failed:", error.message);
+              }
             } else {
-              console.warn("Voice upload failed:", error.message);
+              const path = `${userId}/${timestamp}.m4a`;
+              console.log("[Voice] uploading to deep-prompt-media:", path);
+              const formData = new FormData();
+              formData.append("file", { uri, name: `${timestamp}.m4a`, type: "audio/mp4" } as any);
+              const { error } = await supabase.storage
+                .from("deep-prompt-media")
+                .upload(path, formData, { contentType: "audio/mp4", upsert: true });
+              if (!error) {
+                const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
+                submitUri = urlData.publicUrl;
+                console.log("[Voice] upload success, public url:", submitUri);
+              } else {
+                console.warn("[Voice] upload failed:", error.message);
+              }
             }
           } catch (uploadErr) {
-            console.warn("Voice upload error:", uploadErr);
+            console.warn("[Voice] upload error:", uploadErr);
           }
+        } else {
+          console.log("[Voice] no userId, skipping upload — using local uri");
         }
 
         onSubmit(submitUri, "voice");
@@ -576,9 +606,28 @@ const PromptInput = ({
 
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      const { recording } = await Audio.Recording.createAsync({
+        android: {
+          extension: ".m4a",
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: ".m4a",
+          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {},
+      });
       recordingRef.current = recording;
       setElapsedSeconds(0);
       setIsRecording(true);
@@ -593,6 +642,10 @@ const PromptInput = ({
   };
 
   const handleVideo = async () => {
+    if (Application.applicationId === "host.exp.Exponent") {
+      Alert.alert("not available in Expo Go", "video recording requires a native build. use voice or text instead.");
+      return;
+    }
     try {
       const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
       if (cameraPermission.status !== "granted") {
@@ -628,13 +681,18 @@ const PromptInput = ({
         try {
           const timestamp = Date.now();
           const path = `${userId}/${timestamp}.mp4`;
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          await supabase.storage
+          const formData = new FormData();
+          formData.append("file", { uri: asset.uri, name: `${timestamp}.mp4`, type: "video/mp4" } as any);
+          const { error: uploadError } = await supabase.storage
             .from("videos")
-            .upload(path, blob, { contentType: "video/mp4", upsert: true });
-
+            .upload(path, formData, { contentType: "video/mp4", upsert: true });
+          if (uploadError) {
+            console.error("[Video] upload failed:", uploadError.message);
+            Alert.alert("upload failed", uploadError.message);
+            return;
+          }
           const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+          console.log("[Video] upload success:", urlData?.publicUrl);
           if (urlData?.publicUrl) {
             await supabase
               .from("profiles")
@@ -642,7 +700,7 @@ const PromptInput = ({
               .eq("user_id", userId);
           }
         } catch (uploadErr) {
-          console.warn("Video upload error:", uploadErr);
+          console.warn("[Video] upload error:", uploadErr);
         }
       }
 
@@ -790,9 +848,6 @@ interface SunnyScreenProps {
 export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
-  const [showWalkthrough, setShowWalkthrough] = useState<boolean | null>(null);
-  const [walkthroughSlide, setWalkthroughSlide] = useState(0);
-  const walkthroughFade = useRef(new Animated.Value(1)).current;
   const [showSplash, setShowSplash] = useState<boolean | null>(null);
   const [showNotifPrompt, setShowNotifPrompt] = useState(false);
   const [pendingCompleteData, setPendingCompleteData] = useState<Record<string, any> | null>(null);
@@ -813,46 +868,10 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const progressAnim = useRef(new Animated.Value(8)).current;
 
   useEffect(() => {
-    AsyncStorage.getItem("hasSeenWalkthrough").then(val => {
-      if (val === "true") {
-        setShowWalkthrough(false);
-      } else {
-        setShowWalkthrough(true);
-        AsyncStorage.setItem("hasSeenWalkthrough", "true");
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     AsyncStorage.getItem("splash_shown").then(val => {
       setShowSplash(!val);
     });
   }, []);
-
-  const WALKTHROUGH_SLIDES = [
-    { headline: "Never Go Alone." },
-    { headline: "The activity is the icebreaker." },
-    { headline: "The companion makes the memory." },
-  ];
-
-  const advanceWalkthrough = () => {
-    Animated.timing(walkthroughFade, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start(() => {
-      if (walkthroughSlide >= WALKTHROUGH_SLIDES.length - 1) {
-        setShowWalkthrough(false);
-      } else {
-        setWalkthroughSlide(prev => prev + 1);
-        Animated.timing(walkthroughFade, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }).start();
-      }
-    });
-  };
 
   const step = STEPS[stepIndex];
   const isShowingInput = messagesShown >= step.messages.length;
@@ -1071,6 +1090,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const handlePhotoUpload = async () => {
     console.log("[Avatar] handlePhotoUpload called");
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log("[Avatar] permission status:", status);
     if (status !== "granted") {
       Alert.alert(
         "photo access needed",
@@ -1102,15 +1122,15 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
         throw new Error("not signed in — cannot upload photo");
       }
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
       const ext = (uri.split(".").pop() || "jpg").toLowerCase().replace("jpeg", "jpg");
       const path = `${user.id}/avatar_${Date.now()}.${ext}`;
       console.log("[Avatar] uploading to avatars bucket, path:", path);
+      const formData = new FormData();
+      formData.append("file", { uri, name: `avatar_${Date.now()}.${ext}`, type: `image/${ext}` } as any);
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, blob, { contentType: `image/${ext}`, upsert: true, cacheControl: "0" });
+        .upload(path, formData, { contentType: `image/${ext}`, upsert: true, cacheControl: "0" });
       console.log("[Avatar] upload error:", uploadError?.message ?? "none");
       if (uploadError) throw new Error(uploadError.message);
 
@@ -1169,72 +1189,6 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     }
     return true;
   };
-
-  if (showWalkthrough === null) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
-  }
-
-  if (showWalkthrough) {
-    const slide = WALKTHROUGH_SLIDES[walkthroughSlide];
-    return (
-      <TouchableOpacity
-        style={{ flex: 1 }}
-        activeOpacity={1}
-        onPress={advanceWalkthrough}
-      >
-        <LinearGradient
-          colors={['#2DD4BF', '#3B82F6']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
-        >
-          <Animated.View style={{ opacity: walkthroughFade, alignItems: 'center', gap: 20 }}>
-            <SunnyAvatar expression="warm" size={80} />
-            <Text style={{
-              fontSize: walkthroughSlide === 0 ? 48 : 32,
-              fontWeight: '800',
-              color: '#FFFFFF',
-              textAlign: 'center',
-              letterSpacing: -1.5,
-              lineHeight: walkthroughSlide === 0 ? 54 : 40,
-            }}>
-              {slide.headline}
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: 'rgba(255,255,255,0.7)',
-              textAlign: 'center',
-              marginTop: 8,
-            }}>
-              tap to continue
-            </Text>
-          </Animated.View>
-
-          {/* Dot indicators */}
-          <View style={{
-            position: 'absolute',
-            bottom: 60,
-            flexDirection: 'row',
-            gap: 8,
-          }}>
-            {WALKTHROUGH_SLIDES.map((_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: i === walkthroughSlide
-                    ? '#FFFFFF'
-                    : 'rgba(255,255,255,0.4)',
-                }}
-              />
-            ))}
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  }
 
   if (showSplash === null) return null; // waiting for AsyncStorage check
   if (showSplash) {
@@ -1409,8 +1363,13 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
             activeOpacity={0.85}
             onPress={async () => {
               setShowNotifPrompt(false);
-              await registerForPushNotifications();
-              onComplete(pendingCompleteData ?? {});
+              try {
+                await registerForPushNotifications();
+              } catch (e) {
+                console.warn("[Notif] registration failed:", e);
+              } finally {
+                onComplete(pendingCompleteData ?? {});
+              }
             }}
           >
             <LinearGradient
@@ -1463,8 +1422,9 @@ const styles = StyleSheet.create({
   progressLabel: {
     fontSize: 10,
     fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
     color: colors.muted,
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
 
   // Age gate
@@ -1474,17 +1434,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36, gap: 16,
   },
   ageGateTitle: {
-    fontSize: 22, fontFamily: "Quicksand-Bold",
+    fontSize: 22, fontFamily: "Quicksand_700Bold",
     color: colors.foreground, textAlign: "center",
   },
   ageGateBody: {
-    fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22,
+    fontSize: 15, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", lineHeight: 22,
   },
   ageGateBtn: {
     width: "100%", height: 52, borderRadius: 26, overflow: "hidden", marginTop: 8,
   },
   ageGateBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  ageGateBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  ageGateBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   // Notification prompt overlay
   notifOverlay: {
@@ -1494,18 +1454,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36, gap: 16,
   },
   notifTitle: {
-    fontSize: 22, fontFamily: "Quicksand-Bold",
+    fontSize: 22, fontFamily: "Quicksand_700Bold",
     color: colors.foreground, textAlign: "center",
   },
   notifBody: {
-    fontSize: 15, color: colors.muted, textAlign: "center", lineHeight: 22,
+    fontSize: 15, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", lineHeight: 22,
   },
   notifYesBtn: {
     width: "100%", height: 52, borderRadius: 26, overflow: "hidden", marginTop: 8,
   },
   notifYesBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  notifYesBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
-  notifSkip: { fontSize: 13, color: colors.muted, marginTop: 4 },
+  notifYesBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
+  notifSkip: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted, marginTop: 4 },
 
   chat: { flex: 1 },
   chatContent: { paddingHorizontal: 16, paddingTop: 16 },
@@ -1513,22 +1473,25 @@ const styles = StyleSheet.create({
   sunnyLabel: {
     fontSize: 10,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
     color: colors.teal,
-    letterSpacing: 1,
+    letterSpacing: 0,
     marginLeft: 40,
     marginBottom: 4,
   },
 
   bubbleRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     marginBottom: 6,
     gap: 8,
+    flexShrink: 1,
   },
   bubbleRowUser: { flexDirection: "row-reverse" },
   avatarSlot: { width: 32, height: 32, flexShrink: 0 },
   sunnyBubble: {
-    maxWidth: "78%",
+    maxWidth: "85%",
+    flexShrink: 1,
     backgroundColor: colors.white,
     borderRadius: 18,
     borderBottomLeftRadius: 4,
@@ -1542,7 +1505,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  sunnyBubbleText: { fontSize: 15, color: "#2C2416", lineHeight: 22 },
+  sunnyBubbleText: { fontSize: 15, fontFamily: "Quicksand_400Regular", color: "#2C2416", lineHeight: 22, flexShrink: 1, flexWrap: "wrap" },
   userBubble: {
     maxWidth: "78%",
     borderRadius: 18,
@@ -1551,7 +1514,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     ...shadows.brand,
   },
-  userBubbleText: { fontSize: 15, color: colors.white, lineHeight: 22 },
+  userBubbleText: { fontSize: 15, fontFamily: "Quicksand_400Regular", color: colors.white, lineHeight: 22 },
 
   typingRow: {
     flexDirection: "row",
@@ -1607,9 +1570,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 13,
     fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
     color: colors.teal,
   },
-  optionChipTextSelected: { fontSize: 13, fontWeight: "600", color: colors.white },
+  optionChipTextSelected: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
 
   doneBtn: {
     borderRadius: radius.full,
@@ -1624,7 +1588,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: radius.full,
   },
-  doneBtnText: { fontSize: 14, fontWeight: "600", color: colors.white },
+  doneBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
   doneBtnTextDisabled: { color: colors.muted },
 
   // Text inputs
@@ -1641,6 +1605,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
+    fontFamily: "Quicksand_400Regular",
+    letterSpacing: 0,
     color: colors.foreground,
   },
   sendBtn: { width: 44, height: 44, borderRadius: 22, overflow: "hidden" },
@@ -1667,7 +1633,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(30,158,137,0.5)",
     backgroundColor: "rgba(30,158,137,0.07)",
   },
-  modeBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  modeBtnText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
   modeBtnTextActive: { color: colors.teal },
 
   // Media record buttons
@@ -1684,7 +1650,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: radius.full,
   },
-  mediaBtnText: { fontSize: 14, fontWeight: "600", color: colors.white },
+  mediaBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
 
   // Recording active state
   recordingActive: {
@@ -1708,6 +1674,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
     color: "#EF4444",
   },
   stopRecordingBtn: {
@@ -1719,6 +1686,7 @@ const styles = StyleSheet.create({
   stopRecordingText: {
     fontSize: 13,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
     color: colors.white,
   },
 
@@ -1729,11 +1697,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.teal, borderStyle: "dashed", borderRadius: 12,
     paddingVertical: 20, backgroundColor: colors.background,
   },
-  photoPickerText: { fontSize: 15, fontWeight: "600", color: colors.teal },
+  photoPickerText: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   photoPreviewRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   photoPreview: { width: 64, height: 64, borderRadius: 32 },
   photoChangeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  photoChangeBtnText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
+  photoChangeBtnText: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Skip
   skipBtn: {
@@ -1743,6 +1711,7 @@ const styles = StyleSheet.create({
   },
   skipText: {
     fontSize: 13,
+    fontFamily: "Quicksand_400Regular",
     color: colors.muted,
   },
 });

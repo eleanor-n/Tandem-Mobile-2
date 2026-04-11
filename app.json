@@ -18,7 +18,7 @@
       "icon": "./assets/icon.png",
       "supportsTablet": false,
       "bundleIdentifier": "com.thetandemapp.app",
-      "buildNumber": "5",
+      "buildNumber": "9",
       "usesAppleSignIn": true,
       "config": {
         "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
@@ -74,13 +74,15 @@
           "microphonePermission": "Tandem needs microphone access for video prompts."
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-audio",
+      "expo-video"
     ],
+    "owner": "the_tandem_app",
     "extra": {
       "eas": {
-        "projectId": "3e1f19ba-7221-4cff-a70e-c918cdda0506"
+        "projectId": "6e867e43-5ae8-4af3-8c2e-81050c93d0ba"
       }
-    },
-    "owner": "tandem_never_go_alone"
+    }
   }
 }

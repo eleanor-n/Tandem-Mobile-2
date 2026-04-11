@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase, handleSupabaseError } from "../lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -28,6 +27,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
 
   const checkOnboarding = useCallback(async (userId: string) => {
+    const timeout = setTimeout(() => {
+      setOnboardingCompleted(prev => prev === null ? false : prev);
+      setLoading(false);
+    }, 5000);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -35,8 +38,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("user_id", userId)
         .maybeSingle();
 
+      console.log("[Auth] checkOnboarding result:", data?.onboarding_completed, "for user:", userId);
+
       // No profile row yet = new user, needs onboarding
-      if (!data || error) {
+      if (!data) {
+        setOnboardingCompleted(false);
+      } else if (error) {
         setOnboardingCompleted(false);
       } else {
         setOnboardingCompleted(data.onboarding_completed === true);
@@ -44,6 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch {
       setOnboardingCompleted(false);
     } finally {
+      clearTimeout(timeout);
       setLoading(false);
     }
   }, []);
@@ -62,11 +70,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       clearTimeout(sessionTimeout);
       if (error) {
-        // Stale or invalid token — clear it and force sign-in
+        // Stale or invalid token — sign out via SDK (clears its own storage) and reset state
         await handleSupabaseError(error);
-        await AsyncStorage.multiRemove(["supabase.auth.token", "tandem_has_onboarded", "tandem_sunny_welcomed"]);
         setSession(null);
         setUser(null);
+        setOnboardingCompleted(null);
         setLoading(false);
         return;
       }
@@ -81,31 +89,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (
-        (event === "TOKEN_REFRESHED" || event === "SIGNED_OUT") &&
-        !session
-      ) {
-        // Stale token detected — clear local state and drop to sign-in
-        await AsyncStorage.multiRemove(["supabase.auth.token", "tandem_has_onboarded", "tandem_sunny_welcomed"]);
-        setSession(null);
-        setUser(null);
-        setOnboardingCompleted(null);
-        setLoading(false);
-        return;
-      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user && event === "SIGNED_IN") {
-        // New sign-in (email or Google OAuth) — determine correct screen
+        // All auth methods (email, Google, Apple, phone OTP) — determine correct screen
         setLoading(true);
         checkOnboarding(session.user.id);
-      } else if (!session?.user) {
-        // Signed out
+      } else if (event === "SIGNED_OUT" || (!session?.user && event !== "INITIAL_SESSION")) {
+        // Signed out (explicit or due to token invalidation)
         setOnboardingCompleted(null);
         setLoading(false);
       }
       // TOKEN_REFRESHED with valid session, USER_UPDATED, INITIAL_SESSION, etc.
-      // — no action needed
+      // — no action needed; SDK already persisted the new token to AsyncStorage
     });
 
     return () => {

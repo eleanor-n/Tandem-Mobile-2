@@ -107,6 +107,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontWeight: "800",
+    fontFamily: "Quicksand_700Bold",
     color: colors.teal,
     letterSpacing: -0.5,
   },

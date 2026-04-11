@@ -137,7 +137,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 32,
   },
   panelText: {
-    fontFamily: "Quicksand-Bold",
+    fontFamily: "Quicksand_700Bold",
     fontSize: 28,
     color: "#FFFFFF",
     textAlign: "center",
@@ -148,7 +148,7 @@ const s = StyleSheet.create({
     gap: 20,
   },
   sunnyText: {
-    fontFamily: "Quicksand-Bold",
+    fontFamily: "Quicksand_700Bold",
     fontSize: 18,
     color: colors.foreground,
     textAlign: "center",

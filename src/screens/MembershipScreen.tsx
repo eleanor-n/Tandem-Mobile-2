@@ -398,14 +398,14 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 2, width: 60 },
-  backText: { fontSize: 14, fontWeight: "600", color: colors.teal },
-  headerTitle: { fontSize: 18, fontWeight: "800", color: colors.foreground, letterSpacing: -0.4 },
+  backText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
+  headerTitle: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
 
   content: { padding: 16, gap: 14 },
 
   // Hero
   hero: { borderRadius: radius.xl, padding: 24, gap: 6 },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: colors.white, letterSpacing: -0.5 },
+  heroTitle: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.white, letterSpacing: -0.5 },
   heroSub: { fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 20 },
 
   // Period selector
@@ -416,8 +416,8 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   periodBtnActive: { borderColor: colors.teal, backgroundColor: colors.teal },
-  periodText: { fontSize: 12, fontWeight: "600", color: colors.muted },
-  periodTextActive: { color: colors.white, fontWeight: "700" },
+  periodText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
+  periodTextActive: { color: colors.white, fontWeight: "700", fontFamily: "Quicksand_700Bold" },
 
   // Shared
   priceRow: { flexDirection: "row", alignItems: "baseline", marginTop: 4 },
@@ -431,9 +431,9 @@ const s = StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     alignItems: "center", justifyContent: "center",
   },
-  currentPlanText: { fontSize: 14, fontWeight: "600", color: colors.muted },
+  currentPlanText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
   ctaInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  ctaText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  ctaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   ctaWrap: { paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
   renewNote: {
     textAlign: "center", fontSize: 11, color: "#aaa",
@@ -447,12 +447,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3,
     borderWidth: 1, borderColor: "#F5C842",
   },
-  savingsBadgeText: { fontSize: 11, fontWeight: "700", color: "#8B6A00" },
+  savingsBadgeText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#8B6A00" },
   savingsBadgeWhite: {
     backgroundColor: "rgba(255,255,255,0.25)", borderRadius: radius.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  savingsBadgeWhiteText: { fontSize: 11, fontWeight: "700", color: colors.white },
+  savingsBadgeWhiteText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   // Free card
   freeCard: {
@@ -464,15 +464,15 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between",
     padding: 16, paddingBottom: 12,
   },
-  freeTierName: { fontSize: 16, fontWeight: "700", color: colors.foreground },
-  freePrice: { fontSize: 26, fontWeight: "800", color: colors.foreground, letterSpacing: -1 },
+  freeTierName: { fontSize: 16, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  freePrice: { fontSize: 26, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -1 },
   freePriceSub: { fontSize: 13, color: colors.muted, alignSelf: "flex-end", paddingBottom: 3 },
   freeBadge: {
     backgroundColor: colors.surface, borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 4,
     borderWidth: 1, borderColor: colors.border,
   },
-  freeBadgeText: { fontSize: 11, fontWeight: "600", color: colors.muted },
+  freeBadgeText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
 
   // Go card
   goCard: {
@@ -484,9 +484,9 @@ const s = StyleSheet.create({
   },
   popularBadgeWrap: { alignItems: "center", marginTop: 12 },
   popularBadge: { borderRadius: radius.full, paddingHorizontal: 14, paddingVertical: 5 },
-  popularBadgeText: { fontSize: 11, fontWeight: "700", color: colors.white, letterSpacing: 0.3 },
+  popularBadgeText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white, letterSpacing: 0.3 },
   goCardTop: { padding: 16, paddingTop: 10, paddingBottom: 12 },
-  goTierName: { fontSize: 16, fontWeight: "700", color: colors.foreground },
+  goTierName: { fontSize: 16, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   goPrice: { fontSize: 30, color: colors.teal, letterSpacing: -1, marginTop: 6 },
   perWeekLabel: { fontSize: 12, color: colors.muted, marginTop: 1 },
   billingNote: { fontSize: 11, color: colors.muted, fontStyle: "italic", marginTop: 3 },
@@ -495,7 +495,7 @@ const s = StyleSheet.create({
   // Trail card
   trailCard: { borderRadius: radius.xl, overflow: "hidden" },
   trailCardTop: { padding: 16, paddingBottom: 12 },
-  trailTierName: { fontSize: 16, fontWeight: "700", color: colors.white },
+  trailTierName: { fontSize: 16, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   trailPrice: { fontSize: 30, color: colors.white, letterSpacing: -1, marginTop: 6 },
   trailPerWeekLabel: { fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 1 },
   trailBillingNote: { fontSize: 11, color: "rgba(255,255,255,0.6)", fontStyle: "italic", marginTop: 3 },
@@ -503,16 +503,16 @@ const s = StyleSheet.create({
     margin: 16, marginTop: 8, height: 44, borderRadius: radius.full,
     backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center",
   },
-  trailCurrentText: { fontSize: 14, fontWeight: "600", color: colors.white },
+  trailCurrentText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
   trailCtaWrap: { height: 48, borderRadius: radius.full, overflow: "hidden" },
   trailCta: {
     flex: 1, borderRadius: radius.full,
     backgroundColor: colors.white, alignItems: "center", justifyContent: "center",
   },
-  trailCtaText: { fontSize: 15, fontWeight: "700", color: colors.teal },
+  trailCtaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 
   // Comparison
-  compTitle: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.2, marginTop: 4 },
+  compTitle: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2, marginTop: 4 },
   compTable: {
     backgroundColor: colors.white, borderRadius: radius.xl,
     overflow: "hidden", borderWidth: 1, borderColor: colors.border,
@@ -527,7 +527,7 @@ const s = StyleSheet.create({
   compFeatureCol: { flex: 2.5 },
   compFeatureText: { fontSize: 12, color: colors.foreground },
   compTierCol: { flex: 1, alignItems: "center" },
-  compTierLabel: { fontSize: 12, fontWeight: "700", color: colors.muted },
+  compTierLabel: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted },
   compTierLabelActive: { color: colors.teal },
 
   sunnyBanner: {

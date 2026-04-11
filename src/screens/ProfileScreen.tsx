@@ -6,11 +6,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, Switch, ActivityIndicator, Modal, TextInput, Alert, Animated,
   KeyboardAvoidingView, Platform, Share,
 } from "react-native";
-import { Audio, Video, ResizeMode } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useAudioPlayer } from "expo-audio";
+import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -54,58 +56,6 @@ const VIBE_TAG_OPTIONS = [
   "dog person", "music lover", "bookworm", "gym rat", "homebody",
 ];
 
-const MOCK_COMMENTS = [
-  {
-    id: "c1",
-    name: "jamie",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-    vibeTag: "reliable",
-    text: "showed up on time and brought snacks. 10/10 tandem.",
-    date: "mar 22",
-  },
-  {
-    id: "c2",
-    name: "alex",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-    vibeTag: "funny",
-    text: "made the whole hike way better just by being there.",
-    date: "mar 15",
-  },
-];
-
-const MOCK_HOSTING = [
-  {
-    id: "h1",
-    title: "chess & espresso",
-    date: "tomorrow · 10:00 am",
-    open: true,
-    spots: 2,
-    photo: "https://images.unsplash.com/photo-1529699211952-734e80c4d42b?w=300&h=200&fit=crop",
-  },
-  {
-    id: "h2",
-    title: "trail run: pine ridge",
-    date: "sat · 7:30 am",
-    open: false,
-    spots: 0,
-    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=300&h=200&fit=crop",
-  },
-];
-
-const MOCK_BEEN_TO = [
-  {
-    id: "b1",
-    title: "flower market walk",
-    date: "oct 12, 2025",
-    photo: "https://images.unsplash.com/photo-1490750967868-88df5691cc09?w=300&h=200&fit=crop",
-  },
-  {
-    id: "b2",
-    title: "summit hike",
-    date: "sep 28, 2025",
-    photo: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=300&h=200&fit=crop",
-  },
-];
 
 interface ProfileScreenProps {
   activeTab: string;
@@ -117,6 +67,22 @@ interface ProfileScreenProps {
   onMyActivityPress?: () => void;
 }
 
+const ProfileVideo = ({ uri }: { uri: string }) => {
+  const player = useVideoPlayer({ uri }, p => {
+    p.loop = false;
+  });
+  return (
+    <VideoView
+      player={player}
+      style={{ width: "100%", height: 220, borderRadius: 12 }}
+      nativeControls
+      contentFit="contain"
+      allowsFullscreen
+      allowsPictureInPicture={false}
+    />
+  );
+};
+
 export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -125,7 +91,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
   const [selectedVibeTags, setSelectedVibeTags] = useState<string[]>([]);
-  const [comments, setComments] = useState(MOCK_COMMENTS);
+  const [comments, setComments] = useState<any[]>([]);
   const [showLeaveNote, setShowLeaveNote] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [noteVibe, setNoteVibe] = useState("");
@@ -134,18 +100,30 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const caveat = (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined;
   const [memories, setMemories] = useState<any[]>([]);
-  const [playingKey, setPlayingKey] = useState<string | null>(null);
-  const audioRef = useRef<Audio.Sound | null>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [voiceUri, setVoiceUri] = useState<string | null>(null);
+  const player = useAudioPlayer(voiceUri ? { uri: voiceUri } : null);
+  const pendingPlayRef = useRef(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
+
   const [profilePublic, setProfilePublic] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editOccupation, setEditOccupation] = useState("");
+  const [editGender, setEditGender] = useState("");
+  const [editPronouns, setEditPronouns] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editBirthday, setEditBirthday] = useState("");
+  const [editPersonality, setEditPersonality] = useState("");
+  const [editHumor, setEditHumor] = useState<string[]>([]);
+  const [editUsage, setEditUsage] = useState<string[]>([]);
   const [editSaving, setEditSaving] = useState(false);
+
+  const HUMOR_OPTIONS = ["dry", "sarcastic", "dark", "dad jokes", "absurdist", "self-deprecating", "improv energy"];
+  const USAGE_OPTIONS = ["coffee & food", "outdoor & hiking", "fitness & sports", "arts & culture", "live music", "day trips", "studying", "casual hangouts"];
+  const [avatarError, setAvatarError] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const sunnyText = useRef<string | null>(null);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
   const sunnyFetched = useRef(false);
@@ -158,34 +136,55 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   };
 
   useEffect(() => {
-    return () => {
-      if (sound) sound.unloadAsync();
-    };
-  }, [sound]);
+    setAvatarError(false);
+    setAvatarLoading(false);
+  }, [profile?.avatar_url]);
+
+  // Auto-play once voiceUri is loaded into the player
+
+  useEffect(() => {
+    if (pendingPlayRef.current && voiceUri) {
+      player.play();
+      setIsPlayingAudio(true);
+      pendingPlayRef.current = false;
+    }
+  }, [voiceUri]);
 
   const playVoiceMemo = async (uri: string) => {
+    console.log("[Voice] attempting to play:", uri);
+    console.log("[Voice] url from profile:", profile?.deep_prompts, profile?.photos);
+
+    // Confirm URL is reachable before attempting playback
     try {
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlayingAudio(false);
+      const check = await fetch(uri, { method: "HEAD" });
+      console.log("[Voice] URL status:", check.status, uri);
+      if (!check.ok) {
+        Alert.alert("voice memo unavailable", "the file could not be reached. it may still be processing.");
+        return;
       }
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri });
-      setSound(newSound);
+    } catch (headErr: any) {
+      console.log("[Voice] HEAD check failed:", headErr.message);
+      Alert.alert("voice memo unavailable", "could not connect to the audio file.");
+      return;
+    }
+
+    if (player.playing) {
+      player.pause();
+      setIsPlayingAudio(false);
+    } else if (voiceUri === uri) {
+      // Same URI already loaded — play directly
+      player.play();
       setIsPlayingAudio(true);
-      await newSound.playAsync();
-      newSound.setOnPlaybackStatusUpdate(status => {
-        if (status.isLoaded && status.didJustFinish) setIsPlayingAudio(false);
-      });
-    } catch (err: any) {
-      Alert.alert("couldn't play audio", err.message);
+    } else {
+      // New URI — set it and let the useEffect trigger play after load
+      pendingPlayRef.current = true;
+      setVoiceUri(uri);
     }
   };
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("*").eq("user_id", user.id).single().then(({ data }) => {
+    supabase.from("profiles").select("*, avatar_url, photos, video_url, deep_prompts").eq("user_id", user.id).single().then(({ data }) => {
       if (data) {
         setProfile(data);
         setVisibility((data.profile_visibility as Record<string, boolean>) || {
@@ -197,6 +196,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         setEditFirstName(data.first_name || "");
         setEditBio(data.bio || "");
         setEditOccupation(data.occupation || "");
+        setEditGender(data.gender || "");
+        setEditPronouns(data.pronouns || "");
+        setEditLocation(data.location_name || "");
+        setEditBirthday(data.birthday || "");
+        setEditPersonality(data.personality_type || "");
+        setEditHumor(Array.isArray(data.humor_type) ? data.humor_type : []);
+        setEditUsage(Array.isArray(data.usage_reasons) ? data.usage_reasons : []);
       }
       setLoading(false);
     });
@@ -265,34 +271,35 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: "images" as const,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
+      console.log("[ProfilePhoto] picker result:", JSON.stringify(result));
       if (result.canceled) return;
       const asset = result.assets?.[0];
       if (!asset?.uri) return;
 
       setUploadingPhoto(true);
 
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-
       const fileExt = asset.uri.split(".").pop()?.toLowerCase() || "jpg";
       const mimeType = fileExt === "png" ? "image/png" : "image/jpeg";
       const fileName = `avatar_${Date.now()}.${fileExt}`;
       const storagePath = `${user.id}/${fileName}`;
+      const formData = new FormData();
+      formData.append("file", { uri: asset.uri, name: fileName, type: mimeType } as any);
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(storagePath, blob, {
+        .upload(storagePath, formData, {
           contentType: mimeType,
           upsert: true,
           cacheControl: "0",
         });
 
+      console.log("[ProfilePhoto] upload error:", uploadError?.message);
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
       const { data: urlData } = supabase.storage
@@ -440,19 +447,32 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                 <View style={s.avatarInner}>
                   {uploadingPhoto ? (
                     <ActivityIndicator color={colors.teal} size="small" />
-                  ) : (profile?.avatar_url || profile?.photos?.[0]) ? (
-                    <Image
-                      key={profile._avatarCacheBust || profile.avatar_url}
-                      source={{
-                        uri: (profile.avatar_url || profile.photos[0]) + `?v=${profile._avatarCacheBust || 1}`,
-                        cache: "reload",
-                      }}
-                      style={s.avatarImage}
-                      onError={(e) => console.warn("Avatar image failed to load:", e.nativeEvent.error)}
-                    />
+                  ) : (profile?.avatar_url?.startsWith("https://") && !avatarError) ? (
+                    <>
+                      <ExpoImage
+                        source={{ uri: profile.avatar_url }}
+                        style={s.avatarImage}
+                        contentFit="cover"
+                        onLoadStart={() => setAvatarLoading(true)}
+                        onLoadEnd={() => { setAvatarLoading(false); setAvatarError(false); }}
+                        onError={(e) => {
+                          console.log("[Avatar] expo-image error:", e);
+                          setAvatarError(true);
+                        }}
+                      />
+                      {avatarLoading && (
+                        <ActivityIndicator
+                          color={colors.teal}
+                          size="small"
+                          style={{ position: "absolute" }}
+                        />
+                      )}
+                    </>
                   ) : (
-                    <View style={s.avatarPlaceholder}>
-                      <Ionicons name="person" size={40} color={colors.teal} />
+                    <View style={{ width: 91, height: 91, borderRadius: 45.5, backgroundColor: colors.teal, justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
+                      <Text style={{ fontSize: 40, lineHeight: 91, color: "#FFFFFF", fontFamily: "Quicksand_700Bold", textAlign: "center" }}>
+                        {profile?.first_name?.[0]?.toUpperCase() ?? "?"}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -519,73 +539,17 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Hosting now */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>HOSTING NOW</Text>
-          {MOCK_HOSTING.length === 0 ? (
-            <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
-              <Text style={s.emptyCardCtaText}>+ post an activity</Text>
-            </TouchableOpacity>
-          ) : (
-            <FlatList
-              data={MOCK_HOSTING}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.hScroll}
-              keyExtractor={h => h.id}
-              renderItem={({ item: h }) => (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => showToast("go to discover → my activity to manage this.")}
-                  style={s.actCard}
-                >
-                  <Image source={{ uri: h.photo }} style={s.actPhoto} resizeMode="cover" />
-                  {h.open && (
-                    <View style={s.openBadge}>
-                      <Text style={s.openText}>open</Text>
-                    </View>
-                  )}
-                  {h.spots > 0 && (
-                    <View style={s.spotsBadge}>
-                      <Text style={s.spotsText}>{h.spots} spots</Text>
-                    </View>
-                  )}
-                  <View style={s.actBody}>
-                    <Text style={s.actTitle} numberOfLines={2}>{h.title}</Text>
-                    <Text style={s.actDate}>{h.date}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-          )}
+          <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
+            <Text style={s.emptyCardCtaText}>+ post an activity</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Been to */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>BEEN TO</Text>
-          {MOCK_BEEN_TO.length === 0 ? (
-            <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
-              <Text style={s.emptyCardCtaText}>go find something to join →</Text>
-            </TouchableOpacity>
-          ) : (
-            <FlatList
-              data={MOCK_BEEN_TO}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.hScroll}
-              keyExtractor={b => b.id}
-              renderItem={({ item: b }) => (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => onTabPress("Scrapbook")}
-                  style={[s.actCard, s.beenCard]}
-                >
-                  <Image source={{ uri: b.photo }} style={s.actPhoto} resizeMode="cover" />
-                  <View style={s.actBody}>
-                    <Text style={s.actTitle} numberOfLines={2}>{b.title}</Text>
-                    <Text style={s.actDate}>{b.date}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-            />
-          )}
+          <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
+            <Text style={s.emptyCardCtaText}>go find something to join →</Text>
+          </TouchableOpacity>
         </View>
 
         {/* About chips from real profile */}
@@ -660,8 +624,11 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         ))}
         {Object.entries(deepPrompts).map(([prompt, answer]) => {
           const answerStr = String(answer);
-          const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos") || answerStr.includes("deep-prompt-media");
-          const isVideo = answerStr.endsWith(".mp4") || answerStr.includes("videos/") || answerStr.includes(".mov");
+          const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos") || answerStr.includes("deep-prompt-media") || answerStr.includes("audio/");
+          const isVideo = (answerStr.endsWith(".mp4") || answerStr.includes("videos/") || answerStr.includes(".mov")) && !answerStr.includes("deep-prompt-media");
+
+          // Video takes priority — don't double-show voice memo when profile.video_url is set
+          if (isVoice && profile?.video_url) return null;
 
           return (
             <View key={prompt} style={s.promptBlock}>
@@ -682,14 +649,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   </Text>
                 </TouchableOpacity>
               ) : isVideo ? (
-                <TouchableOpacity
-                  onPress={() => setShowVideo(true)}
-                  activeOpacity={0.8}
-                  style={s.mediaPlayBtn}
-                >
-                  <Ionicons name="videocam" size={24} color={colors.teal} />
-                  <Text style={s.mediaPlayText}>play video</Text>
-                </TouchableOpacity>
+                <ProfileVideo uri={answerStr} />
               ) : (
                 <Text style={s.promptAnswer}>"{answerStr}"</Text>
               )}
@@ -700,14 +660,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Also show profile video_url if it exists */}
         {profile?.video_url && (
           <View style={s.promptBlock}>
-            <Text style={s.promptLabel}>VIDEO</Text>
-            <Video
-              source={{ uri: profile.video_url }}
-              style={{ width: "100%", height: 200, borderRadius: 12 }}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay={false}
-            />
+            <Text style={s.promptLabel}>intro video</Text>
+            <ProfileVideo uri={profile.video_url} />
           </View>
         )}
 
@@ -850,6 +804,34 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </View>
 
           <ScrollView style={es.scroll} contentContainerStyle={es.scrollContent} keyboardShouldPersistTaps="handled">
+            {/* Photo */}
+            <View style={es.photoRow}>
+              <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.85} disabled={uploadingPhoto}>
+                <View style={es.editAvatar}>
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color={colors.teal} />
+                  ) : (profile?.avatar_url?.startsWith("https://") && !avatarError) ? (
+                    <ExpoImage
+                      source={{ uri: profile.avatar_url }}
+                      style={es.editAvatarImg}
+                      contentFit="cover"
+                      onError={(e) => {
+                        console.log("[Avatar] expo-image error:", e);
+                        setAvatarError(true);
+                      }}
+                    />
+                  ) : (
+                    <View style={[es.editAvatarImg, { backgroundColor: colors.teal, alignItems: "center", justifyContent: "center" }]}>
+                      <Text style={{ fontSize: 28, color: "#fff", fontWeight: "700", fontFamily: "Quicksand_700Bold" }}>{editFirstName?.[0]?.toUpperCase() ?? "?"}</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.7} disabled={uploadingPhoto}>
+                <Text style={es.photoHintText}>{uploadingPhoto ? "uploading..." : "change photo"}</Text>
+              </TouchableOpacity>
+            </View>
+
             <Text style={es.label}>FIRST NAME</Text>
             <TextInput
               style={es.input}
@@ -880,7 +862,87 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               placeholderTextColor={colors.muted}
             />
 
-            <Text style={es.photoNote}>photo editing coming soon.</Text>
+            <Text style={es.label}>GENDER</Text>
+            <TextInput
+              style={es.input}
+              value={editGender}
+              onChangeText={setEditGender}
+              placeholder="e.g. woman, man, non-binary..."
+              placeholderTextColor={colors.muted}
+            />
+
+            <Text style={es.label}>PRONOUNS</Text>
+            <TextInput
+              style={es.input}
+              value={editPronouns}
+              onChangeText={setEditPronouns}
+              placeholder="e.g. she/her, they/them..."
+              placeholderTextColor={colors.muted}
+            />
+
+            <Text style={es.label}>NEIGHBORHOOD / CITY</Text>
+            <TextInput
+              style={es.input}
+              value={editLocation}
+              onChangeText={setEditLocation}
+              placeholder="where are you based?"
+              placeholderTextColor={colors.muted}
+            />
+
+            <Text style={es.label}>BIRTHDAY</Text>
+            <TextInput
+              style={es.input}
+              value={editBirthday}
+              onChangeText={setEditBirthday}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.muted}
+              keyboardType="numbers-and-punctuation"
+            />
+
+            <Text style={es.label}>PERSONALITY TYPE</Text>
+            <TextInput
+              style={es.input}
+              value={editPersonality}
+              onChangeText={setEditPersonality}
+              placeholder="MBTI, enneagram, or just vibe..."
+              placeholderTextColor={colors.muted}
+            />
+
+            <Text style={es.label}>HUMOR STYLE</Text>
+            <View style={es.pillRow}>
+              {HUMOR_OPTIONS.map(opt => {
+                const sel = editHumor.includes(opt);
+                return sel ? (
+                  <TouchableOpacity key={opt} onPress={() => setEditHumor(prev => prev.filter(h => h !== opt))} activeOpacity={0.8}>
+                    <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={es.pillSelected}>
+                      <Text style={es.pillSelectedText}>{opt}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity key={opt} onPress={() => setEditHumor(prev => [...prev, opt])} activeOpacity={0.8} style={es.pill}>
+                    <Text style={es.pillText}>{opt}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={es.label}>LOOKING FOR</Text>
+            <View style={es.pillRow}>
+              {USAGE_OPTIONS.map(opt => {
+                const sel = editUsage.includes(opt);
+                return sel ? (
+                  <TouchableOpacity key={opt} onPress={() => setEditUsage(prev => prev.filter(u => u !== opt))} activeOpacity={0.8}>
+                    <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={es.pillSelected}>
+                      <Text style={es.pillSelectedText}>{opt}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity key={opt} onPress={() => setEditUsage(prev => [...prev, opt])} activeOpacity={0.8} style={es.pill}>
+                    <Text style={es.pillText}>{opt}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
             <TouchableOpacity
               style={es.saveBtn}
@@ -894,7 +956,14 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                     first_name: editFirstName.trim(),
                     bio: editBio.trim(),
                     occupation: editOccupation.trim(),
-                  })
+                    gender: editGender.trim(),
+                    pronouns: editPronouns.trim(),
+                    location_name: editLocation.trim(),
+                    birthday: editBirthday.trim() || null,
+                    personality_type: editPersonality.trim(),
+                    humor_type: editHumor,
+                    usage_reasons: editUsage,
+                  } as any)
                   .eq("user_id", user!.id);
                 if (error) {
                   Alert.alert("Couldn't save", error.message);
@@ -906,6 +975,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   first_name: editFirstName.trim(),
                   bio: editBio.trim(),
                   occupation: editOccupation.trim(),
+                  gender: editGender.trim(),
+                  pronouns: editPronouns.trim(),
+                  location_name: editLocation.trim(),
+                  birthday: editBirthday.trim() || null,
+                  personality_type: editPersonality.trim(),
+                  humor_type: editHumor,
+                  usage_reasons: editUsage,
                 }));
                 setEditSaving(false);
                 setShowEditSheet(false);
@@ -1007,7 +1083,7 @@ const s = StyleSheet.create({
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.teal,
     paddingHorizontal: 14, paddingVertical: 10,
   },
-  completeBannerText: { flex: 1, fontSize: 13, color: colors.teal, fontWeight: "500", lineHeight: 18 },
+  completeBannerText: { flex: 1, fontSize: 13, color: colors.teal, fontWeight: "500", fontFamily: "Quicksand_500Medium", lineHeight: 18 },
 
   // Avatar section
   avatarSection: { alignItems: "center", gap: 10, paddingTop: 40 },
@@ -1015,17 +1091,17 @@ const s = StyleSheet.create({
   avatarGap: { flex: 1, borderRadius: 46, backgroundColor: colors.white, padding: 3 },
   avatarInner: { flex: 1, borderRadius: 43, backgroundColor: colors.surface, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   avatarImage: { width: "100%", height: "100%" },
-  avatarInitial: { fontSize: 32, fontWeight: "700", color: colors.muted },
+  avatarInitial: { fontSize: 32, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted },
   avatarPlaceholder: { flex: 1, borderRadius: 43, backgroundColor: "#F0FDFB", alignItems: "center", justifyContent: "center" },
-  photoHint: { fontSize: 12, color: colors.teal, fontWeight: "600", marginTop: -4 },
-  name: { fontSize: 22, fontWeight: "700", color: colors.foreground, letterSpacing: -0.4 },
+  photoHint: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", marginTop: -4 },
+  name: { fontSize: 22, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  location: { fontSize: 13, color: colors.muted, fontWeight: "500" },
-  ageText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
+  location: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  ageText: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // My Activity link
   myActivityLink: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 16 },
-  myActivityLinkText: { fontSize: 12, color: colors.teal, fontWeight: "600" },
+  myActivityLinkText: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
 
   // Stat pills
   statsRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
@@ -1036,17 +1112,17 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
     ...shadows.card,
   },
-  statNum: { fontSize: 15, fontWeight: "800", color: colors.teal },
-  statLabel: { fontSize: 12, color: colors.muted, fontWeight: "500" },
+  statNum: { fontSize: 15, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.teal },
+  statLabel: { fontSize: 12, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Bio
-  bio: { fontSize: 14, color: colors.muted, fontStyle: "italic", textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
+  bio: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, fontStyle: "italic", textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
 
   // Section
   section: { gap: 10 },
-  sectionLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.4 },
+  sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.4 },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionHint: { fontSize: 11, color: colors.muted },
+  sectionHint: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted },
   hScroll: { gap: 12, paddingBottom: 4 },
 
   // Empty card CTAs
@@ -1062,6 +1138,7 @@ const s = StyleSheet.create({
   emptyCardCtaText: {
     fontSize: 13,
     fontWeight: "600" as const,
+    fontFamily: "Quicksand_600SemiBold",
     color: colors.teal,
   },
 
@@ -1073,47 +1150,47 @@ const s = StyleSheet.create({
   beenCard: { opacity: 0.9 },
   actPhoto: { width: "100%", height: 90, backgroundColor: colors.surface },
   actBody: { padding: 10, gap: 3 },
-  actTitle: { fontSize: 13, fontWeight: "700", color: colors.foreground, lineHeight: 18 },
-  actDate: { fontSize: 11, color: colors.muted },
+  actTitle: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, lineHeight: 18 },
+  actDate: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted },
   openBadge: {
     position: "absolute", top: 8, left: 8,
     backgroundColor: colors.teal, borderRadius: radius.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  openText: { fontSize: 10, fontWeight: "700", color: colors.white },
+  openText: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   spotsBadge: {
     position: "absolute", top: 8, right: 8,
     backgroundColor: "rgba(255,255,255,0.9)", borderRadius: radius.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  spotsText: { fontSize: 10, fontWeight: "600", color: colors.foreground },
+  spotsText: { fontSize: 10, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
 
   // Cards / chips
   card: { backgroundColor: colors.white, borderRadius: radius.lg, padding: 16, ...shadows.card, borderWidth: 1, borderColor: colors.border, gap: 10 },
-  cardLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.2 },
-  cardLabelSub: { fontSize: 12, color: colors.muted, lineHeight: 18 },
+  cardLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2 },
+  cardLabelSub: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted, lineHeight: 18 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { backgroundColor: colors.tintTeal, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
-  chipText: { fontSize: 12, fontWeight: "600", color: colors.foreground },
+  chipText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
 
   // Vibe tags
   vibeTagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   vibeTagBtn: { overflow: "hidden", borderRadius: radius.full },
   vibeTagSelected: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full },
-  vibeTagSelectedText: { fontSize: 12, fontWeight: "700", color: colors.white },
+  vibeTagSelectedText: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   vibeTag: {
     paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
     backgroundColor: colors.white,
   },
   vibeTagDisabled: { opacity: 0.4 },
-  vibeTagText: { fontSize: 12, fontWeight: "600", color: colors.foreground },
+  vibeTagText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   vibeTagTextDisabled: { color: colors.muted },
 
   // Prompts
   promptBlock: { backgroundColor: colors.tintTeal, borderRadius: radius.md, padding: 16, borderLeftWidth: 3, borderLeftColor: colors.teal },
-  promptLabel: { fontSize: 10, fontWeight: "700", color: colors.teal, letterSpacing: 1.2, marginBottom: 6 },
-  promptAnswer: { fontSize: 15, fontWeight: "500", color: colors.foreground, fontStyle: "italic", lineHeight: 22 },
+  promptLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal, letterSpacing: 1.2, marginBottom: 6 },
+  promptAnswer: { fontSize: 15, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground, fontStyle: "italic", lineHeight: 22 },
   mediaPlayBtn: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -1127,6 +1204,7 @@ const s = StyleSheet.create({
   mediaPlayText: {
     fontSize: 14,
     fontWeight: "600" as const,
+    fontFamily: "Quicksand_600SemiBold",
     color: colors.teal,
   },
 
@@ -1138,25 +1216,25 @@ const s = StyleSheet.create({
   },
   commentAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface },
   commentAvatarPlaceholder: { backgroundColor: colors.tintTeal, alignItems: "center", justifyContent: "center" },
-  commentAvatarInitial: { fontSize: 14, fontWeight: "700", color: colors.teal },
-  commentName: { fontSize: 13, fontWeight: "700", color: colors.foreground },
+  commentAvatarInitial: { fontSize: 14, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
+  commentName: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   commentVibePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
-  commentVibeText: { fontSize: 10, fontWeight: "700", color: colors.white },
-  commentText: { fontSize: 13, color: colors.secondary, lineHeight: 18 },
-  commentDate: { fontSize: 11, color: colors.muted },
+  commentVibeText: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
+  commentText: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.secondary, lineHeight: 18 },
+  commentDate: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted },
   commentDelete: { padding: 4 },
   leaveNoteBtn: {
     height: 44, borderRadius: radius.full,
     borderWidth: 1.5, borderColor: colors.teal,
     alignItems: "center", justifyContent: "center",
   },
-  leaveNoteBtnText: { fontSize: 14, fontWeight: "600", color: colors.teal },
+  leaveNoteBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
 
   // Privacy
   privacyToggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 2 },
-  privacyToggleText: { fontSize: 13, fontWeight: "600", color: colors.muted },
+  privacyToggleText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
   privacyRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
-  privacyLabel: { fontSize: 14, color: colors.foreground },
+  privacyLabel: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.foreground },
 
   // Actions
   shareProfileBtn: {
@@ -1164,28 +1242,28 @@ const s = StyleSheet.create({
     paddingVertical: 10, borderRadius: radius.full, borderWidth: 1.5,
     borderColor: colors.border, backgroundColor: colors.white,
   },
-  shareProfileText: { fontSize: 13, fontWeight: "600", color: colors.muted },
+  shareProfileText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
   actionRow: { flexDirection: "row", gap: 12 },
   outlineBtn: { flex: 1, height: 48, borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  outlineBtnText: { fontSize: 14, fontWeight: "600", color: colors.foreground },
+  outlineBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   upgradeWrap: { flex: 1, height: 48, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
   upgradeInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  upgradeText: { fontSize: 14, fontWeight: "700", color: colors.white },
+  upgradeText: { fontSize: 14, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   toast: { position: "absolute", bottom: 100, alignSelf: "center", backgroundColor: "rgba(15,23,42,0.85)", borderRadius: radius.full, paddingHorizontal: 20, paddingVertical: 10 },
-  toastText: { fontSize: 13, color: colors.white, fontWeight: "500" },
+  toastText: { fontSize: 13, color: colors.white, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Memories
   memoriesHeader: { fontSize: 16, color: "#1a1a1a" },
-  memoriesSeeAll: { fontSize: 11, color: "#1D9E75", fontWeight: "600" },
+  memoriesSeeAll: { fontSize: 11, color: "#1D9E75", fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
 
   publicBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 20 },
   publicBannerOn: { backgroundColor: "#E8FBF7", borderWidth: 1, borderColor: "#A7EDD9" },
   publicBannerOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  publicBannerText: { flex: 1, fontSize: 13, fontWeight: "500" },
+  publicBannerText: { flex: 1, fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
   publicDot: { width: 8, height: 8, borderRadius: 4 },
   avatarCameraBtn: { position: "absolute", bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.teal, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
-  sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 20, marginBottom: 8 },
+  sunnyLine: { fontStyle: "italic", fontSize: 13, fontFamily: "Quicksand_400Regular", color: "#888", textAlign: "center", paddingHorizontal: 20, marginBottom: 8 },
 });
 
 // Mini memory card styles
@@ -1207,7 +1285,7 @@ const ms = StyleSheet.create({
   miniTitle: { fontSize: 9, color: "#1a1a1a", textAlign: "center" },
   publicDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#1D9E75", marginTop: 3 },
   privateDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#E0D8C8", marginTop: 3 },
-  emptyHint: { fontSize: 12, color: "#A08040", fontStyle: "italic" },
+  emptyHint: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: "#A08040", fontStyle: "italic" },
 });
 
 // Leave a note modal styles
@@ -1220,8 +1298,8 @@ const ls = StyleSheet.create({
     width: 36, height: 4, backgroundColor: colors.border,
     borderRadius: 2, alignSelf: "center", marginBottom: 24,
   },
-  title: { fontSize: 20, fontWeight: "800", color: colors.foreground, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: colors.muted, lineHeight: 20, marginBottom: 20 },
+  title: { fontSize: 20, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, marginBottom: 4 },
+  subtitle: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, lineHeight: 20, marginBottom: 20 },
   input: {
     backgroundColor: colors.white, borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.border,
@@ -1229,21 +1307,21 @@ const ls = StyleSheet.create({
     minHeight: 100, textAlignVertical: "top",
     lineHeight: 22,
   },
-  charCount: { fontSize: 11, color: colors.muted, alignSelf: "flex-end", marginTop: 4, marginBottom: 16 },
-  vibeLabel: { fontSize: 12, fontWeight: "700", color: colors.muted, letterSpacing: 1, marginBottom: 10 },
+  charCount: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted, alignSelf: "flex-end", marginTop: 4, marginBottom: 16 },
+  vibeLabel: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1, marginBottom: 10 },
   vibeTags: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 28 },
   vibeTagSelected: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full },
-  vibeTagSelectedText: { fontSize: 12, fontWeight: "700", color: colors.white },
+  vibeTagSelectedText: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   vibeTag: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full,
     borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.white,
   },
-  vibeTagText: { fontSize: 12, fontWeight: "600", color: colors.foreground },
+  vibeTagText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   submitBtn: { height: 52, borderRadius: 26, overflow: "hidden" },
   submitBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  submitBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  submitBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   cancelBtn: { alignItems: "center", paddingVertical: 16 },
-  cancelText: { fontSize: 14, color: colors.muted },
+  cancelText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted },
 });
 
 // Edit profile sheet styles
@@ -1258,11 +1336,11 @@ const es = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  title: { fontSize: 18, fontWeight: "800", color: colors.foreground },
+  title: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   closeBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 4 },
-  label: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.4, marginBottom: 6, marginTop: 16 },
+  label: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.4, marginBottom: 6, marginTop: 16 },
   input: {
     backgroundColor: colors.white, borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.border,
@@ -1273,5 +1351,18 @@ const es = StyleSheet.create({
   photoNote: { fontSize: 12, color: colors.muted, fontStyle: "italic", marginTop: 20, marginBottom: 8 },
   saveBtn: { height: 52, borderRadius: 26, overflow: "hidden", marginTop: 12 },
   saveBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  saveBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  saveBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
+  photoRow: { alignItems: "center", gap: 8, paddingBottom: 8 },
+  editAvatar: { width: 72, height: 72, borderRadius: 36, overflow: "hidden", backgroundColor: colors.surface },
+  editAvatarImg: { width: 72, height: 72, borderRadius: 36 },
+  photoHintText: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
+  pill: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  pillText: { fontSize: 13, color: colors.foreground, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  pillSelected: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
+  pillSelectedText: { fontSize: 13, color: colors.white, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
 });

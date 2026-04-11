@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   TouchableOpacity,
   Image,
   Modal,
@@ -16,6 +15,7 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
@@ -40,219 +40,6 @@ const calculateAge = (birthday: string | null): number | null => {
   );
 };
 
-// ── Mock activity data ───────────────────────────────────────────────────────
-const MOCK_ACTIVITIES = [
-  {
-    id: "a1",
-    title: "coffee & catch up at Small World",
-    category: "coffee",
-    photo: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=500&fit=crop",
-    distance: "0.3 mi",
-    location: "Nassau St",
-    date: "Saturday, April 5",
-    time: "10am",
-    tags: ["Free", "This Weekend", "Indoors"],
-    vibeEmojis: ["☀️ outdoor", "🧋 casual", "👋 first-timers welcome"],
-    goingCount: 2,
-    goingAvatars: [
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
-    ],
-    vibe: "casual saturday morning with good lattes and better conversation.",
-    host: {
-      name: "maya", user_id: "mock-host-1",
-      photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-      rating: 4.9, bio: "coffee nerd and weekend wanderer",
-      activitiesCount: 12, companionsCount: 8,
-      sharedInterests: ["coffee", "live music"],
-      promptAnswers: [
-        { question: "a hill i'd die on", answer: "oat milk is not a personality. but it helps." },
-        { question: "my friends would say my green flag is", answer: "i always show up on time and bring snacks." },
-      ],
-      previousActivities: [
-        { title: "morning espresso run", location: "Nassau St", date: "Mar 22", category: "coffee" },
-        { title: "jazz at Small World", location: "Nassau St", date: "Mar 15", category: "concerts" },
-      ],
-    },
-  },
-  {
-    id: "a2",
-    title: "sourland mountain ridge hike",
-    category: "hiking",
-    photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800&h=500&fit=crop",
-    distance: "12 mi",
-    location: "Hillsborough",
-    date: "Sunday, April 6",
-    time: "8:30am",
-    tags: ["Outdoors", "This Weekend", "Active"],
-    vibeEmojis: ["🥾 outdoors", "🌅 early bird", "🎒 bring layers"],
-    goingCount: 5,
-    goingAvatars: [
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
-    ],
-    vibe: "early start, always worth it. bring snacks and layers.",
-    host: {
-      name: "alex", user_id: "mock-host-2",
-      photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-      rating: 4.8, bio: "trail runner, always chasing sunrise views",
-      activitiesCount: 18, companionsCount: 14,
-      sharedInterests: ["hiking", "fitness"],
-      promptAnswers: [
-        { question: "a hill i'd die on", answer: "trekking poles are not optional. they just aren't." },
-        { question: "my friends would say my green flag is", answer: "i've never once cancelled a hike because of clouds." },
-      ],
-      previousActivities: [
-        { title: "canal path run", location: "D&R Canal", date: "Mar 29", category: "fitness" },
-        { title: "rocky hill loop", location: "Rocky Hill", date: "Mar 8", category: "hiking" },
-      ],
-    },
-  },
-  {
-    id: "a3",
-    title: "saturday farmers market run",
-    category: "markets",
-    photo: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=500&fit=crop",
-    distance: "1.1 mi",
-    location: "Princeton Farmers Market",
-    date: "Saturday, April 5",
-    time: "9am",
-    tags: ["Free", "This Weekend", "Outdoors"],
-    vibeEmojis: ["🧺 outdoors", "☕ casual", "🆓 free"],
-    goingCount: 3,
-    goingAvatars: [
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-    ],
-    vibe: "fresh bread, good people. best way to start the weekend.",
-    host: {
-      name: "sam", user_id: "mock-host-3",
-      photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
-      rating: 5.0, bio: "farmers market regular, always finds the best stands",
-      activitiesCount: 7, companionsCount: 5,
-      sharedInterests: ["markets", "coffee"],
-      promptAnswers: [
-        { question: "a hill i'd die on", answer: "the sourdough from the corner stand is unmatched. fight me." },
-        { question: "my friends would say my green flag is", answer: "i always find the most interesting vendor and introduce everyone." },
-      ],
-      previousActivities: [
-        { title: "west side market stroll", location: "West Side", date: "Mar 22", category: "markets" },
-        { title: "sunday brunch crawl", location: "Downtown", date: "Mar 9", category: "coffee" },
-      ],
-    },
-  },
-  {
-    id: "a4",
-    title: "live jazz at the blue whale",
-    category: "concerts",
-    photo: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=800&h=500&fit=crop",
-    distance: "3.4 mi",
-    location: "Little Tokyo",
-    date: "Friday, April 4",
-    time: "9pm",
-    tags: ["This Week", "Evening", "Indoors"],
-    vibeEmojis: ["🎷 live music", "🌙 evening", "👗 come as you are"],
-    goingCount: 4,
-    goingAvatars: [
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-      "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face",
-    ],
-    vibe: "late-night jazz and good drinks. dress however you want.",
-    host: {
-      name: "jamie", user_id: "mock-host-4",
-      photo: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-      rating: 4.7, bio: "music lover, always finding the best live shows",
-      activitiesCount: 9, companionsCount: 6,
-      sharedInterests: ["concerts", "live music"],
-      promptAnswers: [
-        { question: "a hill i'd die on", answer: "if you're talking during the set, we can't be friends." },
-        { question: "my friends would say my green flag is", answer: "i always find the best spot and save you a seat." },
-      ],
-      previousActivities: [
-        { title: "indie night at the echo", location: "Echo Park", date: "Mar 28", category: "concerts" },
-        { title: "open mic at the griffith", location: "Griffith Park", date: "Mar 14", category: "concerts" },
-      ],
-    },
-  },
-  {
-    id: "a5",
-    title: "beach volleyball at venice",
-    category: "fitness",
-    photo: "https://images.unsplash.com/photo-1559308007-a4b81c3c0cf1?w=800&h=500&fit=crop",
-    distance: "8.2 mi",
-    location: "Venice Beach",
-    date: "Sunday, April 6",
-    time: "11am",
-    tags: ["Outdoors", "Active", "Free"],
-    vibeEmojis: ["🏐 active", "🌊 outdoors", "🆓 free"],
-    goingCount: 6,
-    goingAvatars: [
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face",
-    ],
-    vibe: "no experience needed. just show up.",
-    host: {
-      name: "riley", user_id: "mock-host-5",
-      photo: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&h=100&fit=crop&crop=face",
-      rating: 4.9, bio: "beach volleyball regular, all skill levels welcome",
-      activitiesCount: 22, companionsCount: 17,
-      sharedInterests: ["fitness", "outdoors"],
-      promptAnswers: [
-        { question: "a hill i'd die on", answer: "sunscreen is not optional. i will hand it to you." },
-        { question: "my friends would say my green flag is", answer: "i cheer for everyone, even total beginners." },
-      ],
-      previousActivities: [
-        { title: "morning beach run", location: "Venice Beach", date: "Mar 30", category: "fitness" },
-        { title: "sunset volleyball", location: "Santa Monica", date: "Mar 16", category: "fitness" },
-      ],
-    },
-  },
-];
-
-// ── Mock my posts data ────────────────────────────────────────────────────────
-const MOCK_MY_POSTS = [
-  {
-    id: "mp1",
-    title: "morning run at canal",
-    photo: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=400&h=300&fit=crop",
-    date: "Sunday, April 6",
-    pendingRequests: [
-      {
-        id: "r1",
-        name: "sarah",
-        photo: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=100&h=100&fit=crop&crop=face",
-        bio: "runner, coffee lover, outdoor enthusiast",
-      },
-      {
-        id: "r2",
-        name: "jordan",
-        photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face",
-        bio: "into trail running and weekend adventures",
-      },
-    ],
-  },
-  {
-    id: "mp2",
-    title: "gallery night downtown",
-    photo: "https://images.unsplash.com/photo-1541367777708-7905fe3296c0?w=400&h=300&fit=crop",
-    date: "Friday, April 4",
-    pendingRequests: [
-      {
-        id: "r3",
-        name: "priya",
-        photo: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face",
-        bio: "art nerd, always looking for interesting openings",
-      },
-    ],
-  },
-  {
-    id: "mp3",
-    title: "sunday brunch crawl",
-    photo: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop",
-    date: "Sunday, April 13",
-    pendingRequests: [],
-  },
-];
 
 const FALLBACK_PHOTOS: Record<string, string> = {
   coffee: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800",
@@ -274,13 +61,31 @@ const CATEGORY_ICON: Record<string, string> = {
 };
 
 const CATEGORY_GRADIENT: Record<string, [string, string]> = {
-  coffee:   ["#C8956C", "#A0695A"],
-  hiking:   ["#5BA85E", "#3D7A40"],
-  markets:  ["#E8A838", "#C68A20"],
-  concerts: ["#7B5EA7", "#5A3D88"],
-  fitness:  ["#4A90D9", "#2D6BB5"],
-  sports:   ["#E05C4B", "#B83C2E"],
+  coffee:   ["#C8873A", "#E8B88A"],
+  hiking:   ["#2D6A4F", "#52B788"],
+  outdoors: ["#2D6A4F", "#52B788"],
+  markets:  ["#7B2D8B", "#C77DFF"],
+  shopping: ["#7B2D8B", "#C77DFF"],
+  concerts: ["#1A1A2E", "#E94560"],
+  music:    ["#1A1A2E", "#E94560"],
+  fitness:  ["#0077B6", "#00B4D8"],
+  gym:      ["#0077B6", "#00B4D8"],
+  workout:  ["#0077B6", "#00B4D8"],
+  sports:   ["#007200", "#70E000"],
+  food:     ["#FF6B6B", "#FF8E53"],
+  art:      ["#F72585", "#7209B7"],
+  culture:  ["#F72585", "#7209B7"],
+  study:    ["#3A0CA3", "#4CC9F0"],
+  academic: ["#3A0CA3", "#4CC9F0"],
+  travel:   ["#F77F00", "#FCBF49"],
+  explore:  ["#F77F00", "#FCBF49"],
   default:  ["#2DD4BF", "#3B82F6"],
+};
+
+// Returns gradient colors for a given activity tag
+const getCardGradient = (tag: string): [string, string] => {
+  const key = (tag ?? "").toLowerCase();
+  return CATEGORY_GRADIENT[key] ?? CATEGORY_GRADIENT.default;
 };
 
 const FILTERS = [
@@ -302,9 +107,11 @@ interface DiscoverScreenProps {
   openPostModal?: boolean;
   onPostModalOpened?: () => void;
   startOnMyActivity?: boolean;
+  postPrefill?: { name: string; lat: number; lng: number } | null;
+  onPostPrefillConsumed?: () => void;
 }
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened, startOnMyActivity }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -344,12 +151,49 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showUpsell, setShowUpsell] = useState(false);
   const [showRequestSheet, setShowRequestSheet] = useState(false);
-  const [requestSheetActivity, setRequestSheetActivity] = useState<typeof MOCK_MY_POSTS[0] | null>(null);
-  const [myPostsState, setMyPostsState] = useState(MOCK_MY_POSTS);
+  const [requestSheetActivity, setRequestSheetActivity] = useState<any | null>(null);
+  const [myPostsState, setMyPostsState] = useState<any[]>([]);
+  const [showViewerProfile, setShowViewerProfile] = useState(false);
+  const [viewerProfileData, setViewerProfileData] = useState<{
+    id: string;
+    name: string;
+    photo: string;
+    bio?: string;
+    occupation?: string;
+    humor_type?: string[];
+    quick_prompts?: Record<string, string>;
+  } | null>(null);
+  const [viewerProfileLoading, setViewerProfileLoading] = useState(false);
+
+  // Fetch full profile when viewer modal opens
+  useEffect(() => {
+    if (!showViewerProfile || !viewerProfileData?.id) return;
+    setViewerProfileLoading(true);
+    supabase
+      .from("profiles")
+      .select("user_id, first_name, avatar_url, bio, occupation, humor_type, quick_prompts")
+      .eq("user_id", viewerProfileData.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setViewerProfileData(prev => prev ? {
+            ...prev,
+            photo: data.avatar_url ?? prev.photo,
+            name: data.first_name ?? prev.name,
+            bio: data.bio ?? "",
+            occupation: data.occupation ?? "",
+            humor_type: Array.isArray(data.humor_type) ? data.humor_type : [],
+            quick_prompts: data.quick_prompts ?? {},
+          } : null);
+        }
+        setViewerProfileLoading(false);
+      });
+  }, [showViewerProfile, viewerProfileData?.id]);
 
   // Live activity data
   const [liveActivities, setLiveActivities] = useState<any[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
+  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [loadingMyPosts, setLoadingMyPosts] = useState(false);
 
@@ -376,6 +220,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   useEffect(() => {
     if (openPostModal) { setShowPostModal(true); onPostModalOpened?.(); }
   }, [openPostModal]);
+  useEffect(() => {
+    if (!postPrefill) return;
+    setPostLocation(postPrefill.name);
+    setPostLocationLat(postPrefill.lat);
+    setPostLocationLng(postPrefill.lng);
+    onPostPrefillConsumed?.();
+  }, [postPrefill]);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [showFilterUpsell, setShowFilterUpsell] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -425,7 +276,22 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [postLocationLat, setPostLocationLat] = useState<number | null>(null);
   const [postLocationLng, setPostLocationLng] = useState<number | null>(null);
   const [postDesc, setPostDesc] = useState("");
+  const [postPhotoUri, setPostPhotoUri] = useState<string | null>(null);
+  const [postPhotoUploading, setPostPhotoUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+
+  const handlePickPostPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset?.uri) return;
+    setPostPhotoUri(asset.uri);
+  };
   const [showHostProfile, setShowHostProfile] = useState(false);
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
 
@@ -442,16 +308,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       AsyncStorage.setItem("saved_activities", JSON.stringify([...next]));
       return next;
     });
-    const activity = MOCK_ACTIVITIES.find(a => a.id === id);
+    const activity = liveActivities.find((a: any) => a.id === id);
     if (activity) {
       AsyncStorage.getItem("saved_activities_meta").then(val => {
         const existing = val ? JSON.parse(val) : {};
-        existing[id] = { title: activity.title, date: activity.date, host: activity.host.name, category: activity.category };
+        existing[id] = { title: activity.title, date: activity.activity_date ?? activity.date, host: activity.host?.name ?? "", category: activity.tags?.[0] ?? activity.category ?? "" };
         AsyncStorage.setItem("saved_activities_meta", JSON.stringify(existing));
       });
     }
   };
-  const [profileActivity, setProfileActivity] = useState<typeof MOCK_ACTIVITIES[0] | null>(null);
+  const [profileActivity, setProfileActivity] = useState<any | null>(null);
 
   // I'm In celebration modal
   const [showCelebModal, setShowCelebModal] = useState(false);
@@ -477,54 +343,98 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   };
 
   // Fetch live browse activities
+  //
+  // DATABASE CLEANUP — run in Supabase SQL editor if ghost posts appear:
+  // delete from public.activities where user_id not in (select id from auth.users);
+  // delete from public.activities where user_id not in (select user_id from public.profiles);
+  const fetchLiveActivities = useCallback(async (cancelled: { current: boolean }) => {
+    setLoadingActivities(true);
+    // Show activities from up to 7 days ago so recently-posted activities
+    // don't vanish immediately when their date passes.
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffStr = cutoff.toISOString().split("T")[0];
+    const { data, error } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("status", "active")
+      .gte("activity_date", cutoffStr)
+      .order("activity_date", { ascending: true })
+      .limit(20);
+    console.log("[Feed] raw results count:", data?.length ?? 0);
+    console.log("[Feed] fetch error:", error ? JSON.stringify(error) : "none");
+    if (cancelled.current) return;
+    if (!error && data && data.length > 0) {
+      // Only fetch profiles for activities that have a non-null user_id
+      const userIds = [...new Set(data.map((a: any) => a.user_id).filter(Boolean))] as string[];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, first_name, avatar_url")
+        .in("user_id", userIds);
+      const profileMap: Record<string, { first_name: string; avatar_url: string }> = {};
+      for (const p of profiles ?? []) {
+        profileMap[p.user_id] = p;
+      }
+      if (cancelled.current) return;
+      // Filter out ghost activities: no user_id or no matching profile with a first_name
+      const validActivities = data.filter((a: any) =>
+        a.user_id && profileMap[a.user_id]?.first_name
+      );
+      console.log("[Feed] valid (non-ghost) count:", validActivities.length);
+      setLiveActivities(validActivities.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        category: a.tags?.[0] ?? "default",
+        photo: FALLBACK_PHOTOS[a.tags?.[0]] ?? FALLBACK_PHOTOS.default,
+        image_url: a.image_url ?? null,
+        distance: "",
+        location: a.location_name ?? "",
+        date: a.activity_date ?? "",
+        time: a.activity_time ?? "",
+        tags: a.tags ?? [],
+        vibeEmojis: [],
+        goingCount: 0,
+        goingAvatars: [],
+        vibe: a.description ?? "",
+        host: {
+          name: profileMap[a.user_id].first_name,
+          user_id: a.user_id,
+          photo: profileMap[a.user_id].avatar_url ?? "",
+          rating: 0,
+          bio: "",
+          activitiesCount: 0,
+          companionsCount: 0,
+          sharedInterests: [],
+          promptAnswers: [],
+          previousActivities: [],
+        },
+      })));
+    } else {
+      setLiveActivities([]);
+    }
+    setLoadingActivities(false);
+  }, []);
+
   useEffect(() => {
     if (discoverMode !== "browse") return;
-    let cancelled = false;
-    setLoadingActivities(true);
-    supabase
-      .from("activities")
-      .select("*, profiles!user_id(first_name, avatar_url)")
-      .eq("status", "active")
-      .gte("activity_date", new Date().toISOString().split("T")[0])
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (!error && data && data.length > 0) {
-          setLiveActivities(data.map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            category: a.tags?.[0] ?? "default",
-            photo: FALLBACK_PHOTOS[a.tags?.[0]] ?? FALLBACK_PHOTOS.default,
-            distance: "",
-            location: a.location_name ?? "",
-            date: a.activity_date ?? "",
-            time: a.activity_time ?? "",
-            tags: a.tags ?? [],
-            vibeEmojis: [],
-            goingCount: 0,
-            goingAvatars: [],
-            vibe: a.description ?? "",
-            host: {
-              name: a.profiles?.first_name ?? "someone",
-              user_id: a.user_id,
-              photo: a.profiles?.avatar_url ?? "",
-              rating: 0,
-              bio: "",
-              activitiesCount: 0,
-              companionsCount: 0,
-              sharedInterests: [],
-              promptAnswers: [],
-              previousActivities: [],
-            },
-          })));
-        } else {
-          setLiveActivities([]);
-        }
-        setLoadingActivities(false);
-      });
-    return () => { cancelled = true; };
-  }, [discoverMode]);
+    const cancelled = { current: false };
+    fetchLiveActivities(cancelled);
+
+    // Realtime: reload feed when any activity is inserted
+    const channel = supabase
+      .channel("activities-feed")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "activities" },
+        () => { if (!cancelled.current) fetchLiveActivities(cancelled); }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled.current = true;
+      supabase.removeChannel(channel);
+    };
+  }, [discoverMode, feedRefreshKey, fetchLiveActivities]);
 
   // Fetch my posts when switching to myActivity tab
   useEffect(() => {
@@ -544,6 +454,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             .select("*, profiles!user_id(first_name, avatar_url)")
             .eq("activity_id", a.id)
             .eq("action", "join_request");
+
+          // Fetch who tapped "i'm in" from join_requests
+          const { data: joinReqs } = await supabase
+            .from("join_requests")
+            .select("requester_id")
+            .eq("activity_id", a.id)
+            .eq("status", "pending");
+          const requesterIds = [...new Set((joinReqs ?? []).map((r: any) => r.requester_id).filter(Boolean))] as string[];
+          let interestedMap: Record<string, { first_name: string; avatar_url: string }> = {};
+          if (requesterIds.length > 0) {
+            const { data: profs } = await supabase
+              .from("profiles")
+              .select("user_id, first_name, avatar_url")
+              .in("user_id", requesterIds);
+            for (const p of profs ?? []) interestedMap[p.user_id] = p;
+          }
+
           return {
             id: a.id,
             title: a.title,
@@ -554,6 +481,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               name: r.profiles?.first_name ?? "someone",
               photo: r.profiles?.avatar_url ?? "",
               bio: "",
+            })),
+            interestedUsers: requesterIds.map(id => ({
+              id,
+              name: interestedMap[id]?.first_name ?? "someone",
+              photo: interestedMap[id]?.avatar_url ?? "",
             })),
           };
         }));
@@ -573,9 +505,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   }, [startOnMyActivity]);
 
   useEffect(() => {
-    if (myActivityTab === "saved" && discoverMode === "myActivity") {
-      fetchSaved();
-    }
+    if (myActivityTab !== "saved" || discoverMode !== "myActivity") return;
+    // Load from AsyncStorage first (instant), then hydrate from Supabase
+    AsyncStorage.getItem("saved_activities_meta").then(val => {
+      if (val) {
+        const meta = JSON.parse(val);
+        const list = Object.entries(meta).map(([id, data]: any) => ({ id, ...data }));
+        setSavedActivities(list);
+      }
+    });
+    fetchSaved();
   }, [myActivityTab, discoverMode]);
 
   // Reset deck index when filter or mode changes
@@ -584,8 +523,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   }, [activeFilter, discoverMode]);
 
   const deck = (() => {
-    const source = liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES;
-    return activeFilter === "all" ? source : source.filter((a: any) => a.category === activeFilter);
+    return activeFilter === "all" ? liveActivities : liveActivities.filter((a: any) => a.category === activeFilter);
   })();
 
   const handleImIn = async (activityId: string) => {
@@ -593,8 +531,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setShowUpsell(true);
       return;
     }
-    const source = liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES;
-    const act = source.find((a: any) => a.id === activityId);
+    const act = liveActivities.find((a: any) => a.id === activityId);
     // SUPABASE: Ensure join_requests table exists:
     // CREATE TABLE IF NOT EXISTS join_requests (
     //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -616,6 +553,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     }
     await incrementImIn();
     setRequestedSet(prev => new Set([...prev, activityId]));
+    setCurrentIndex(prev => prev + 1);
     const hostName = act?.host.name ?? "them";
     const actTitle = act?.title ?? "the activity";
     const subtitle = await getSunnyResponse({
@@ -623,11 +561,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       activityTitle: actTitle,
       hostName,
     });
-    showImInToast(
-      "you're in!",
-      subtitle,
-      () => setCurrentIndex(prev => prev + 1),
-    );
+    showImInToast("you're in!", subtitle, () => {});
   };
 
   const handleSkip = () => {
@@ -647,8 +581,25 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     } catch {
       // non-blocking
     }
+    // Also persist to AsyncStorage so the Saved tab can load without a Supabase round-trip
+    try {
+      const existing = await AsyncStorage.getItem("saved_activities_meta");
+      const meta = existing ? JSON.parse(existing) : {};
+      meta[currentCard.id] = {
+        title: currentCard.title,
+        date: currentCard.date,
+        host: currentCard.host?.name ?? "",
+        category: currentCard.category,
+        photo: currentCard.photo,
+        location: currentCard.location,
+      };
+      await AsyncStorage.setItem("saved_activities_meta", JSON.stringify(meta));
+    } catch {
+      // non-blocking
+    }
     showToast("saved to your private list.");
     setCurrentIndex(prev => prev + 1);
+    setTimeout(() => { setDiscoverMode("myActivity"); setMyActivityTab("saved"); }, 800);
   };
 
   const fetchSaved = async () => {
@@ -735,10 +686,31 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       ? postCustomCategory.trim()
       : postSelectedCategory;
     const formattedDate = formatDateForDB(selectedDate);
-    console.log("DATE BEING SENT:", formattedDate, typeof formattedDate);
+    // -- Run in Supabase SQL editor if not already done:
+    // alter table public.activities add column if not exists image_url text;
     setIsPosting(true);
+    let uploadedImageUrl: string | null = null;
     try {
-      const { data, error } = await supabase.from("activities").insert({
+      // Upload photo first if one was selected
+      if (postPhotoUri && user?.id) {
+        setPostPhotoUploading(true);
+        const fileExt = postPhotoUri.split(".").pop()?.toLowerCase() || "jpg";
+        const mimeType = fileExt === "png" ? "image/png" : "image/jpeg";
+        const fileName = `activity_${Date.now()}.${fileExt}`;
+        const storagePath = `${user.id}/${fileName}`;
+        const formData = new FormData();
+        formData.append("file", { uri: postPhotoUri, name: fileName, type: mimeType } as any);
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(storagePath, formData, { contentType: mimeType, upsert: true, cacheControl: "0" });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(storagePath);
+          uploadedImageUrl = urlData?.publicUrl ?? null;
+        }
+        setPostPhotoUploading(false);
+      }
+
+      const payload = {
         user_id: user?.id,
         title: postTitle.trim(),
         description: postDesc.trim() || null,
@@ -753,13 +725,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         max_participants: postSpots,
         is_group: postSpots > 1,
         status: "active",
-      }).select().single();
+        image_url: uploadedImageUrl,
+      };
+      console.log("[Post] submitting:", payload);
+      const { data, error } = await supabase.from("activities").insert(payload).select().single();
+      console.log("[Post] result:", error);
       if (error) {
-        console.error("post creation error:", JSON.stringify(error));
-        showToast("something went wrong. try again?");
+        Alert.alert("couldn't create post", error.message);
         return;
       }
-      console.log("post created:", data);
+      console.log("[Post] created:", data);
       setShowPostModal(false);
       setPostTitle("");
       setSelectedDate(new Date());
@@ -771,13 +746,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setPostLocationLng(null);
       setPostDesc("");
       setPostSpots(1);
+      setPostPhotoUri(null);
       setShowGroupNudge(false);
+      setFeedRefreshKey(k => k + 1);
       showToast("posted! check back soon.");
     } catch (err) {
-      console.error("post creation exception:", err);
-      showToast("something went wrong. try again?");
+      console.error("[Post] exception:", err);
+      Alert.alert("couldn't create post", "something went wrong. try again?");
     } finally {
       setIsPosting(false);
+      setPostPhotoUploading(false);
     }
   };
 
@@ -785,9 +763,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const isDone = currentIndex >= deck.length;
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? "good morning" : hour < 17 ? "good afternoon" : "good evening";
-  const photoUri = currentCard
-    ? (currentCard.photo && currentCard.photo.startsWith("http") ? currentCard.photo : (FALLBACK_PHOTOS[currentCard.category] || FALLBACK_PHOTOS.default))
-    : "";
+  const cardImageUrl: string | null = currentCard?.image_url ?? null;
+  const cardGradient = currentCard ? getCardGradient(currentCard.category) : CATEGORY_GRADIENT.default;
 
   return (
     <View style={s.container}>
@@ -857,7 +834,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             ))}
           </View>
           {myActivityTab === "saved" && (
-            <Text style={{ fontSize: 11, color: colors.muted, paddingHorizontal: 16, paddingBottom: 4 }}>
+            <Text style={{ fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted, paddingHorizontal: 16, paddingBottom: 4 }}>
               only visible to you
             </Text>
           )}
@@ -964,17 +941,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 </Text>
               </View>
             ) : (
-              <FlatList
-                data={savedActivities}
-                keyExtractor={act => act.id}
-                scrollEnabled={false}
-                contentContainerStyle={{ gap: 12 }}
-                renderItem={({ item: act }) => (
+              <View style={{ gap: 12 }}>
+                {savedActivities.map((act: any) => (
                   <TouchableOpacity
+                    key={act.id}
                     activeOpacity={0.85}
                     onPress={() => {
-                      const idx = (liveActivities.length > 0 ? liveActivities : MOCK_ACTIVITIES)
-                        .findIndex((a: any) => a.id === act.id);
+                      const idx = liveActivities.findIndex((a: any) => a.id === act.id);
                       if (idx !== -1) {
                         setDiscoverMode("browse");
                         setCurrentIndex(idx);
@@ -993,8 +966,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                       <Text style={s.requestBadgeText}>saved</Text>
                     </View>
                   </TouchableOpacity>
-                )}
-              />
+                ))}
+              </View>
             )}
           </ScrollView>
         )
@@ -1024,7 +997,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               <Text style={s.deckDoneTitle}>that's everyone nearby for now.</Text>
               <Text style={s.deckDoneDesc}>{sunnyDeckDoneDesc}</Text>
             </View>
-          ) : (
+          ) : !currentCard ? null : (
             <>
               {/* Card scrollable area */}
               <ScrollView
@@ -1042,9 +1015,18 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                         <Text style={s.savedPillText}>saved for later</Text>
                       </View>
                     )}
-                    {/* Full-bleed photo with category pill overlay */}
+                    {/* Full-bleed photo/gradient with category pill overlay */}
                     <View style={s.photoWrap}>
-                      <Image source={{ uri: photoUri }} style={s.cardPhoto} resizeMode="cover" />
+                      {cardImageUrl ? (
+                        <Image source={{ uri: cardImageUrl }} style={s.cardPhoto} resizeMode="cover" />
+                      ) : (
+                        <LinearGradient
+                          colors={cardGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={s.cardPhoto}
+                        />
+                      )}
                       {/* Category pill — bottom-left frosted overlay */}
                       <View style={s.categoryPill}>
                         <Ionicons
@@ -1446,7 +1428,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               style={{ paddingTop: 12, paddingBottom: 4 }}
               activeOpacity={0.7}
             >
-              <Text style={{ fontSize: 13, color: colors.muted, textAlign: "center" }}>
+              <Text style={{ fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center" }}>
                 see your pending requests →
               </Text>
             </TouchableOpacity>
@@ -1456,7 +1438,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
       {/* Post Activity Modal */}
       <Modal visible={showPostModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPostModal(false)}>
-        <KeyboardAvoidingView style={modalS.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={[modalS.container, { zIndex: 1 }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={modalS.handle} />
           <View style={modalS.header}>
             <Text style={modalS.title}>create a post</Text>
@@ -1465,6 +1447,31 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             </TouchableOpacity>
           </View>
           <ScrollView style={modalS.scroll} contentContainerStyle={modalS.scrollContent} keyboardShouldPersistTaps="handled">
+            {/* Photo picker */}
+            <TouchableOpacity
+              style={modalS.photoPicker}
+              onPress={handlePickPostPhoto}
+              activeOpacity={0.8}
+            >
+              {postPhotoUri ? (
+                <>
+                  <Image source={{ uri: postPhotoUri }} style={modalS.photoPreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={modalS.photoRemoveBtn}
+                    onPress={() => setPostPhotoUri(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={modalS.photoRemoveText}>×</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
+                  <Text style={modalS.photoPickerText}>add a photo (optional)</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
             <TextInput
               style={modalS.heroInput}
               placeholder="what are you doing?"
@@ -1490,8 +1497,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               ].map(c => (
                 <TouchableOpacity
                   key={c.key}
-                  onPress={() => { setPostSelectedCategory(prev => prev === c.key ? "" : c.key); if (c.key !== "other") setPostCustomCategory(""); }}
-                  activeOpacity={0.8}
+                  onPress={() => {
+                    console.log("[Post] category selected:", c.key);
+                    setPostSelectedCategory(prev => prev === c.key ? "" : c.key);
+                    if (c.key !== "other") setPostCustomCategory("");
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={[modalS.categoryPill, postSelectedCategory === c.key && modalS.categoryPillActive]}
                 >
                   <Text style={[modalS.categoryPillText, postSelectedCategory === c.key && modalS.categoryPillTextActive]}>
@@ -1529,8 +1541,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 mode="date"
                 display="spinner"
                 minimumDate={new Date()}
-                onValueChange={(_, date) => { setShowDatePicker(false); setSelectedDate(date); }}
-                onDismiss={() => setShowDatePicker(false)}
+                onChange={(_: any, date: any) => { setShowDatePicker(false); setSelectedDate(date); }}
               />
             )}
             <TouchableOpacity
@@ -1549,54 +1560,67 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 value={selectedTime ?? new Date()}
                 mode="time"
                 display="spinner"
-                onValueChange={(_, time) => { setShowTimePicker(false); setSelectedTime(time); }}
-                onDismiss={() => setShowTimePicker(false)}
+                onChange={(_: any, time: any) => { setShowTimePicker(false); setSelectedTime(time); }}
               />
             )}
 
-            <GooglePlacesAutocomplete
-              placeholder="where is it?"
-              onPress={(data, details = null) => {
-                setPostLocation(data.description);
-                if (details?.geometry?.location) {
-                  setPostLocationLat(details.geometry.location.lat);
-                  setPostLocationLng(details.geometry.location.lng);
-                }
-              }}
-              query={{
-                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
-                language: "en",
-              }}
-              fetchDetails={true}
-              enablePoweredByContainer={false}
-              keyboardShouldPersistTaps="handled"
-              listViewDisplayed="auto"
-              styles={{
-                container: { flex: 0, zIndex: 999 },
-                textInput: {
-                  height: 50,
-                  borderRadius: 999,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
-                  backgroundColor: colors.white,
-                  paddingHorizontal: 16,
-                  fontSize: 14,
-                  color: colors.foreground,
-                  marginBottom: 0,
-                },
-                listView: {
-                  backgroundColor: colors.white,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginTop: 4,
-                  zIndex: 999,
-                },
-                row: { padding: 12, backgroundColor: colors.white },
-                description: { fontSize: 14, color: colors.foreground },
-                poweredContainer: { display: "none" },
-              }}
-            />
+            <View style={{ height: 200, zIndex: 9999, elevation: 9999, overflow: "visible" }}>
+              <GooglePlacesAutocomplete
+                placeholder="Search for a location"
+                onPress={(data, details = null) => {
+                  console.log("[Places] selected:", data.description);
+                  setPostLocation(data.description);
+                  if (details?.geometry?.location) {
+                    setPostLocationLat(details.geometry.location.lat);
+                    setPostLocationLng(details.geometry.location.lng);
+                  }
+                }}
+                predefinedPlaces={[{
+                  description: "Princeton, NJ",
+                  geometry: { location: { lat: 40.3573, lng: -74.6672, latitude: 40.3573, longitude: -74.6672 } },
+                }]}
+                query={{
+                  key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+                  language: "en",
+                  types: "establishment|geocode",
+                }}
+                fetchDetails={true}
+                enablePoweredByContainer={false}
+                keyboardShouldPersistTaps="handled"
+                listViewDisplayed="auto"
+                styles={{
+                  container: { flex: 0, zIndex: 9999, elevation: 9999, overflow: "visible" },
+                  textInput: {
+                    height: 50,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    backgroundColor: colors.white,
+                    paddingHorizontal: 12,
+                    fontSize: 14,
+                    color: colors.foreground,
+                    marginBottom: 0,
+                  },
+                  listView: {
+                    position: "absolute",
+                    top: 50,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: colors.white,
+                    borderRadius: 10,
+                    zIndex: 9999,
+                    elevation: 9999,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 4,
+                  },
+                  row: { padding: 13, minHeight: 44 },
+                  description: { fontFamily: "Quicksand_400Regular", fontSize: 14, color: colors.foreground },
+                  poweredContainer: { display: "none" },
+                }}
+              />
+            </View>
 
             <View style={modalS.spotsRow}>
               <View>
@@ -1799,6 +1823,84 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         })()}
       </Modal>
 
+      {/* ── Viewer Profile (read-only, from interested list) ── */}
+      <Modal
+        visible={showViewerProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowViewerProfile(false)}
+      >
+        <View style={viewerS.container}>
+          <View style={viewerS.handle} />
+          <View style={viewerS.topBar}>
+            <TouchableOpacity onPress={() => setShowViewerProfile(false)} style={viewerS.closeBtn} activeOpacity={0.7}>
+              <Ionicons name="close" size={20} color={colors.muted} />
+            </TouchableOpacity>
+          </View>
+          {viewerProfileLoading ? (
+            <View style={viewerS.loaderWrap}>
+              <ActivityIndicator color={colors.teal} size="large" />
+            </View>
+          ) : viewerProfileData ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={viewerS.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Avatar */}
+              <View style={viewerS.heroSection}>
+                {viewerProfileData.photo ? (
+                  <Image source={{ uri: viewerProfileData.photo }} style={viewerS.avatar} />
+                ) : (
+                  <View style={[viewerS.avatar, viewerS.avatarPlaceholder]}>
+                    <Text style={viewerS.initials}>
+                      {(viewerProfileData.name ?? "?").charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={viewerS.name}>{viewerProfileData.name}</Text>
+                {viewerProfileData.occupation ? (
+                  <Text style={viewerS.occupation}>{viewerProfileData.occupation}</Text>
+                ) : null}
+              </View>
+
+              {/* Bio */}
+              {viewerProfileData.bio ? (
+                <View style={viewerS.bioBox}>
+                  <Text style={viewerS.bioText}>"{viewerProfileData.bio}"</Text>
+                </View>
+              ) : null}
+
+              {/* Humor tags */}
+              {(viewerProfileData.humor_type?.length ?? 0) > 0 && (
+                <View style={viewerS.section}>
+                  <Text style={viewerS.sectionLabel}>HUMOR</Text>
+                  <View style={viewerS.pillRow}>
+                    {viewerProfileData.humor_type!.map(h => (
+                      <View key={h} style={viewerS.pill}>
+                        <Text style={viewerS.pillText}>{h}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Quick prompts */}
+              {viewerProfileData.quick_prompts && Object.keys(viewerProfileData.quick_prompts).length > 0 && (
+                <View style={viewerS.section}>
+                  {Object.entries(viewerProfileData.quick_prompts).map(([q, a]) => (
+                    <View key={q} style={viewerS.promptCard}>
+                      <Text style={viewerS.promptQ}>{q.replace(/_/g, " ")}</Text>
+                      <Text style={viewerS.promptA}>{String(a)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          ) : null}
+        </View>
+      </Modal>
+
       {/* Upsell Sheet — i'm in limit */}
       <UpsellSheet
         visible={showUpsell}
@@ -1842,14 +1944,51 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             </TouchableOpacity>
           </View>
           <ScrollView style={reqS.scroll} contentContainerStyle={reqS.scrollContent} showsVerticalScrollIndicator={false}>
-            {(requestSheetActivity?.pendingRequests.length ?? 0) === 0 ? (
+
+            {/* ── Interested: people who tapped "i'm in" ── */}
+            {(requestSheetActivity?.interestedUsers?.length ?? 0) > 0 && (
+              <View style={reqS.interestedSection}>
+                <Text style={reqS.interestedLabel}>
+                  interested ({requestSheetActivity.interestedUsers.length})
+                </Text>
+                {requestSheetActivity.interestedUsers.map((u: any) => (
+                  <TouchableOpacity
+                    key={u.id}
+                    style={reqS.interestedRow}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      setViewerProfileData({ id: u.id, name: u.name, photo: u.photo });
+                      setShowViewerProfile(true);
+                    }}
+                  >
+                    {u.photo ? (
+                      <Image source={{ uri: u.photo }} style={reqS.requesterAvatar} />
+                    ) : (
+                      <View style={[reqS.requesterAvatar, reqS.requesterAvatarPlaceholder]}>
+                        <Text style={reqS.requesterAvatarInitial}>
+                          {(u.name ?? "?").charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={reqS.requesterName}>{u.name}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.muted} style={{ marginLeft: "auto" }} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* ── Pending approvals ── */}
+            {(requestSheetActivity?.pendingRequests?.length ?? 0) > 0 && (
+              <Text style={reqS.interestedLabel}>requests</Text>
+            )}
+            {(requestSheetActivity?.pendingRequests.length ?? 0) === 0 && (requestSheetActivity?.interestedUsers?.length ?? 0) === 0 ? (
               <View style={reqS.empty}>
                 <SunnyAvatar expression="warm" size={56} />
-                <Text style={reqS.emptyTitle}>no pending requests.</Text>
+                <Text style={reqS.emptyTitle}>no activity yet.</Text>
                 <Text style={reqS.emptyDesc}>when someone wants in, they'll show up here.</Text>
               </View>
             ) : (
-              requestSheetActivity?.pendingRequests.map(req => {
+              requestSheetActivity?.pendingRequests.map((req: any) => {
                 const atLimit = (approvedCounts[requestSheetActivity.id] ?? 0) >= getApprovalLimit();
                 return (
                   <View key={req.id} style={reqS.requesterRow}>
@@ -1910,8 +2049,8 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   headerLeft: { gap: 2 },
-  greeting: { fontSize: 12, color: colors.muted, fontWeight: "500" },
-  headerTitle: { fontSize: 26, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  greeting: { fontSize: 12, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  headerTitle: { fontSize: 26, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.tintTeal, alignItems: "center", justifyContent: "center" },
   iconBadge: { position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.teal, borderWidth: 1.5, borderColor: colors.background },
@@ -1925,6 +2064,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 6,
     fontWeight: "500",
+    fontFamily: "Quicksand_500Medium",
   },
 
   // Sub-tabs (my posts / saved)
@@ -1949,6 +2089,7 @@ const s = StyleSheet.create({
   subTabText: {
     fontSize: 13,
     fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
     color: colors.muted,
   },
   subTabTextActive: {
@@ -1960,9 +2101,9 @@ const s = StyleSheet.create({
   modeToggle: { flexDirection: "row", backgroundColor: "#F3F4F6", borderRadius: radius.full, padding: 3 },
   modeToggleBtn: { flex: 1, overflow: "hidden", borderRadius: radius.full },
   modeActive: { paddingVertical: 8, borderRadius: radius.full, alignItems: "center" },
-  modeActiveText: { fontSize: 13, fontWeight: "700", color: colors.white },
+  modeActiveText: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   modeInactive: { paddingVertical: 8, alignItems: "center" },
-  modeInactiveText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  modeInactiveText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: "#6B7280" },
 
   // Filter pills
   filtersScroll: { flexGrow: 0 },
@@ -1973,8 +2114,8 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
   },
   filterPillActive: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.full },
-  filterText: { fontSize: 13, fontWeight: "600", color: colors.foreground },
-  filterTextActive: { fontSize: 13, fontWeight: "700", color: colors.white },
+  filterText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
+  filterTextActive: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   // Feed (My Activity tab)
   feed: { flex: 1 },
@@ -1982,8 +2123,8 @@ const s = StyleSheet.create({
 
   // My Activity empty state
   myActivityEmpty: { alignItems: "center", paddingTop: 80, gap: 12 },
-  myActivityEmptyTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground },
-  myActivityEmptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  myActivityEmptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  myActivityEmptyDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
 
   // My posts list
   myPostRow: {
@@ -1993,20 +2134,20 @@ const s = StyleSheet.create({
   },
   myPostPhoto: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.surface },
   myPostInfo: { flex: 1, gap: 3 },
-  myPostTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground, letterSpacing: -0.2 },
-  myPostDate: { fontSize: 12, color: colors.muted },
+  myPostTitle: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.2 },
+  myPostDate: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted },
   requestBadge: {
     backgroundColor: colors.tintTeal, borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 4,
   },
-  requestBadgeText: { fontSize: 11, fontWeight: "700", color: colors.teal },
+  requestBadgeText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 
   // Card deck
   deckContainer: { flex: 1, paddingHorizontal: 16, paddingBottom: 80 },
-  deckProgress: { fontSize: 12, color: colors.muted, paddingTop: 10, paddingBottom: 6 },
+  deckProgress: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted, paddingTop: 10, paddingBottom: 6 },
   deckDone: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingBottom: 80 },
-  deckDoneTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground, textAlign: "center" },
-  deckDoneDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  deckDoneTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, textAlign: "center" },
+  deckDoneDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
 
   // Card scroll
   cardScroll: { flex: 1 },
@@ -2027,7 +2168,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 7,
     backgroundColor: "#F0FDFB",
   },
-  savedPillText: { fontSize: 11, fontWeight: "600", color: colors.teal },
+  savedPillText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   bookmarkBtn: {
     position: "absolute", top: 12, right: 12,
     backgroundColor: "rgba(255,255,255,0.88)",
@@ -2041,30 +2182,30 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.9)", borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 5,
   },
-  categoryPillText: { fontSize: 11, fontWeight: "700", color: colors.foreground },
+  categoryPillText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   featuredBadge: {
     position: "absolute", top: 12, right: 12,
     borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4,
   },
-  featuredBadgeText: { fontSize: 10, fontWeight: "700", color: colors.white },
+  featuredBadgeText: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   cardBody: { padding: 20, gap: 0 },
-  cardTitle: { fontSize: 20, fontWeight: "700", color: colors.foreground, letterSpacing: -0.3, marginBottom: 12 },
+  cardTitle: { fontSize: 20, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.3, marginBottom: 12 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
-  cardMetaTeal: { fontSize: 13, color: colors.teal, fontWeight: "600" },
-  cardMetaGray: { fontSize: 13, color: colors.muted },
+  cardMetaTeal: { fontSize: 13, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
+  cardMetaGray: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
   vibeBox: {
     borderLeftWidth: 3, borderLeftColor: colors.teal,
     backgroundColor: "#F0FDFB", borderRadius: 8,
     paddingHorizontal: 12, paddingVertical: 10,
   },
-  vibeText: { fontSize: 14, fontStyle: "italic", color: colors.secondary, lineHeight: 20 },
+  vibeText: { fontSize: 14, fontFamily: "Quicksand_400Regular", fontStyle: "italic", color: colors.secondary, lineHeight: 20 },
 
   // Attendee row
   goingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   avatarStack: { flexDirection: "row" },
   stackAvatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.white, backgroundColor: colors.surface },
-  goingText: { fontSize: 12, color: colors.muted, fontWeight: "500" },
+  goingText: { fontSize: 12, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Host strip below card
   hostStrip: {
@@ -2079,10 +2220,10 @@ const s = StyleSheet.create({
   },
   hostStripAvatar: { width: "100%", height: "100%", borderRadius: 15, backgroundColor: colors.surface },
   hostStripInfo: { flex: 1 },
-  hostStripLabel: { fontSize: 13, color: colors.muted },
-  hostStripName: { fontWeight: "700", color: colors.foreground },
-  hostStripBio: { fontSize: 11, fontStyle: "italic", color: colors.muted, marginTop: 1 },
-  viewProfile: { fontSize: 13, fontWeight: "600", color: colors.teal },
+  hostStripLabel: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  hostStripName: { fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  hostStripBio: { fontSize: 11, fontFamily: "Quicksand_400Regular", fontStyle: "italic", color: colors.muted, marginTop: 1 },
+  viewProfile: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
 
   // Action buttons row
   actionRow: {
@@ -2100,7 +2241,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 8,
   },
-  passBtnText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  passBtnText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: "#6B7280" },
   imInBtn: {
     height: 52,
     borderRadius: 26,
@@ -2112,7 +2253,7 @@ const s = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  imInBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  imInBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   requestedBtn: {
     height: 52,
     borderRadius: 26,
@@ -2122,7 +2263,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  requestedBtnText: { fontSize: 15, fontWeight: "600", color: colors.muted },
+  requestedBtnText: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
 
   // Vibe emoji tag pills
   vibeTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -2131,7 +2272,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#E5E7EB",
     paddingHorizontal: 8, paddingVertical: 6,
   },
-  vibeTagText: { fontSize: 12, color: colors.foreground },
+  vibeTagText: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.foreground },
 
   // Prompt answer cards (on card)
   promptCard: {
@@ -2139,8 +2280,8 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#E5E7EB",
     padding: 12, gap: 4,
   },
-  promptCardQ: { fontSize: 10, fontWeight: "700", color: "#9CA3AF", letterSpacing: 0.8, textTransform: "uppercase" },
-  promptCardA: { fontSize: 14, fontWeight: "600", color: colors.foreground, lineHeight: 20 },
+  promptCardQ: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#9CA3AF", letterSpacing: 0.8, textTransform: "uppercase" },
+  promptCardA: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 20 },
 
   // Toast
   toast: {
@@ -2148,7 +2289,7 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.85)", borderRadius: radius.full,
     paddingHorizontal: 20, paddingVertical: 10,
   },
-  toastText: { fontSize: 13, color: colors.white, fontWeight: "500" },
+  toastText: { fontSize: 13, color: colors.white, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   saveToast: {
     position: "absolute", bottom: 112, left: 24, right: 24,
@@ -2169,40 +2310,40 @@ const s = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4,
     borderWidth: 1, borderColor: colors.teal,
   },
-  lockedFilterText: { fontSize: 11, fontWeight: "600", color: colors.teal },
+  lockedFilterText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
 });
 
 const notifS = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingBottom: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground },
-  emptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  emptyDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
 });
 
 const filterS = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  resetText: { fontSize: 14, fontWeight: "600", color: colors.teal },
+  resetText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, gap: 6, paddingBottom: 24 },
-  sectionLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.2, marginTop: 16, marginBottom: 10 },
+  sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2, marginTop: 16, marginBottom: 10 },
   lockedSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, marginBottom: 10 },
   goBadge: { backgroundColor: colors.tintTeal, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 3 },
-  goBadgeText: { fontSize: 11, fontWeight: "700", color: colors.teal },
+  goBadgeText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 
   // Pill rows (free)
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border },
-  pillText: { fontSize: 13, fontWeight: "500", color: colors.foreground },
+  pillText: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground },
   pillActive: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full },
-  pillActiveText: { fontSize: 13, fontWeight: "700", color: colors.white },
+  pillActiveText: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 
   // Locked pills
   pillLocked: {
@@ -2210,27 +2351,27 @@ const filterS = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.full,
     backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, opacity: 0.7,
   },
-  pillLockedText: { fontSize: 13, fontWeight: "500", color: colors.muted },
+  pillLockedText: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.muted },
 
   // Age stepper
   ageRow: { flexDirection: "row", alignItems: "center", gap: 16 },
   ageStepper: { flex: 1, alignItems: "center", gap: 6 },
-  ageLabel: { fontSize: 11, fontWeight: "700", color: colors.muted, letterSpacing: 0.8 },
+  ageLabel: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 0.8 },
   stepperRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   stepBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.border,
     alignItems: "center", justifyContent: "center",
   },
-  stepBtnText: { fontSize: 20, fontWeight: "300", color: colors.foreground, lineHeight: 24 },
-  stepValue: { fontSize: 20, fontWeight: "700", color: colors.foreground, minWidth: 32, textAlign: "center" },
-  ageDash: { fontSize: 18, color: colors.muted, paddingTop: 20 },
+  stepBtnText: { fontSize: 20, fontWeight: "300", fontFamily: "Quicksand_400Regular", color: colors.foreground, lineHeight: 24 },
+  stepValue: { fontSize: 20, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, minWidth: 32, textAlign: "center" },
+  ageDash: { fontSize: 18, fontFamily: "Quicksand_400Regular", color: colors.muted, paddingTop: 20 },
 
   // Footer
   footer: { paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background },
   applyBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
   applyBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  applyBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  applyBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   optionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   option: {
     paddingHorizontal: 14, paddingVertical: 8,
@@ -2238,7 +2379,7 @@ const filterS = StyleSheet.create({
     backgroundColor: colors.white,
   },
   optionSelected: { borderColor: colors.teal, backgroundColor: colors.tintTeal },
-  optionText: { fontSize: 13, fontWeight: "600", color: colors.secondary },
+  optionText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.secondary },
   optionTextSelected: { color: colors.teal },
 });
 
@@ -2246,17 +2387,17 @@ const modalS = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 18, fontWeight: "700", color: colors.foreground },
+  title: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, gap: 16, paddingBottom: 80 },
   heroInput: {
-    fontSize: 20, fontWeight: "700", color: colors.foreground,
+    fontSize: 20, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground,
     borderBottomWidth: 2, borderBottomColor: colors.border,
     paddingBottom: 12, paddingTop: 4,
     minHeight: 50,
   },
-  sectionLabel: { fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1.2 },
+  sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2 },
   categoryScroll: { flexGrow: 0 },
   categoryRow: { flexDirection: "row", gap: 10 },
   categoryTile: {
@@ -2265,7 +2406,7 @@ const modalS = StyleSheet.create({
     alignItems: "center", gap: 6,
   },
   categoryEmoji: { fontSize: 22 },
-  categoryLabel: { fontSize: 11, fontWeight: "600", color: colors.foreground },
+  categoryLabel: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   rowFields: { flexDirection: "row", gap: 10 },
   pillField: {
     flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
@@ -2279,19 +2420,19 @@ const modalS = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
     paddingHorizontal: 14, paddingVertical: 12,
   },
-  pillFieldText: { fontSize: 14, color: colors.muted, fontWeight: "500" },
+  pillFieldText: { fontSize: 14, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
   spotsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  spotsLabel: { fontSize: 14, fontWeight: "600", color: colors.foreground },
+  spotsLabel: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   spotsControls: { flexDirection: "row", alignItems: "center", gap: 16 },
   spotsBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  spotsBtnText: { fontSize: 18, fontWeight: "300", color: colors.foreground, lineHeight: 22 },
-  spotsNum: { fontSize: 18, fontWeight: "700", color: colors.foreground, minWidth: 24, textAlign: "center" },
-  spotsGroupHint: { fontSize: 11, color: colors.teal, fontWeight: "600", marginTop: 2 },
+  spotsBtnText: { fontSize: 18, fontWeight: "300", fontFamily: "Quicksand_400Regular", color: colors.foreground, lineHeight: 22 },
+  spotsNum: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, minWidth: 24, textAlign: "center" },
+  spotsGroupHint: { fontSize: 11, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", marginTop: 2 },
   spotsBtnPlus: { width: 32, height: 32, borderRadius: 16, overflow: "hidden" },
   spotsBtnPlusInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  spotsBtnPlusText: { fontSize: 18, fontWeight: "300", color: colors.white, lineHeight: 22 },
+  spotsBtnPlusText: { fontSize: 18, fontWeight: "300", fontFamily: "Quicksand_400Regular", color: colors.white, lineHeight: 22 },
   groupRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 },
-  groupLabel: { fontSize: 14, fontWeight: "600", color: colors.foreground },
+  groupLabel: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
   descInput: {
     backgroundColor: colors.surface, borderRadius: radius.md,
     paddingHorizontal: 16, paddingVertical: 14,
@@ -2300,7 +2441,7 @@ const modalS = StyleSheet.create({
   },
   postBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
   postBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  postBtnText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  postBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   groupNudge: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     backgroundColor: "#F0FDFB", borderRadius: 8,
@@ -2308,7 +2449,7 @@ const modalS = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
     marginTop: -8,
   },
-  groupNudgeText: { fontSize: 13, color: colors.muted },
+  groupNudgeText: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
   categoryPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   categoryPill: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100,
@@ -2330,7 +2471,21 @@ const modalS = StyleSheet.create({
     backgroundColor: colors.white,
   },
   dateFieldText: { fontFamily: "Caveat_400Regular", fontSize: 16, color: colors.foreground },
-  dateFieldHint: { fontSize: 12, color: colors.muted },
+  dateFieldHint: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted },
+
+  photoPicker: {
+    height: 160, borderRadius: 16, borderWidth: 1.5, borderColor: colors.border,
+    borderStyle: "dashed", backgroundColor: "#F9FAFB",
+    alignItems: "center", justifyContent: "center", overflow: "hidden",
+  },
+  photoPreview: { width: "100%", height: "100%", borderRadius: 16 },
+  photoRemoveBtn: {
+    position: "absolute", top: 8, right: 8,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center",
+  },
+  photoRemoveText: { color: "#fff", fontSize: 16, lineHeight: 20, textAlign: "center" },
+  photoPickerText: { fontSize: 13, color: "#9CA3AF", fontFamily: "Quicksand_400Regular" },
 });
 
 const celebS = StyleSheet.create({
@@ -2346,24 +2501,24 @@ const celebS = StyleSheet.create({
     alignItems: "center", gap: 4,
     ...shadows.float,
   },
-  title: { fontSize: 22, fontWeight: "800", color: colors.foreground, textAlign: "center", marginBottom: 6 },
-  subtitle: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: 16 },
+  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, textAlign: "center", marginBottom: 6 },
+  subtitle: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: 16 },
   keepGoingBtn: { width: "100%", height: 52, borderRadius: 26, overflow: "hidden" },
   keepGoingInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  keepGoingText: { fontSize: 15, fontWeight: "700", color: colors.white },
+  keepGoingText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
 });
 
 const reqS = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 18, fontWeight: "700", color: colors.foreground, flex: 1, marginRight: 12 },
+  title: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, flex: 1, marginRight: 12 },
   closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12, paddingBottom: 40 },
   empty: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: colors.foreground },
-  emptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  emptyDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
   requesterRow: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: colors.white, borderRadius: radius.md,
@@ -2371,27 +2526,45 @@ const reqS = StyleSheet.create({
   },
   requesterAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface },
   requesterInfo: { flex: 1, gap: 2 },
-  requesterName: { fontSize: 15, fontWeight: "700", color: colors.foreground },
-  requesterBio: { fontSize: 12, color: colors.muted, lineHeight: 17 },
+  requesterName: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  requesterBio: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted, lineHeight: 17 },
   requesterActions: { flexDirection: "column", gap: 6, alignItems: "flex-end" },
   letInBtn: {
     backgroundColor: colors.teal, borderRadius: radius.full,
     paddingHorizontal: 14, paddingVertical: 7,
   },
-  letInBtnText: { fontSize: 12, fontWeight: "700", color: colors.white },
+  letInBtnText: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   passBtn: {
     backgroundColor: colors.white, borderRadius: radius.full,
     paddingHorizontal: 14, paddingVertical: 7,
     borderWidth: 1.5, borderColor: colors.border,
   },
-  passBtnText: { fontSize: 12, fontWeight: "600", color: colors.muted },
+  passBtnText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted },
   letInBtnLocked: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: colors.surface, borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 6,
     borderWidth: 1, borderColor: colors.border, opacity: 0.6,
   },
-  letInBtnLockedText: { fontSize: 11, fontWeight: "700", color: colors.muted },
+  letInBtnLockedText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted },
+  interestedSection: { gap: 8, marginBottom: 4 },
+  interestedLabel: {
+    fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold",
+    color: colors.muted, letterSpacing: 1.2, textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  interestedRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: colors.white, borderRadius: radius.md,
+    padding: 14, ...shadows.card,
+  },
+  requesterAvatarPlaceholder: {
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.tintTeal,
+  },
+  requesterAvatarInitial: {
+    fontSize: 17, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal,
+  },
 });
 
 const hostS = StyleSheet.create({
@@ -2416,13 +2589,13 @@ const hostS = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: colors.surface, marginBottom: 8,
   },
-  name: { fontSize: 22, fontWeight: "700", color: colors.foreground, letterSpacing: -0.4 },
-  location: { fontSize: 13, color: colors.muted },
-  ratingText: { fontSize: 13, color: colors.muted, fontWeight: "500" },
+  name: { fontSize: 22, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
+  location: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  ratingText: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Bio
   bio: {
-    fontStyle: "italic", color: colors.muted,
+    fontStyle: "italic", fontFamily: "Quicksand_400Regular", color: colors.muted,
     textAlign: "center", fontSize: 14, lineHeight: 20,
   },
 
@@ -2434,12 +2607,12 @@ const hostS = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
     alignItems: "center", gap: 2,
   },
-  statNum: { fontSize: 18, fontWeight: "700", color: colors.foreground },
-  statLabel: { fontSize: 11, color: colors.muted, fontWeight: "500" },
+  statNum: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  statLabel: { fontSize: 11, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
   // Sections
   section: { gap: 12 },
-  sectionLabel: { fontSize: 13, fontWeight: "700", color: colors.foreground, letterSpacing: -0.2 },
+  sectionLabel: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.2 },
 
   // Shared interests
   interestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -2447,17 +2620,17 @@ const hostS = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full,
   },
-  interestText: { fontSize: 13, fontWeight: "600", color: colors.white },
+  interestText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
 
   // Previous activities
-  viewAll: { fontSize: 13, fontWeight: "600", color: colors.teal },
+  viewAll: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   prevCard: { width: 140 },
   prevCardBlock: {
     height: 90, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center", marginBottom: 8,
   },
-  prevCardTitle: { fontSize: 13, fontWeight: "600", color: colors.foreground, lineHeight: 17 },
-  prevCardMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  prevCardTitle: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 17 },
+  prevCardMeta: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted, marginTop: 2 },
 
   // Sticky bottom bar
   stickyBar: {
@@ -2474,6 +2647,44 @@ const hostS = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   msgBtnText: {
-    fontSize: 15, fontWeight: "700", color: colors.teal,
+    fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal,
   },
+});
+
+const viewerS = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
+  topBar: { flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 20, paddingTop: 8 },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  loaderWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  scrollContent: { padding: 24, gap: 20, paddingBottom: 60 },
+  heroSection: { alignItems: "center", gap: 6 },
+  avatar: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.surface, marginBottom: 4 },
+  avatarPlaceholder: { alignItems: "center", justifyContent: "center", backgroundColor: colors.tintTeal },
+  initials: { fontSize: 32, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
+  name: { fontSize: 22, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
+  occupation: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  hint: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  bioBox: {
+    borderLeftWidth: 3, borderLeftColor: colors.teal,
+    backgroundColor: "#F0FDFB", borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 10,
+  },
+  bioText: { fontSize: 14, fontStyle: "italic", fontFamily: "Quicksand_400Regular", color: colors.secondary, lineHeight: 20 },
+  section: { gap: 10 },
+  sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: colors.white, borderRadius: radius.full,
+    borderWidth: 1.5, borderColor: colors.border,
+  },
+  pillText: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground },
+  promptCard: {
+    backgroundColor: colors.white, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    padding: 14, gap: 4, ...shadows.card,
+  },
+  promptQ: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 0.8, textTransform: "capitalize" },
+  promptA: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 20 },
 });

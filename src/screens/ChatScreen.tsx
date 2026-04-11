@@ -13,17 +13,10 @@ interface ChatScreenProps {
   onBack: () => void;
 }
 
-// Mock messages so the thread doesn't feel empty
-const MOCK_MESSAGES = [
-  { id: "m1", text: "hey! stoked you're in for the hike", sent: false },
-  { id: "m2", text: "same! what time were you thinking?", sent: true },
-  { id: "m3", text: "7am at the trailhead — there's parking on ridge rd", sent: false },
-];
-
 export const ChatScreen = ({ convo, onBack }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<{ id: string; text: string; sent: boolean }[]>([]);
 
   const sendMessage = () => {
     if (!message.trim()) return;
@@ -146,13 +139,13 @@ const s = StyleSheet.create({
     borderWidth: 2, borderColor: colors.teal, overflow: "hidden",
   },
   headerAvatar: { width: "100%", height: "100%", borderRadius: 16 },
-  headerName: { fontSize: 16, fontWeight: "700", color: colors.foreground },
+  headerName: { fontSize: 16, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   contextPill: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: colors.tintTeal, borderRadius: radius.full,
     paddingHorizontal: 10, paddingVertical: 5,
   },
-  contextText: { fontSize: 11, fontWeight: "700", color: colors.teal },
+  contextText: { fontSize: 11, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 
   // Messages
   messages: { flex: 1 },
@@ -166,7 +159,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.teal, alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: colors.white,
   },
-  matchedName: { fontSize: 17, fontWeight: "700", color: colors.foreground },
+  matchedName: { fontSize: 17, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   matchedHint: { fontSize: 13, color: colors.muted },
 
   // Bubbles

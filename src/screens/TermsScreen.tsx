@@ -252,19 +252,19 @@ const s = StyleSheet.create({
   },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 6, width: 80 },
   chevron: { width: 8, height: 8, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: colors.teal, transform: [{ rotate: "45deg" }] },
-  backText: { fontSize: 14, fontWeight: "600", color: colors.teal },
-  title: { fontSize: 17, fontWeight: "700", color: colors.foreground, letterSpacing: -0.3 },
+  backText: { fontSize: 14, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
+  title: { fontSize: 17, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.3 },
 
   content: { paddingHorizontal: 20, paddingTop: 24, gap: 8 },
 
-  wordmark: { fontSize: 28, fontWeight: "800", color: colors.teal, letterSpacing: -0.8 },
-  tagline: { fontSize: 15, fontWeight: "600", color: colors.foreground, marginTop: 2 },
+  wordmark: { fontSize: 28, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.teal, letterSpacing: -0.8 },
+  tagline: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, marginTop: 2 },
   meta: { fontSize: 12, color: colors.muted, marginTop: 4, marginBottom: 4 },
   intro: { fontSize: 13, color: colors.foreground, lineHeight: 21, marginBottom: 8 },
 
   section: { gap: 8, marginTop: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: "700", color: colors.foreground, marginTop: 8 },
-  subHead: { fontSize: 13, fontWeight: "700", color: colors.teal, marginTop: 4 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, marginTop: 8 },
+  subHead: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal, marginTop: 4 },
   body: { fontSize: 13, color: colors.muted, lineHeight: 21 },
   bulletRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   bulletDot: { fontSize: 15, color: colors.teal, lineHeight: 21, marginTop: -1 },
@@ -272,5 +272,5 @@ const s = StyleSheet.create({
 
   footer: { marginTop: 24, paddingTop: 20, borderTopWidth: 1, borderTopColor: colors.border, gap: 4, alignItems: "center" },
   footerText: { fontSize: 12, color: colors.muted, textAlign: "center" },
-  footerBrand: { fontSize: 13, fontWeight: "700", color: colors.teal, marginTop: 4 },
+  footerBrand: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal, marginTop: 4 },
 });

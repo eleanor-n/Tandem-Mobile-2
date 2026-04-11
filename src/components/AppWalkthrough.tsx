@@ -265,6 +265,7 @@ const s = StyleSheet.create({
   nextBtnText: {
     fontSize: 13,
     fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
     color: "#fff",
   },
   // Downward-pointing arrow (card is above target)

@@ -102,6 +102,6 @@ const s = StyleSheet.create({
     width: 52, height: 52, borderRadius: 26,
     alignItems: "center", justifyContent: "center",
   },
-  label: { fontSize: 10, fontWeight: "600", color: colors.muted, letterSpacing: 0.1 },
+  label: { fontSize: 10, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.muted, letterSpacing: 0.1 },
   labelActive: { color: colors.teal },
 });

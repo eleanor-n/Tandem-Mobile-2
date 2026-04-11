@@ -26,5 +26,5 @@ const s = StyleSheet.create({
   name: { fontSize: 13, fontStyle: "italic", color: colors.muted, flex: 1 },
   badge: { backgroundColor: colors.tintTeal, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2 },
   badgeTrail: { backgroundColor: "#EEF4FE" },
-  badgeText: { fontSize: 10, fontWeight: "700", color: colors.teal },
+  badgeText: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 });
