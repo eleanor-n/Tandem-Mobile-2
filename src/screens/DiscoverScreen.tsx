@@ -2095,8 +2095,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                         </Text>
                       </View>
                     )}
-                    <Text style={reqS.requesterName}>{u.name}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.muted} style={{ marginLeft: "auto" }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={reqS.requesterName}>{u.name}</Text>
+                      <Text style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>tap to view profile</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.muted} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -2141,7 +2144,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                             requestSheetActivity.title,
                           )}
                         >
-                          <Text style={reqS.letInBtnText}>let them in</Text>
+                          <Text style={reqS.letInBtnText}>let's tandem</Text>
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
