@@ -1458,90 +1458,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               <Ionicons name="close" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
-          {/* Location — outside ScrollView so the dropdown renders correctly */}
-          <View style={{ zIndex: 10, elevation: 10, paddingHorizontal: 20, paddingBottom: 4 }}>
-            <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
-            <GooglePlacesAutocomplete
-              placeholder="search for a location"
-              onPress={(data, details = null) => {
-                setPostLocation(data.description);
-                if (details?.geometry?.location) {
-                  setPostLocationLat(details.geometry.location.lat);
-                  setPostLocationLng(details.geometry.location.lng);
-                }
-              }}
-              predefinedPlaces={[{
-                description: "Princeton, NJ",
-                geometry: { location: { lat: 40.3573, lng: -74.6672, latitude: 40.3573, longitude: -74.6672 } },
-              }]}
-              query={{
-                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-                language: "en",
-                types: "establishment|geocode",
-              }}
-              fetchDetails={true}
-              enablePoweredByContainer={false}
-              minLength={2}
-              keyboardShouldPersistTaps="handled"
-              listViewDisplayed="auto"
-              styles={{
-                container: { zIndex: 10, elevation: 10 },
-                textInput: {
-                  height: 50,
-                  borderRadius: 10,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
-                  backgroundColor: colors.white,
-                  paddingHorizontal: 12,
-                  fontSize: 14,
-                  color: colors.foreground,
-                  marginBottom: 0,
-                },
-                listView: {
-                  backgroundColor: colors.white,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.12,
-                  shadowRadius: 6,
-                  elevation: 10,
-                  marginTop: 2,
-                },
-                row: { padding: 13, minHeight: 44 },
-                description: { fontFamily: "Quicksand_400Regular", fontSize: 14, color: colors.foreground },
-                poweredContainer: { display: "none" },
-              }}
-            />
-          </View>
-
           <ScrollView style={modalS.scroll} contentContainerStyle={modalS.scrollContent} keyboardShouldPersistTaps="handled">
-            {/* Photo picker */}
-            <TouchableOpacity
-              style={modalS.photoPicker}
-              onPress={handlePickPostPhoto}
-              activeOpacity={0.8}
-            >
-              {postPhotoUri ? (
-                <>
-                  <Image source={{ uri: postPhotoUri }} style={modalS.photoPreview} resizeMode="cover" />
-                  <TouchableOpacity
-                    style={modalS.photoRemoveBtn}
-                    onPress={() => setPostPhotoUri(null)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={modalS.photoRemoveText}>×</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <View style={{ alignItems: "center", gap: 6 }}>
-                  <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
-                  <Text style={modalS.photoPickerText}>add a photo (optional)</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
             <TextInput
               style={modalS.heroInput}
               placeholder="what are you doing?"
@@ -1592,6 +1509,93 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 autoFocus
               />
             )}
+
+            <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
+            <View style={{ zIndex: 100, elevation: 100, marginBottom: 16 }}>
+              <GooglePlacesAutocomplete
+                placeholder="search for a location"
+                onPress={(data, details = null) => {
+                  setPostLocation(data.description);
+                  if (details?.geometry?.location) {
+                    setPostLocationLat(details.geometry.location.lat);
+                    setPostLocationLng(details.geometry.location.lng);
+                  }
+                }}
+                predefinedPlaces={[{
+                  description: "Princeton, NJ",
+                  geometry: { location: { lat: 40.3573, lng: -74.6672, latitude: 40.3573, longitude: -74.6672 } },
+                }]}
+                query={{
+                  key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+                  language: "en",
+                  types: "establishment|geocode",
+                }}
+                fetchDetails={true}
+                enablePoweredByContainer={false}
+                minLength={2}
+                keyboardShouldPersistTaps="handled"
+                listViewDisplayed="auto"
+                renderDescription={(row) => row.description}
+                styles={{
+                  container: { zIndex: 100, elevation: 100 },
+                  textInput: {
+                    height: 50,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    backgroundColor: colors.white,
+                    paddingHorizontal: 12,
+                    fontSize: 14,
+                    color: colors.foreground,
+                    marginBottom: 0,
+                  },
+                  listView: {
+                    position: "absolute",
+                    top: 52,
+                    left: 0,
+                    right: 0,
+                    zIndex: 100,
+                    elevation: 100,
+                    backgroundColor: colors.white,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 6,
+                  },
+                  row: { padding: 13, minHeight: 44 },
+                  description: { fontFamily: "Quicksand_400Regular", fontSize: 14, color: colors.foreground },
+                  poweredContainer: { display: "none" },
+                }}
+              />
+            </View>
+
+            {/* Photo picker */}
+            <TouchableOpacity
+              style={modalS.photoPicker}
+              onPress={handlePickPostPhoto}
+              activeOpacity={0.8}
+            >
+              {postPhotoUri ? (
+                <>
+                  <Image source={{ uri: postPhotoUri }} style={modalS.photoPreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={modalS.photoRemoveBtn}
+                    onPress={() => setPostPhotoUri(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={modalS.photoRemoveText}>×</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={{ alignItems: "center", gap: 6 }}>
+                  <Ionicons name="camera-outline" size={32} color="#9CA3AF" />
+                  <Text style={modalS.photoPickerText}>add a photo (optional)</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHEN IS IT?</Text>
             <TouchableOpacity
