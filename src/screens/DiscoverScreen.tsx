@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
 import { LinearGradient } from "expo-linear-gradient";
@@ -259,54 +260,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [postLocation, setPostLocation] = useState("");
   const [postLocationLat, setPostLocationLat] = useState<number | null>(null);
   const [postLocationLng, setPostLocationLng] = useState<number | null>(null);
-  const [locationText, setLocationText] = useState("");
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const locationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [postDesc, setPostDesc] = useState("");
   const [postPhotoUri, setPostPhotoUri] = useState<string | null>(null);
   const [postPhotoUploading, setPostPhotoUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-
-  const searchPlaces = async (text: string) => {
-    if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
-    try {
-      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${apiKey}&language=en`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.predictions) { setSuggestions(data.predictions); setShowSuggestions(true); }
-    } catch (err) {
-      console.log("[Places] search error:", err);
-    }
-  };
-
-  const selectPlace = async (prediction: any) => {
-    try {
-      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry,formatted_address,name&key=${apiKey}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.result) {
-        const { lat, lng } = data.result.geometry.location;
-        setLocationText(prediction.description);
-        setPostLocation(prediction.description);
-        setPostLocationLat(lat);
-        setPostLocationLng(lng);
-      }
-    } catch (err) {
-      console.log("[Places] details error:", err);
-    }
-    setSuggestions([]);
-    setShowSuggestions(false);
-  };
-
-  const handleLocationChange = (text: string) => {
-    setLocationText(text);
-    setPostLocation(text);
-    if (locationDebounceRef.current) clearTimeout(locationDebounceRef.current);
-    locationDebounceRef.current = setTimeout(() => searchPlaces(text), 300);
-  };
 
   const handlePickPostPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -799,9 +756,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setPostLocation("");
       setPostLocationLat(null);
       setPostLocationLng(null);
-      setLocationText("");
-      setSuggestions([]);
-      setShowSuggestions(false);
       setPostDesc("");
       setPostSpots(1);
       setPostPhotoUri(null);
@@ -1557,32 +1511,48 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             )}
 
             <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
-            <View style={{ zIndex: 999, elevation: 999, marginBottom: showSuggestions && suggestions.length > 0 ? 210 : 16 }}>
-              <TextInput
-                style={modalS.locationInput}
-                placeholder="search for a location"
-                placeholderTextColor={colors.muted}
-                value={locationText}
-                onChangeText={handleLocationChange}
-                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                autoCorrect={false}
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <View style={modalS.suggestionsList}>
-                  {suggestions.map((prediction, index) => (
-                    <TouchableOpacity
-                      key={prediction.place_id}
-                      onPress={() => selectPlace(prediction)}
-                      style={[modalS.suggestionRow, index === suggestions.length - 1 && { borderBottomWidth: 0 }]}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={modalS.suggestionText} numberOfLines={2}>{prediction.description}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
+            <GooglePlacesAutocomplete
+              placeholder="search for a location"
+              onPress={(data, details = null) => {
+                setPostLocation(data.description);
+                if (details?.geometry?.location) {
+                  setPostLocationLat(details.geometry.location.lat);
+                  setPostLocationLng(details.geometry.location.lng);
+                }
+              }}
+              query={{
+                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+                language: "en",
+              }}
+              fetchDetails={true}
+              enablePoweredByContainer={false}
+              keyboardShouldPersistTaps="handled"
+              listViewDisplayed="auto"
+              styles={{
+                container: { flex: 0, zIndex: 999 },
+                textInput: {
+                  height: 50,
+                  borderRadius: 999,
+                  borderWidth: 1.5,
+                  borderColor: colors.border,
+                  backgroundColor: colors.white,
+                  paddingHorizontal: 16,
+                  fontSize: 14,
+                  color: colors.foreground,
+                  marginBottom: 0,
+                },
+                listView: {
+                  backgroundColor: colors.white,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginTop: 4,
+                  zIndex: 999,
+                },
+                row: { padding: 12, backgroundColor: colors.white },
+                description: { fontSize: 14, color: colors.foreground },
+              }}
+            />
 
             {/* Photo picker */}
             <TouchableOpacity
@@ -2511,23 +2481,6 @@ const modalS = StyleSheet.create({
     paddingBottom: 12, paddingTop: 4,
     minHeight: 50,
   },
-  locationInput: {
-    height: 50, borderRadius: 10, borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: colors.white, paddingHorizontal: 12,
-    fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.foreground,
-  },
-  suggestionsList: {
-    position: "absolute", top: 52, left: 0, right: 0,
-    backgroundColor: colors.white, borderRadius: 8,
-    borderWidth: 1, borderColor: colors.border,
-    zIndex: 999, elevation: 999, maxHeight: 200,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 6,
-  },
-  suggestionRow: {
-    padding: 12, borderBottomWidth: 1, borderBottomColor: "#F0F0F0",
-  },
-  suggestionText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.foreground },
   sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2 },
   categoryScroll: { flexGrow: 0 },
   categoryRow: { flexDirection: "row", gap: 10 },
