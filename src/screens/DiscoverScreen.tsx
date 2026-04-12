@@ -1576,6 +1576,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               />
             )}
 
+            {(() => {
+              console.log('[Places] API key present:', !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
+              console.log('[Places] API key first 10 chars:', process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.slice(0, 10));
+              console.log('[ENV] all EXPO_PUBLIC vars:', Object.keys(process.env).filter(k => k.startsWith('EXPO_PUBLIC')));
+              return null;
+            })()}
             <View style={{ height: 200, zIndex: 9999, elevation: 9999, overflow: "visible" }}>
               <GooglePlacesAutocomplete
                 placeholder="Search for a location"
@@ -1875,7 +1881,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                     }
                   }}
                 >
-                  <Text style={hostS.msgBtnText}>say hey</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={hostS.msgBtnText}>say hey</Text>
+                    <Text style={{ fontFamily: "System", fontSize: 18 }}>👋</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </View>
