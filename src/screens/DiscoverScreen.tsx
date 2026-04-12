@@ -169,18 +169,21 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   useEffect(() => {
     if (!showViewerProfile || !viewerProfileData?.id) return;
     setViewerProfileLoading(true);
+    const userId = viewerProfileData.id;
+    console.log('[Profile] user_id being queried:', userId);
     supabase
       .from("profiles")
-      .select("user_id, first_name, avatar_url, bio, occupation, humor_type, quick_prompts")
-      .eq("user_id", viewerProfileData.id)
+      .select("user_id, first_name, avatar_url, occupation, humor_type, quick_prompts")
+      .eq("user_id", userId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        console.log('[Profile] query result data:', JSON.stringify(data, null, 2));
+        console.log('[Profile] query error:', error);
         if (data) {
           setViewerProfileData(prev => prev ? {
             ...prev,
             photo: data.avatar_url ?? prev.photo,
             name: data.first_name ?? prev.name,
-            bio: data.bio ?? "",
             occupation: data.occupation ?? "",
             humor_type: Array.isArray(data.humor_type) ? data.humor_type : [],
             quick_prompts: data.quick_prompts ?? {},
@@ -293,7 +296,25 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setPostPhotoUri(asset.uri);
   };
   const [showHostProfile, setShowHostProfile] = useState(false);
+  const [hostProfileFetched, setHostProfileFetched] = useState<any | null>(null);
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
+
+  // Fetch full host profile when modal opens
+  useEffect(() => {
+    if (!showHostProfile || !profileActivity?.host?.user_id) return;
+    const userId = profileActivity.host.user_id;
+    console.log('[Profile] user_id being queried:', userId);
+    supabase
+      .from("profiles")
+      .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts")
+      .eq("user_id", userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        console.log('[Profile] query result data:', JSON.stringify(data, null, 2));
+        console.log('[Profile] query error:', error);
+        setHostProfileFetched(data ?? null);
+      });
+  }, [showHostProfile, profileActivity?.host?.user_id]);
 
   useEffect(() => {
     AsyncStorage.getItem("saved_activities").then(val => {
