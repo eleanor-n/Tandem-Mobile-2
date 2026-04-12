@@ -1482,7 +1482,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       </Modal>
 
       {/* Post Activity Modal */}
-      <Modal visible={showPostModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPostModal(false)}>
+      <Modal visible={showPostModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowPostModal(false)} statusBarTranslucent={true}>
         <KeyboardAvoidingView style={[modalS.container, { zIndex: 1 }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={modalS.handle} />
           <View style={modalS.header}>
@@ -1561,8 +1561,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               enablePoweredByContainer={false}
               keyboardShouldPersistTaps="handled"
               listViewDisplayed="auto"
+              isRowScrollable={false}
+              minLength={2}
+              nearbyPlacesAPI="GooglePlacesSearch"
               styles={{
-                container: { flex: 0, zIndex: 999 },
+                container: { flex: 0, zIndex: 9999, elevation: 9999 },
                 textInput: {
                   height: 50,
                   borderRadius: 999,
@@ -1580,7 +1583,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   borderWidth: 1,
                   borderColor: colors.border,
                   marginTop: 4,
-                  zIndex: 999,
+                  zIndex: 9999,
+                  elevation: 9999,
+                  position: "absolute",
+                  top: 50,
+                  left: 0,
+                  right: 0,
                 },
                 row: { padding: 12, backgroundColor: colors.white },
                 description: { fontSize: 14, color: colors.foreground },
