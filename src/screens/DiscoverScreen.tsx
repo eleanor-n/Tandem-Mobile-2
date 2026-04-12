@@ -393,7 +393,31 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         a.user_id && profileMap[a.user_id]?.first_name
       );
       console.log("[Feed] valid (non-ghost) count:", validActivities.length);
-      setLiveActivities(validActivities.map((a: any) => ({
+
+      // Fetch all interactions for the current user to build exclusion set
+      const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+      let excludedIds = new Set<string>();
+      if (currentUserId) {
+        const { data: interactions } = await supabase
+          .from("activity_interactions")
+          .select("activity_id")
+          .eq("user_id", currentUserId);
+        excludedIds = new Set((interactions ?? []).map((i: any) => i.activity_id));
+      }
+      if (cancelled.current) return;
+
+      // Log own posts being excluded
+      console.log("[Feed] own post ids excluded:", validActivities
+        .filter((a: any) => a.user_id === currentUserId)
+        .map((a: any) => a.title));
+
+      // Exclude interacted activities and own posts
+      const feedActivities = validActivities.filter((a: any) =>
+        !excludedIds.has(a.id) && a.user_id !== currentUserId
+      );
+      console.log("[Feed] after exclusion count:", feedActivities.length);
+
+      setLiveActivities(feedActivities.map((a: any) => ({
         id: a.id,
         title: a.title,
         category: a.tags?.[0] ?? "default",
@@ -576,7 +600,17 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     showImInToast("you're in!", subtitle, () => {});
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    if (currentCard && user) {
+      try {
+        await supabase.from("activity_interactions").upsert(
+          { activity_id: currentCard.id, user_id: user.id, action: "decline" },
+          { ignoreDuplicates: true }
+        );
+      } catch {
+        // non-blocking
+      }
+    }
     setCurrentIndex(prev => prev + 1);
   };
 
@@ -584,11 +618,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     if (!currentCard) return;
     try {
       if (user) {
-        await supabase.from("activity_interactions").insert({
-          activity_id: currentCard.id,
-          user_id: user.id,
-          action: "save",
-        });
+        await supabase.from("activity_interactions").upsert(
+          { activity_id: currentCard.id, user_id: user.id, action: "save" },
+          { ignoreDuplicates: true }
+        );
       }
     } catch {
       // non-blocking
@@ -1155,7 +1188,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
               {/* Action buttons — pinned below card */}
               <View style={[s.actionRow, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
-                {requestedSet.has(currentCard.id) ? (
+                {currentCard.host.user_id === user?.id ? null : requestedSet.has(currentCard.id) ? (
                   <View style={{ flex: 1 }}>
                     <View style={s.requestedBtn}>
                       <Text style={s.requestedBtnText}>requested</Text>
