@@ -154,41 +154,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [requestSheetActivity, setRequestSheetActivity] = useState<any | null>(null);
   const [myPostsState, setMyPostsState] = useState<any[]>([]);
   const [showViewerProfile, setShowViewerProfile] = useState(false);
-  const [viewerProfileData, setViewerProfileData] = useState<{
-    id: string;
-    name: string;
-    photo: string;
-    bio?: string;
-    occupation?: string;
-    humor_type?: string[];
-    quick_prompts?: Record<string, string>;
-  } | null>(null);
+  const [viewerProfileData, setViewerProfileData] = useState<{ id: string; name: string; photo: string } | null>(null);
+  const [viewerProfileFetched, setViewerProfileFetched] = useState<any | null>(null);
   const [viewerProfileLoading, setViewerProfileLoading] = useState(false);
 
   // Fetch full profile when viewer modal opens
   useEffect(() => {
     if (!showViewerProfile || !viewerProfileData?.id) return;
     setViewerProfileLoading(true);
+    setViewerProfileFetched(null);
     const userId = viewerProfileData.id;
-    console.log('[Profile] user_id being queried:', userId);
     supabase
       .from("profiles")
-      .select("user_id, first_name, avatar_url, occupation, humor_type, quick_prompts")
+      .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts")
       .eq("user_id", userId)
       .maybeSingle()
-      .then(({ data, error }) => {
-        console.log('[Profile] query result data:', JSON.stringify(data, null, 2));
-        console.log('[Profile] query error:', error);
-        if (data) {
-          setViewerProfileData(prev => prev ? {
-            ...prev,
-            photo: data.avatar_url ?? prev.photo,
-            name: data.first_name ?? prev.name,
-            occupation: data.occupation ?? "",
-            humor_type: Array.isArray(data.humor_type) ? data.humor_type : [],
-            quick_prompts: data.quick_prompts ?? {},
-          } : null);
-        }
+      .then(({ data }) => {
+        setViewerProfileFetched(data ?? null);
         setViewerProfileLoading(false);
       });
   }, [showViewerProfile, viewerProfileData?.id]);
@@ -297,23 +279,32 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   };
   const [showHostProfile, setShowHostProfile] = useState(false);
   const [hostProfileFetched, setHostProfileFetched] = useState<any | null>(null);
+  const [hostProfileLoading, setHostProfileLoading] = useState(false);
+  const [ownProfile, setOwnProfile] = useState<any | null>(null);
   const [savedSet, setSavedSet] = useState<Set<string>>(new Set());
 
-  // Fetch full host profile when modal opens
+  // Fetch full host profile + own profile when modal opens
   useEffect(() => {
     if (!showHostProfile || !profileActivity?.host?.user_id) return;
     const userId = profileActivity.host.user_id;
-    console.log('[Profile] user_id being queried:', userId);
-    supabase
-      .from("profiles")
-      .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts")
-      .eq("user_id", userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        console.log('[Profile] query result data:', JSON.stringify(data, null, 2));
-        console.log('[Profile] query error:', error);
-        setHostProfileFetched(data ?? null);
-      });
+    setHostProfileLoading(true);
+    setHostProfileFetched(null);
+    Promise.all([
+      supabase
+        .from("profiles")
+        .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      user ? supabase
+        .from("profiles")
+        .select("humor_type, usage_reasons, personality_type, quick_prompts")
+        .eq("user_id", user.id)
+        .maybeSingle() : Promise.resolve({ data: null }),
+    ]).then(([hostResult, ownResult]) => {
+      setHostProfileFetched(hostResult.data ?? null);
+      setOwnProfile((ownResult as any).data ?? null);
+      setHostProfileLoading(false);
+    });
   }, [showHostProfile, profileActivity?.host?.user_id]);
 
   useEffect(() => {
@@ -1718,9 +1709,39 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       >
         {profileActivity && (() => {
           const host = profileActivity.host;
+          const p = hostProfileFetched;
+          const age = p?.birthday ? calculateAge(p.birthday) : null;
+          const humorTypes: string[] = Array.isArray(p?.humor_type) ? p.humor_type : [];
+          const usageReasons: string[] = Array.isArray(p?.usage_reasons) ? p.usage_reasons : [];
+          const quickPrompts: Record<string, string> = (p?.quick_prompts && typeof p.quick_prompts === "object") ? p.quick_prompts : {};
+          const deepPrompts: Record<string, string> = (p?.deep_prompts && typeof p.deep_prompts === "object") ? p.deep_prompts : {};
+
+          // Compute compatibility overlaps (max 3)
+          const overlaps: string[] = [];
+          if (ownProfile) {
+            const ownHumor: string[] = Array.isArray(ownProfile.humor_type) ? ownProfile.humor_type : [];
+            const ownUsage: string[] = Array.isArray(ownProfile.usage_reasons) ? ownProfile.usage_reasons : [];
+            const sharedHumor = humorTypes.filter(h => ownHumor.map(x => x.toLowerCase()).includes(h.toLowerCase()));
+            if (sharedHumor.length > 0) overlaps.push(`you're both ${sharedHumor[0].toLowerCase()}`);
+            const sharedUsage = usageReasons.filter(u => ownUsage.map(x => x.toLowerCase()).includes(u.toLowerCase()));
+            if (sharedUsage.length > 0) overlaps.push(`you both want ${sharedUsage[0].toLowerCase()}`);
+            if (p?.personality_type && ownProfile.personality_type &&
+                p.personality_type.toLowerCase() === ownProfile.personality_type.toLowerCase()) {
+              overlaps.push(`fellow ${p.personality_type.toLowerCase()}`);
+            }
+            const ownSat = ownProfile.quick_prompts?.ideal_saturday;
+            const hostSat = quickPrompts.ideal_saturday;
+            if (ownSat && hostSat && ownSat.toLowerCase() === hostSat.toLowerCase()) {
+              overlaps.push(`you'd both spend saturday: ${hostSat}`);
+            }
+          }
+          const topOverlaps = overlaps.slice(0, 3);
+
+          const isMediaValue = (v: string) =>
+            typeof v === "string" && (v.startsWith("file://") || /\.(mov|mp4|m4a)$/i.test(v));
+
           return (
             <View style={hostS.container}>
-              {/* Handle + close */}
               <View style={hostS.handle} />
               <View style={hostS.topBar}>
                 <TouchableOpacity onPress={() => setShowHostProfile(false)} style={hostS.closeBtn} activeOpacity={0.7}>
@@ -1728,97 +1749,117 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 </TouchableOpacity>
               </View>
 
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={hostS.scrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* Avatar + name + location */}
-                <View style={hostS.heroSection}>
-                  <Image source={{ uri: host.photo }} style={hostS.avatar} />
-                  <Text style={hostS.name}>{host.name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
-                    <Ionicons name="location-outline" size={13} color={colors.muted} />
-                    <Text style={hostS.location}>{profileActivity.location}</Text>
-                  </View>
+              {hostProfileLoading ? (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                  <ActivityIndicator color={colors.teal} size="large" />
                 </View>
-
-                {/* Bio quote */}
-                <Text style={hostS.bio}>"{host.bio}"</Text>
-
-                {/* Stat pills */}
-                <View style={hostS.statsRow}>
-                  <View style={hostS.statPill}>
-                    <Text style={hostS.statNum}>{host.activitiesCount}</Text>
-                    <Text style={hostS.statLabel}>activities</Text>
+              ) : (
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={hostS.scrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Avatar + name + age + location */}
+                  <View style={hostS.heroSection}>
+                    {(p?.avatar_url || host.photo) ? (
+                      <Image source={{ uri: p?.avatar_url || host.photo }} style={hostS.avatar} />
+                    ) : (
+                      <View style={[hostS.avatar, hostS.avatarPlaceholder]}>
+                        <Text style={hostS.avatarInitial}>{(host.name ?? "?").charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <Text style={hostS.name}>{p?.first_name ?? host.name}</Text>
+                    {age !== null && (
+                      <Text style={hostS.ageLine}>{age} years old</Text>
+                    )}
+                    {p?.occupation ? (
+                      <Text style={hostS.occupation}>{p.occupation}</Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                      <Ionicons name="location-outline" size={13} color={colors.muted} />
+                      <Text style={hostS.location}>{profileActivity.location}</Text>
+                    </View>
                   </View>
-                  <View style={hostS.statPill}>
-                    <Text style={hostS.statNum}>{host.companionsCount}</Text>
-                    <Text style={hostS.statLabel}>companions</Text>
-                  </View>
-                </View>
 
-                {/* Shared interests */}
-                {host.sharedInterests && host.sharedInterests.length > 0 && (
-                  <View style={hostS.section}>
-                    <Text style={hostS.sectionLabel}>we're both into...</Text>
-                    <View style={hostS.interestRow}>
-                      {host.sharedInterests.map((interest) => (
-                        <LinearGradient
-                          key={interest}
-                          colors={gradients.brand}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={hostS.interestPill}
-                        >
-                          <Ionicons
-                            name={(CATEGORY_ICON[interest] || CATEGORY_ICON.default) as any}
-                            size={12}
-                            color={colors.white}
-                          />
-                          <Text style={hostS.interestText}>{interest}</Text>
-                        </LinearGradient>
+                  {/* Compatibility section */}
+                  {topOverlaps.length > 0 && (
+                    <View style={hostS.compatCard}>
+                      <Text style={hostS.compatHeading}>you'd get along because...</Text>
+                      {topOverlaps.map((line, i) => (
+                        <Text key={i} style={hostS.compatLine}>· {line}</Text>
                       ))}
                     </View>
-                  </View>
-                )}
+                  )}
 
-                {/* Previous activities */}
-                {host.previousActivities && host.previousActivities.length > 0 && (
-                  <View style={hostS.section}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={hostS.sectionLabel}>previous activities</Text>
-                      <TouchableOpacity activeOpacity={0.7}>
-                        <Text style={hostS.viewAll}>view all</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 12, paddingRight: 4 }}
-                    >
-                      {host.previousActivities.map((act, i) => (
-                        <View key={i} style={hostS.prevCard}>
-                          <LinearGradient
-                            colors={CATEGORY_GRADIENT[act.category] || CATEGORY_GRADIENT.default}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={hostS.prevCardBlock}
-                          >
-                            <Ionicons
-                              name={(CATEGORY_ICON[act.category] || CATEGORY_ICON.default) as any}
-                              size={24}
-                              color={colors.white}
-                            />
-                          </LinearGradient>
-                          <Text style={hostS.prevCardTitle} numberOfLines={2}>{act.title}</Text>
-                          <Text style={hostS.prevCardMeta}>{act.location} · {act.date}</Text>
+                  {/* Personality type pill */}
+                  {p?.personality_type ? (
+                    <View style={hostS.section}>
+                      <Text style={hostS.sectionLabel}>PERSONALITY</Text>
+                      <View style={hostS.pillRow}>
+                        <View style={hostS.pillTeal}>
+                          <Text style={hostS.pillTealText}>{p.personality_type}</Text>
                         </View>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </ScrollView>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Humor type pills */}
+                  {humorTypes.length > 0 && (
+                    <View style={hostS.section}>
+                      <Text style={hostS.sectionLabel}>HUMOR</Text>
+                      <View style={hostS.pillRow}>
+                        {humorTypes.map(h => (
+                          <View key={h} style={hostS.pill}>
+                            <Text style={hostS.pillText}>{h}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Usage reasons pills */}
+                  {usageReasons.length > 0 && (
+                    <View style={hostS.section}>
+                      <Text style={hostS.sectionLabel}>INTO</Text>
+                      <View style={hostS.pillRow}>
+                        {usageReasons.map(r => (
+                          <View key={r} style={hostS.pill}>
+                            <Text style={hostS.pillText}>{r}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Quick prompts */}
+                  {Object.entries(quickPrompts).filter(([, v]) => v && !isMediaValue(v)).length > 0 && (
+                    <View style={hostS.section}>
+                      {Object.entries(quickPrompts)
+                        .filter(([, v]) => v && !isMediaValue(v))
+                        .map(([q, a]) => (
+                          <View key={q} style={hostS.promptCard}>
+                            <Text style={hostS.promptQ}>{q.replace(/_/g, " ")}</Text>
+                            <Text style={hostS.promptA}>{a}</Text>
+                          </View>
+                        ))}
+                    </View>
+                  )}
+
+                  {/* Deep prompts (text only) */}
+                  {Object.entries(deepPrompts).filter(([, v]) => v && !isMediaValue(v)).length > 0 && (
+                    <View style={hostS.section}>
+                      {Object.entries(deepPrompts)
+                        .filter(([, v]) => v && !isMediaValue(v))
+                        .map(([q, a]) => (
+                          <View key={q} style={hostS.promptCard}>
+                            <Text style={hostS.promptQ}>{q}</Text>
+                            <Text style={hostS.promptA}>{a}</Text>
+                          </View>
+                        ))}
+                    </View>
+                  )}
+                </ScrollView>
+              )}
 
               {/* Sticky bottom bar */}
               <View style={hostS.stickyBar}>
@@ -1826,8 +1867,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   style={hostS.msgBtn}
                   activeOpacity={0.8}
                   onPress={() => {
-                    // TODO: wire to messages table — check for existing convo between
-                    // user and host, create one if none exists, navigate to that chat.
                     setShowHostProfile(false);
                     if (onMessagesPress) {
                       onMessagesPress();
@@ -1836,7 +1875,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                     }
                   }}
                 >
-                  <Text style={hostS.msgBtnText}>say hey 👋</Text>
+                  <Text style={hostS.msgBtnText}>say hey</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1862,63 +1901,99 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             <View style={viewerS.loaderWrap}>
               <ActivityIndicator color={colors.teal} size="large" />
             </View>
-          ) : viewerProfileData ? (
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={viewerS.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Avatar */}
-              <View style={viewerS.heroSection}>
-                {viewerProfileData.photo ? (
-                  <Image source={{ uri: viewerProfileData.photo }} style={viewerS.avatar} />
-                ) : (
-                  <View style={[viewerS.avatar, viewerS.avatarPlaceholder]}>
-                    <Text style={viewerS.initials}>
-                      {(viewerProfileData.name ?? "?").charAt(0).toUpperCase()}
-                    </Text>
+          ) : viewerProfileData ? (() => {
+            const vp = viewerProfileFetched;
+            const vAge = vp?.birthday ? calculateAge(vp.birthday) : null;
+            const vHumor: string[] = Array.isArray(vp?.humor_type) ? vp.humor_type : [];
+            const vUsage: string[] = Array.isArray(vp?.usage_reasons) ? vp.usage_reasons : [];
+            const vQuick: Record<string, string> = (vp?.quick_prompts && typeof vp.quick_prompts === "object") ? vp.quick_prompts : {};
+            const vDeep: Record<string, string> = (vp?.deep_prompts && typeof vp.deep_prompts === "object") ? vp.deep_prompts : {};
+            const isMediaValue = (v: string) =>
+              typeof v === "string" && (v.startsWith("file://") || /\.(mov|mp4|m4a)$/i.test(v));
+            return (
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={viewerS.scrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={viewerS.heroSection}>
+                  {(vp?.avatar_url || viewerProfileData.photo) ? (
+                    <Image source={{ uri: vp?.avatar_url || viewerProfileData.photo }} style={viewerS.avatar} />
+                  ) : (
+                    <View style={[viewerS.avatar, viewerS.avatarPlaceholder]}>
+                      <Text style={viewerS.initials}>{(viewerProfileData.name ?? "?").charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={viewerS.name}>{vp?.first_name ?? viewerProfileData.name}</Text>
+                  {vAge !== null && <Text style={viewerS.hint}>{vAge} years old</Text>}
+                  {vp?.occupation ? <Text style={viewerS.occupation}>{vp.occupation}</Text> : null}
+                </View>
+
+                {vp?.personality_type ? (
+                  <View style={viewerS.section}>
+                    <Text style={viewerS.sectionLabel}>PERSONALITY</Text>
+                    <View style={viewerS.pillRow}>
+                      <View style={[viewerS.pill, { borderColor: colors.teal, backgroundColor: colors.tintTeal }]}>
+                        <Text style={[viewerS.pillText, { color: colors.teal }]}>{vp.personality_type}</Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {vHumor.length > 0 && (
+                  <View style={viewerS.section}>
+                    <Text style={viewerS.sectionLabel}>HUMOR</Text>
+                    <View style={viewerS.pillRow}>
+                      {vHumor.map(h => (
+                        <View key={h} style={viewerS.pill}>
+                          <Text style={viewerS.pillText}>{h}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 )}
-                <Text style={viewerS.name}>{viewerProfileData.name}</Text>
-                {viewerProfileData.occupation ? (
-                  <Text style={viewerS.occupation}>{viewerProfileData.occupation}</Text>
-                ) : null}
-              </View>
 
-              {/* Bio */}
-              {viewerProfileData.bio ? (
-                <View style={viewerS.bioBox}>
-                  <Text style={viewerS.bioText}>"{viewerProfileData.bio}"</Text>
-                </View>
-              ) : null}
-
-              {/* Humor tags */}
-              {(viewerProfileData.humor_type?.length ?? 0) > 0 && (
-                <View style={viewerS.section}>
-                  <Text style={viewerS.sectionLabel}>HUMOR</Text>
-                  <View style={viewerS.pillRow}>
-                    {viewerProfileData.humor_type!.map(h => (
-                      <View key={h} style={viewerS.pill}>
-                        <Text style={viewerS.pillText}>{h}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Quick prompts */}
-              {viewerProfileData.quick_prompts && Object.keys(viewerProfileData.quick_prompts).length > 0 && (
-                <View style={viewerS.section}>
-                  {Object.entries(viewerProfileData.quick_prompts).map(([q, a]) => (
-                    <View key={q} style={viewerS.promptCard}>
-                      <Text style={viewerS.promptQ}>{q.replace(/_/g, " ")}</Text>
-                      <Text style={viewerS.promptA}>{String(a)}</Text>
+                {vUsage.length > 0 && (
+                  <View style={viewerS.section}>
+                    <Text style={viewerS.sectionLabel}>INTO</Text>
+                    <View style={viewerS.pillRow}>
+                      {vUsage.map(r => (
+                        <View key={r} style={viewerS.pill}>
+                          <Text style={viewerS.pillText}>{r}</Text>
+                        </View>
+                      ))}
                     </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
-          ) : null}
+                  </View>
+                )}
+
+                {Object.entries(vQuick).filter(([, v]) => v && !isMediaValue(v)).length > 0 && (
+                  <View style={viewerS.section}>
+                    {Object.entries(vQuick)
+                      .filter(([, v]) => v && !isMediaValue(v))
+                      .map(([q, a]) => (
+                        <View key={q} style={viewerS.promptCard}>
+                          <Text style={viewerS.promptQ}>{q.replace(/_/g, " ")}</Text>
+                          <Text style={viewerS.promptA}>{a}</Text>
+                        </View>
+                      ))}
+                  </View>
+                )}
+
+                {Object.entries(vDeep).filter(([, v]) => v && !isMediaValue(v)).length > 0 && (
+                  <View style={viewerS.section}>
+                    {Object.entries(vDeep)
+                      .filter(([, v]) => v && !isMediaValue(v))
+                      .map(([q, a]) => (
+                        <View key={q} style={viewerS.promptCard}>
+                          <Text style={viewerS.promptQ}>{q}</Text>
+                          <Text style={viewerS.promptA}>{a}</Text>
+                        </View>
+                      ))}
+                  </View>
+                )}
+              </ScrollView>
+            );
+          })() : null}
         </View>
       </Modal>
 
@@ -2610,48 +2685,48 @@ const hostS = StyleSheet.create({
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: colors.surface, marginBottom: 8,
   },
+  avatarPlaceholder: { alignItems: "center", justifyContent: "center", backgroundColor: colors.tintTeal },
+  avatarInitial: { fontSize: 28, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
   name: { fontSize: 22, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
+  ageLine: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  occupation: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.secondary },
   location: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
-  ratingText: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
-  // Bio
-  bio: {
-    fontStyle: "italic", fontFamily: "Quicksand_400Regular", color: colors.muted,
-    textAlign: "center", fontSize: 14, lineHeight: 20,
+  // Compatibility card
+  compatCard: {
+    backgroundColor: "#E6F9F5", borderWidth: 1, borderColor: "#9FE1CB",
+    borderRadius: 16, padding: 14, gap: 6,
   },
-
-  // Stats
-  statsRow: { flexDirection: "row", justifyContent: "center", gap: 12 },
-  statPill: {
-    paddingHorizontal: 20, paddingVertical: 10,
-    backgroundColor: colors.white, borderRadius: radius.full,
-    borderWidth: 1, borderColor: colors.border,
-    alignItems: "center", gap: 2,
-  },
-  statNum: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
-  statLabel: { fontSize: 11, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  compatHeading: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: "#0F6E56" },
+  compatLine: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: "#085041", lineHeight: 20 },
 
   // Sections
-  section: { gap: 12 },
-  sectionLabel: { fontSize: 13, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.2 },
+  section: { gap: 10 },
+  sectionLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2 },
 
-  // Shared interests
-  interestRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  interestPill: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full,
+  // Pills
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: colors.white, borderRadius: radius.full,
+    borderWidth: 1.5, borderColor: colors.border,
   },
-  interestText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.white },
+  pillText: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground },
+  pillTeal: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    backgroundColor: colors.tintTeal, borderRadius: radius.full,
+    borderWidth: 1.5, borderColor: colors.teal,
+  },
+  pillTealText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
 
-  // Previous activities
-  viewAll: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
-  prevCard: { width: 140 },
-  prevCardBlock: {
-    height: 90, borderRadius: radius.md,
-    alignItems: "center", justifyContent: "center", marginBottom: 8,
+  // Prompt cards
+  promptCard: {
+    backgroundColor: colors.white, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    padding: 14, gap: 4,
   },
-  prevCardTitle: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 17 },
-  prevCardMeta: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted, marginTop: 2 },
+  promptQ: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 0.8, textTransform: "capitalize" },
+  promptA: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 20 },
 
   // Sticky bottom bar
   stickyBar: {
