@@ -65,6 +65,7 @@ interface ProfileScreenProps {
   onMessagesPress?: () => void;
   onPostPress?: () => void;
   onMyActivityPress?: () => void;
+  onScrapbookPress?: () => void;
 }
 
 const ProfileVideo = ({ uri }: { uri: string }) => {
@@ -83,7 +84,7 @@ const ProfileVideo = ({ uri }: { uri: string }) => {
   );
 };
 
-export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress }: ProfileScreenProps) => {
+export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress, onScrapbookPress }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
@@ -512,6 +513,10 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         <TouchableOpacity onPress={() => onMyActivityPress?.()} activeOpacity={0.7} style={s.myActivityLink}>
           <Text style={s.myActivityLinkText}>view your posts & saved activities →</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7} style={s.myActivityLink}>
+          <Text style={s.myActivityLinkText}>open your scrapbook →</Text>
         </TouchableOpacity>
 
         {/* Bio */}

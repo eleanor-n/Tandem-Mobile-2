@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SunnyAvatar from "../components/SunnyAvatar";
-import { getSunnyResponse } from "../lib/sunny";
+import { BottomNav } from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, radius, shadows } from "../theme";
+import { colors, radius } from "../theme";
 
 export interface Conversation {
   id: string;
@@ -31,20 +30,18 @@ const formatTimestamp = (iso: string): string => {
 };
 
 interface MessagesScreenProps {
-  onBack: () => void;
   onOpenChat: (convo: { id: string; name: string; photo: string }) => void;
+  activeTab?: string;
+  onTabPress?: (tab: string) => void;
+  onPostPress?: () => void;
 }
 
-export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
+export const MessagesScreen = ({ onOpenChat, activeTab, onTabPress, onPostPress }: MessagesScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
-  const [sunnyEmptyDesc, setSunnyEmptyDesc] = useState("conversations start here when you connect on an activity.");
-
-  useEffect(() => {
-    getSunnyResponse({ context: "emptyMessages" }).then(setSunnyEmptyDesc);
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchConversations = useCallback(async () => {
     if (!user) { setLoadingConversations(false); return; }
@@ -110,30 +107,30 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
     fetchConversations();
   }, [fetchConversations]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchConversations();
+    setRefreshing(false);
+  }, [fetchConversations]);
+
   return (
     <View style={s.container}>
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={22} color={colors.teal} />
-        </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={s.title}>messages</Text>
-          <Text style={{ fontSize: 22, fontFamily: undefined }}>{'\u200B'}💬{'\u200B'}</Text>
-        </View>
-        <View style={{ width: 44 }} />
+        <Text style={s.title}>chats</Text>
       </View>
 
-      {conversations.length === 0 ? (
+      {conversations.length === 0 && !loadingConversations ? (
         <View style={s.empty}>
           <SunnyAvatar expression="warm" size={60} />
-          <Text style={s.emptyTitle}>no messages yet.</Text>
-          <Text style={s.emptyDesc}>{sunnyEmptyDesc}</Text>
+          <Text style={s.emptyTitle}>no chats yet.</Text>
+          <Text style={s.emptyDesc}>say "i'm in" on someone's plan and you can start chatting right away.</Text>
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}
+          contentContainerStyle={{ paddingBottom: 90 + insets.bottom }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.teal} />}
         >
           {conversations.map((c) => (
             <TouchableOpacity
@@ -142,10 +139,15 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
               onPress={() => onOpenChat({ id: c.id, name: c.name, photo: c.photo })}
               activeOpacity={0.85}
             >
-              {/* Teal left bar on unread */}
               {c.unread && <View style={s.unreadBar} />}
               <View style={s.avatarWrap}>
-                <Image source={{ uri: c.photo }} style={s.avatar} />
+                {c.photo ? (
+                  <Image source={{ uri: c.photo }} style={s.avatar} />
+                ) : (
+                  <View style={[s.avatar, s.avatarInitial]}>
+                    <Text style={s.avatarInitialText}>{(c.name ?? "?").charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
                 {c.unread && <View style={s.dot} />}
               </View>
               <View style={s.info}>
@@ -161,6 +163,8 @@ export const MessagesScreen = ({ onBack, onOpenChat }: MessagesScreenProps) => {
           ))}
         </ScrollView>
       )}
+
+      <BottomNav activeTab={activeTab ?? "Chat"} onTabPress={onTabPress ?? (() => {})} onPostPress={onPostPress} />
     </View>
   );
 };
@@ -169,16 +173,14 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 14,
+    paddingHorizontal: 20, paddingBottom: 14,
     borderBottomWidth: 1, borderBottomColor: colors.border,
     backgroundColor: colors.background,
   },
-  backBtn: { width: 44, height: 44, alignItems: "flex-start", justifyContent: "center" },
-  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
+  title: { fontSize: 24, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
 
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingBottom: 80 },
-  emptyTitle: { fontSize: 20, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingBottom: 100 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   emptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
 
   row: {
@@ -195,6 +197,8 @@ const s = StyleSheet.create({
   },
   avatarWrap: { position: "relative" },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.surface },
+  avatarInitial: { alignItems: "center", justifyContent: "center", backgroundColor: colors.tintTeal },
+  avatarInitialText: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
   dot: {
     position: "absolute", top: 0, right: 0,
     width: 12, height: 12, borderRadius: 6,
@@ -204,7 +208,7 @@ const s = StyleSheet.create({
   nameRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 },
   name: { fontSize: 15, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground },
   nameUnread: { fontWeight: "700", fontFamily: "Quicksand_700Bold" },
-  time: { fontSize: 12, color: colors.muted },
-  preview: { fontSize: 14, color: colors.muted, lineHeight: 18 },
-  previewUnread: { color: colors.secondary, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  time: { fontSize: 12, color: "#9CA3AF" },
+  preview: { fontSize: 13, color: colors.muted, lineHeight: 18 },
+  previewUnread: { color: colors.foreground, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 });

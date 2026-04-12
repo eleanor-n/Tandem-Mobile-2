@@ -30,7 +30,7 @@ import { getSunnyResponse } from "./src/lib/sunny";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 
-type Tab = "Discover" | "Map" | "Scrapbook" | "Profile";
+type Tab = "Discover" | "Map" | "Chat" | "Profile";
 type UnauthScreen = "welcome" | "auth";
 
 const AppInner = () => {
@@ -38,8 +38,8 @@ const AppInner = () => {
   const [unauthScreen, setUnauthScreen] = useState<UnauthScreen>("welcome");
   const [activeTab, setActiveTab] = useState<Tab>("Discover");
   const [showSettings, setShowSettings] = useState(false);
-  const [showMessages, setShowMessages] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
+  const [showScrapbook, setShowScrapbook] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
   const [showSplash, setShowSplash] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
@@ -272,16 +272,8 @@ const AppInner = () => {
   }
 
   // Overlay screens (highest priority first)
-  if (activeChat) {
-    return <ChatScreen convo={activeChat} onBack={() => setActiveChat(null)} />;
-  }
-  if (showMessages) {
-    return (
-      <MessagesScreen
-        onBack={() => setShowMessages(false)}
-        onOpenChat={(c) => setActiveChat(c)}
-      />
-    );
+  if (showScrapbook) {
+    return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setShowPost(true); }} />;
   }
   if (showSettings) {
     return (
@@ -312,15 +304,20 @@ const AppInner = () => {
         />
       );
       break;
-    case "Scrapbook": tabContent = <ScrapbookScreen {...tabProps} />; break;
+    case "Chat":
+      tabContent = activeChat
+        ? <ChatScreen convo={activeChat} onBack={() => setActiveChat(null)} />
+        : <MessagesScreen {...tabProps} onOpenChat={(c) => setActiveChat(c)} />;
+      break;
     case "Profile":
       tabContent = (
         <ProfileScreen
           {...tabProps}
           onSettingsPress={() => setShowSettings(true)}
           onMembershipPress={() => setShowMembership(true)}
-          onMessagesPress={() => setShowMessages(true)}
+          onMessagesPress={() => setActiveTab("Chat")}
           onMyActivityPress={() => { setActiveTab("Discover"); setShowMyActivity(true); }}
+          onScrapbookPress={() => setShowScrapbook(true)}
         />
       );
       break;
@@ -329,7 +326,7 @@ const AppInner = () => {
         <>
           <DiscoverScreen
             {...tabProps}
-            onMessagesPress={() => setShowMessages(true)}
+            onMessagesPress={() => setActiveTab("Chat")}
             onMembershipPress={() => setShowMembership(true)}
             openPostModal={showPost}
             onPostModalOpened={() => setShowPost(false)}

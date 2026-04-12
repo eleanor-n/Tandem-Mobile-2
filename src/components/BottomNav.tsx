@@ -7,14 +7,14 @@ import { colors, gradients, radius } from "../theme";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
-const TABS = ["Discover", "Map", "Post", "Scrapbook", "Profile"] as const;
+const TABS = ["Discover", "Map", "Post", "Chat", "Profile"] as const;
 
 const ICONS: Record<string, { active: IoniconName; inactive: IoniconName }> = {
-  Discover:  { active: "home",     inactive: "home-outline"     },
-  Map:       { active: "location", inactive: "location-outline" },
-  Post:      { active: "add",      inactive: "add"              },
-  Scrapbook: { active: "book",     inactive: "book-outline"     },
-  Profile:   { active: "person",   inactive: "person-outline"   },
+  Discover: { active: "home",            inactive: "home-outline"            },
+  Map:      { active: "location",        inactive: "location-outline"        },
+  Post:     { active: "add",             inactive: "add"                     },
+  Chat:     { active: "chatbubble",      inactive: "chatbubble-outline"      },
+  Profile:  { active: "person",          inactive: "person-outline"          },
 };
 
 interface BottomNavProps {
