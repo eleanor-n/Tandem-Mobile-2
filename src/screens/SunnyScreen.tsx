@@ -440,8 +440,9 @@ const BirthdayInput = ({ onSubmit }: { onSubmit: (v: string) => void }) => {
   return (
     <View style={styles.textInputContainer}>
       <View style={styles.textInputRow}>
+        <View style={{ backgroundColor: "white", borderRadius: 12, flex: 1 }}>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, { backgroundColor: "white" }]}
           value={value}
           onChangeText={handleChange}
           placeholder="MM/DD/YYYY"
@@ -451,7 +452,12 @@ const BirthdayInput = ({ onSubmit }: { onSubmit: (v: string) => void }) => {
           returnKeyType="done"
           onSubmitEditing={() => { if (isComplete) onSubmit(value); }}
           autoFocus
+          autoComplete="off"
+          autoCorrect={false}
+          textContentType="none"
+          importantForAutofill="no"
         />
+        </View>
         <TouchableOpacity
           onPress={() => { if (isComplete) onSubmit(value); }}
           disabled={!isComplete}
@@ -738,8 +744,9 @@ const PromptInput = ({
 
       {mode === "text" ? (
         <View style={styles.textInputRow}>
+          <View style={{ backgroundColor: "white", borderRadius: 12, flex: 1 }}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: "white" }]}
             value={value}
             onChangeText={setValue}
             placeholder={placeholder || "Type here..."}
@@ -748,7 +755,12 @@ const PromptInput = ({
             returnKeyType="send"
             autoFocus
             multiline
+            autoComplete="off"
+            autoCorrect={false}
+            textContentType="none"
+            importantForAutofill="no"
           />
+          </View>
           <TouchableOpacity
             onPress={() => { if (value.trim()) { onSubmit(value.trim(), "text"); setValue(""); } }}
             disabled={!value.trim()}
@@ -866,6 +878,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
   const [showAgeGate, setShowAgeGate] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const progressAnim = useRef(new Animated.Value(8)).current;
+  const openingDoneRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem("splash_shown").then(val => {
@@ -894,10 +907,11 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
       setIsTyping(false);
       setIsTalking(true);
       const msg = step.messages[messagesShown].replace("[Name]", userName || "you");
-      setMessages(prev => [
-        ...prev,
-        { id: `${stepIndex}-${messagesShown}`, from: "sunny", text: msg },
-      ]);
+      setMessages(prev => {
+        const id = `${stepIndex}-${messagesShown}`;
+        if (prev.some(m => m.id === id)) return prev; // dedup guard — prevents replay if effect fires with stale state
+        return [...prev, { id, from: "sunny", text: msg }];
+      });
       setTimeout(() => setIsTalking(false), 1200);
       setMessagesShown(n => n + 1);
     }, delay);
@@ -967,6 +981,8 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     }
 
     if (value === "let's go" && step.key === "opening") {
+      if (openingDoneRef.current) return;
+      openingDoneRef.current = true;
       setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
