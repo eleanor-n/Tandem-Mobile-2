@@ -1458,6 +1458,64 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               <Ionicons name="close" size={20} color={colors.muted} />
             </TouchableOpacity>
           </View>
+          {/* Location — outside ScrollView so the dropdown renders correctly */}
+          <View style={{ zIndex: 10, elevation: 10, paddingHorizontal: 20, paddingBottom: 4 }}>
+            <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
+            <GooglePlacesAutocomplete
+              placeholder="search for a location"
+              onPress={(data, details = null) => {
+                setPostLocation(data.description);
+                if (details?.geometry?.location) {
+                  setPostLocationLat(details.geometry.location.lat);
+                  setPostLocationLng(details.geometry.location.lng);
+                }
+              }}
+              predefinedPlaces={[{
+                description: "Princeton, NJ",
+                geometry: { location: { lat: 40.3573, lng: -74.6672, latitude: 40.3573, longitude: -74.6672 } },
+              }]}
+              query={{
+                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+                language: "en",
+                types: "establishment|geocode",
+              }}
+              fetchDetails={true}
+              enablePoweredByContainer={false}
+              minLength={2}
+              keyboardShouldPersistTaps="handled"
+              listViewDisplayed="auto"
+              styles={{
+                container: { zIndex: 10, elevation: 10 },
+                textInput: {
+                  height: 50,
+                  borderRadius: 10,
+                  borderWidth: 1.5,
+                  borderColor: colors.border,
+                  backgroundColor: colors.white,
+                  paddingHorizontal: 12,
+                  fontSize: 14,
+                  color: colors.foreground,
+                  marginBottom: 0,
+                },
+                listView: {
+                  backgroundColor: colors.white,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 6,
+                  elevation: 10,
+                  marginTop: 2,
+                },
+                row: { padding: 13, minHeight: 44 },
+                description: { fontFamily: "Quicksand_400Regular", fontSize: 14, color: colors.foreground },
+                poweredContainer: { display: "none" },
+              }}
+            />
+          </View>
+
           <ScrollView style={modalS.scroll} contentContainerStyle={modalS.scrollContent} keyboardShouldPersistTaps="handled">
             {/* Photo picker */}
             <TouchableOpacity
@@ -1510,7 +1568,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 <TouchableOpacity
                   key={c.key}
                   onPress={() => {
-                    console.log("[Post] category selected:", c.key);
                     setPostSelectedCategory(prev => prev === c.key ? "" : c.key);
                     if (c.key !== "other") setPostCustomCategory("");
                   }}
@@ -1575,70 +1632,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 onChange={(_: any, time: any) => { setShowTimePicker(false); setSelectedTime(time); }}
               />
             )}
-
-            {(() => {
-              console.log('[Places] API key present:', !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY);
-              console.log('[Places] API key first 10 chars:', process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.slice(0, 10));
-              console.log('[ENV] all EXPO_PUBLIC vars:', Object.keys(process.env).filter(k => k.startsWith('EXPO_PUBLIC')));
-              return null;
-            })()}
-            <View style={{ height: 200, zIndex: 9999, elevation: 9999, overflow: "visible" }}>
-              <GooglePlacesAutocomplete
-                placeholder="Search for a location"
-                onPress={(data, details = null) => {
-                  console.log("[Places] selected:", data.description);
-                  setPostLocation(data.description);
-                  if (details?.geometry?.location) {
-                    setPostLocationLat(details.geometry.location.lat);
-                    setPostLocationLng(details.geometry.location.lng);
-                  }
-                }}
-                predefinedPlaces={[{
-                  description: "Princeton, NJ",
-                  geometry: { location: { lat: 40.3573, lng: -74.6672, latitude: 40.3573, longitude: -74.6672 } },
-                }]}
-                query={{
-                  key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-                  language: "en",
-                  types: "establishment|geocode",
-                }}
-                fetchDetails={true}
-                enablePoweredByContainer={false}
-                keyboardShouldPersistTaps="handled"
-                listViewDisplayed="auto"
-                styles={{
-                  container: { flex: 0, zIndex: 9999, elevation: 9999, overflow: "visible" },
-                  textInput: {
-                    height: 50,
-                    borderRadius: 10,
-                    borderWidth: 1.5,
-                    borderColor: colors.border,
-                    backgroundColor: colors.white,
-                    paddingHorizontal: 12,
-                    fontSize: 14,
-                    color: colors.foreground,
-                    marginBottom: 0,
-                  },
-                  listView: {
-                    position: "absolute",
-                    top: 50,
-                    left: 0,
-                    right: 0,
-                    backgroundColor: colors.white,
-                    borderRadius: 10,
-                    zIndex: 9999,
-                    elevation: 9999,
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 4,
-                  },
-                  row: { padding: 13, minHeight: 44 },
-                  description: { fontFamily: "Quicksand_400Regular", fontSize: 14, color: colors.foreground },
-                  poweredContainer: { display: "none" },
-                }}
-              />
-            </View>
 
             <View style={modalS.spotsRow}>
               <View>
