@@ -72,16 +72,18 @@ const AppInner = () => {
   useEffect(() => {
     const checkFirstLaunch = async () => {
       const hasOnboarded = await AsyncStorage.getItem("tandem_has_onboarded");
+      const splashKey = `splash_seen_${user?.id ?? "unknown"}`;
+      const walkthroughKey = `walkthrough_${user?.id ?? "unknown"}`;
       if (!hasOnboarded) {
-        // Existing user who predates the splash feature — skip it all
+        // Existing user who used the app before the splash feature was added
         await AsyncStorage.multiSet([
           ["tandem_has_onboarded", "true"],
-          ["splash_seen", "true"],
-          ["walkthrough_complete", "true"],
+          [splashKey, "true"],
+          [walkthroughKey, "true"],
         ]);
         return;
       }
-      const seen = await AsyncStorage.getItem("splash_seen");
+      const seen = await AsyncStorage.getItem(splashKey);
       if (!seen) {
         setShowSplash(true);
       }
@@ -250,6 +252,8 @@ const AppInner = () => {
           } catch {
             // Non-blocking — don't fail onboarding if email fails
           }
+          // Mark that this user has onboarded so checkFirstLaunch knows to show splash
+          await AsyncStorage.setItem("tandem_has_onboarded", "true");
           // Re-fetch profile so onboardingCompleted flips to true → routes to Discover
           await refreshOnboarding();
         }}
@@ -262,9 +266,9 @@ const AppInner = () => {
     return (
       <SplashAnimationScreen
         onComplete={async () => {
-          await AsyncStorage.setItem("splash_seen", "true");
+          await AsyncStorage.setItem(`splash_seen_${user?.id ?? "unknown"}`, "true");
           setShowSplash(false);
-          const walkthroughSeen = await AsyncStorage.getItem("walkthrough_complete");
+          const walkthroughSeen = await AsyncStorage.getItem(`walkthrough_${user?.id ?? "unknown"}`);
           if (!walkthroughSeen) setShowWalkthrough(true);
         }}
       />
@@ -337,7 +341,7 @@ const AppInner = () => {
           {showWalkthrough && (
             <AppWalkthrough
               onComplete={async () => {
-                await AsyncStorage.setItem("walkthrough_complete", "true");
+                await AsyncStorage.setItem(`walkthrough_${user?.id ?? "unknown"}`, "true");
                 setShowWalkthrough(false);
               }}
             />

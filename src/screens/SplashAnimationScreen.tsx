@@ -7,7 +7,6 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import SunnyAvatar from "../components/SunnyAvatar";
 import { colors } from "../theme";
 
@@ -85,7 +84,6 @@ export const SplashAnimationScreen = ({ onComplete }: SplashAnimationScreenProps
     }).start();
 
     await delay(1200);
-    await AsyncStorage.setItem("splash_shown", "true");
     onComplete();
   };
 

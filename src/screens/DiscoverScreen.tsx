@@ -164,15 +164,24 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setViewerProfileLoading(true);
     setViewerProfileFetched(null);
     const userId = viewerProfileData.id;
-    supabase
-      .from("profiles")
-      .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts")
-      .eq("user_id", userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setViewerProfileFetched(data ?? null);
-        setViewerProfileLoading(false);
-      });
+    Promise.all([
+      supabase
+        .from("profiles")
+        .select("user_id, first_name, avatar_url, occupation, birthday, personality_type, humor_type, usage_reasons, quick_prompts, deep_prompts, location_name, photos, membership_tier")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      user
+        ? supabase
+            .from("profiles")
+            .select("humor_type, usage_reasons, personality_type, quick_prompts")
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]).then(([viewerResult, ownResult]) => {
+      setViewerProfileFetched(viewerResult.data ?? null);
+      setOwnProfile((ownResult as any).data ?? null);
+      setViewerProfileLoading(false);
+    });
   }, [showViewerProfile, viewerProfileData?.id]);
 
   // Live activity data
@@ -568,6 +577,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       return;
     }
     const act = liveActivities.find((a: any) => a.id === activityId);
+
+    // Show celebration immediately — before any async work
+    showImInToast("you're in!", "your request is on its way.", () => {});
+    setRequestedSet(prev => new Set([...prev, activityId]));
+    setCurrentIndex(prev => prev + 1);
+
+    // Async: insert join request
     // SUPABASE: Ensure join_requests table exists:
     // CREATE TABLE IF NOT EXISTS join_requests (
     //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -576,7 +592,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     //   status text DEFAULT 'pending',
     //   created_at timestamptz DEFAULT now()
     // );
-    // Enable RLS and add policy: allow insert for authenticated users where requester_id = auth.uid()
     if (user) {
       const { error } = await supabase.from("join_requests").insert({
         activity_id: activityId,
@@ -586,18 +601,22 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       if (error) {
         console.warn("join_requests insert failed:", error.message);
       }
+
+      // FIX 12: auto-create tandem so both users can chat immediately
+      // tandems uses user_a_id / user_b_id (verified from MessagesScreen)
+      if (act?.host?.user_id) {
+        await supabase.from("tandems").upsert(
+          {
+            activity_id: activityId,
+            user_a_id: user.id,
+            user_b_id: act.host.user_id,
+          },
+          { onConflict: "user_a_id,user_b_id,activity_id", ignoreDuplicates: true }
+        );
+      }
     }
+
     await incrementImIn();
-    setRequestedSet(prev => new Set([...prev, activityId]));
-    setCurrentIndex(prev => prev + 1);
-    const hostName = act?.host.name ?? "them";
-    const actTitle = act?.title ?? "the activity";
-    const subtitle = await getSunnyResponse({
-      context: "imIn",
-      activityTitle: actTitle,
-      hostName,
-    });
-    showImInToast("you're in!", subtitle, () => {});
   };
 
   const handleSkip = async () => {
@@ -736,13 +755,21 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setIsPosting(true);
     let uploadedImageUrl: string | null = null;
     try {
+      // Always use a fresh auth user to avoid stale context state causing FK violations
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      if (!freshUser) {
+        showToast("sign in again to post.");
+        setIsPosting(false);
+        return;
+      }
+
       // Upload photo first if one was selected
-      if (postPhotoUri && user?.id) {
+      if (postPhotoUri) {
         setPostPhotoUploading(true);
         const fileExt = postPhotoUri.split(".").pop()?.toLowerCase() || "jpg";
         const mimeType = fileExt === "png" ? "image/png" : "image/jpeg";
         const fileName = `activity_${Date.now()}.${fileExt}`;
-        const storagePath = `${user.id}/${fileName}`;
+        const storagePath = `${freshUser.id}/${fileName}`;
         const formData = new FormData();
         formData.append("file", { uri: postPhotoUri, name: fileName, type: mimeType } as any);
         const { error: uploadError } = await supabase.storage
@@ -756,7 +783,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       }
 
       const payload = {
-        user_id: user?.id,
+        user_id: freshUser.id,
         title: postTitle.trim(),
         description: postDesc.trim() || null,
         activity_date: formattedDate,
@@ -1958,6 +1985,38 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   {vp?.occupation ? <Text style={viewerS.occupation}>{vp.occupation}</Text> : null}
                 </View>
 
+                {/* Compatibility section */}
+                {(() => {
+                  const overlaps: string[] = [];
+                  if (ownProfile) {
+                    const ownHumor: string[] = Array.isArray(ownProfile.humor_type) ? ownProfile.humor_type : [];
+                    const ownUsage: string[] = Array.isArray(ownProfile.usage_reasons) ? ownProfile.usage_reasons : [];
+                    const sharedHumor = vHumor.filter(h => ownHumor.map((x: string) => x.toLowerCase()).includes(h.toLowerCase()));
+                    if (sharedHumor.length > 0) overlaps.push(`you're both ${sharedHumor[0].toLowerCase()}`);
+                    const sharedUsage = vUsage.filter(u => ownUsage.map((x: string) => x.toLowerCase()).includes(u.toLowerCase()));
+                    if (sharedUsage.length > 0) overlaps.push(`you both want ${sharedUsage[0].toLowerCase()}`);
+                    if (vp?.personality_type && ownProfile.personality_type &&
+                        vp.personality_type.toLowerCase() === ownProfile.personality_type.toLowerCase()) {
+                      overlaps.push(`fellow ${vp.personality_type.toLowerCase()}`);
+                    }
+                    const ownSat = ownProfile.quick_prompts?.ideal_saturday;
+                    const viewerSat = vQuick.ideal_saturday;
+                    if (ownSat && viewerSat && ownSat.toLowerCase() === viewerSat.toLowerCase()) {
+                      overlaps.push(`you'd both spend saturday: ${viewerSat}`);
+                    }
+                  }
+                  const shown = overlaps.slice(0, 3);
+                  if (shown.length === 0) return null;
+                  return (
+                    <View style={viewerS.compatCard}>
+                      <Text style={viewerS.compatHeading}>you'd get along because...</Text>
+                      {shown.map((o, i) => (
+                        <Text key={i} style={viewerS.compatLine}>· {o}</Text>
+                      ))}
+                    </View>
+                  );
+                })()}
+
                 {vp?.personality_type ? (
                   <View style={viewerS.section}>
                     <Text style={viewerS.sectionLabel}>PERSONALITY</Text>
@@ -2808,6 +2867,26 @@ const viewerS = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.border,
   },
   pillText: { fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground },
+  compatCard: {
+    backgroundColor: "#E6F9F5",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#9FE1CB",
+    padding: 14,
+    marginBottom: 12,
+  },
+  compatHeading: {
+    fontSize: 13,
+    fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
+    color: "#0F6E56",
+    marginBottom: 6,
+  },
+  compatLine: {
+    fontSize: 14,
+    color: "#085041",
+    lineHeight: 20,
+  },
   promptCard: {
     backgroundColor: colors.white, borderRadius: radius.md,
     borderWidth: 1, borderColor: colors.border,

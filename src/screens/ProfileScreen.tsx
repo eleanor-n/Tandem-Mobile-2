@@ -123,6 +123,9 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   const HUMOR_OPTIONS = ["dry", "sarcastic", "dark", "dad jokes", "absurdist", "self-deprecating", "improv energy"];
   const USAGE_OPTIONS = ["coffee & food", "outdoor & hiking", "fitness & sports", "arts & culture", "live music", "day trips", "studying", "casual hangouts"];
+  const [activitiesCount, setActivitiesCount] = useState<number>(0);
+  const [companionsCount, setCompanionsCount] = useState<number>(0);
+  const [hostingCount, setHostingCount] = useState<number>(0);
   const [avatarError, setAvatarError] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const sunnyText = useRef<string | null>(null);
@@ -182,6 +185,19 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       setVoiceUri(uri);
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      supabase.from("activities").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+      supabase.from("tandems").select("id", { count: "exact", head: true }).or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`),
+      supabase.from("activities").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "active"),
+    ]).then(([actRes, tandemRes, hostingRes]) => {
+      setActivitiesCount(actRes.count ?? 0);
+      setCompanionsCount(tandemRes.count ?? 0);
+      setHostingCount(hostingRes.count ?? 0);
+    });
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -498,15 +514,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Stat pills */}
         <View style={s.statsRow}>
           <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
-            <Text style={s.statNum}>12</Text>
+            <Text style={s.statNum}>{activitiesCount}</Text>
             <Text style={s.statLabel}>activities</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => showToast("your tandem companions — coming soon.")}>
-            <Text style={s.statNum}>8</Text>
+            <Text style={s.statNum}>{companionsCount}</Text>
             <Text style={s.statLabel}>companions</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.statPill} activeOpacity={0.7} onPress={() => onMyActivityPress?.()}>
-            <Text style={s.statNum}>3</Text>
+            <Text style={s.statNum}>{hostingCount}</Text>
             <Text style={s.statLabel}>hosting</Text>
           </TouchableOpacity>
         </View>
