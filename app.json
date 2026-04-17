@@ -76,7 +76,9 @@
       ],
       "expo-apple-authentication",
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      "expo-secure-store",
+      "expo-asset"
     ],
     "owner": "the_tandem_app",
     "extra": {
