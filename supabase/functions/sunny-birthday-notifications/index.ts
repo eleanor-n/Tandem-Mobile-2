@@ -57,9 +57,9 @@ Deno.serve(async (_req) => {
           filters: [
             { field: "tag", key: "user_id", relation: "=", value: profile.user_id },
           ],
-          headings: { en: "happy birthday! 🎂" },
+          headings: { en: "happy birthday" },
           contents: {
-            en: `sunny here, ${profile.first_name}. wishing you a great one. go do something worth remembering today.`,
+            en: "it's sunny. today's your day. do something worth tandeming about.",
           },
           name: "birthday_notification",
         }),

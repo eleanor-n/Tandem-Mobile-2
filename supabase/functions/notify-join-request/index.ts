@@ -53,8 +53,8 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to: ownerProfile.expo_push_token,
-        title: "someone wants to tandem",
-        body: `${requesterName} said "i'm in" on ${activity.title}`,
+        title: "someone's in",
+        body: `${requesterName} wants to tandem with you on ${activity.title}. take a look.`,
         sound: "default",
         data: { type: "join_request", activity_id: record.activity_id },
       }),

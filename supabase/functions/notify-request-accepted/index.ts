@@ -57,8 +57,8 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to: requesterProfile.expo_push_token,
-        title: "you're in!",
-        body: `${ownerName} accepted you for ${activity.title}. say hey.`,
+        title: "you're tandeming",
+        body: `${ownerName} is down for ${activity.title}. go say hey.`,
         sound: "default",
         data: { type: "request_accepted", activity_id: record.activity_id },
       }),
