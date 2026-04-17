@@ -43,3 +43,4 @@ yarn-error.*
 # PDF files
 *.pdf
 .env
+.env
