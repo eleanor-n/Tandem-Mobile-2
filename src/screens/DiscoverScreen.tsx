@@ -132,6 +132,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [toggleY, setToggleY] = useState(120);
   const hasUnread = false;
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
 
   // Sunny dynamic copy
   const [sunnyDeckDoneDesc, setSunnyDeckDoneDesc] = useState("check back tomorrow or post your own.");
@@ -420,12 +421,21 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       // Fetch all interactions for the current user to build exclusion set
       const currentUserId = (await supabase.auth.getUser()).data.user?.id;
       let excludedIds = new Set<string>();
+      let blockedIds = new Set<string>();
       if (currentUserId) {
-        const { data: interactions } = await supabase
-          .from("activity_interactions")
-          .select("activity_id")
-          .eq("user_id", currentUserId);
+        const [{ data: interactions }, { data: blockedData }] = await Promise.all([
+          supabase
+            .from("activity_interactions")
+            .select("activity_id")
+            .eq("user_id", currentUserId),
+          supabase
+            .from("blocked_users")
+            .select("blocked_id")
+            .eq("blocker_id", currentUserId),
+        ]);
         excludedIds = new Set((interactions ?? []).map((i: any) => i.activity_id));
+        blockedIds = new Set((blockedData ?? []).map((b: any) => b.blocked_id));
+        setBlockedUserIds(blockedIds);
       }
       if (cancelled.current) return;
 
@@ -434,9 +444,9 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         .filter((a: any) => a.user_id === currentUserId)
         .map((a: any) => a.title));
 
-      // Exclude interacted activities and own posts
+      // Exclude interacted activities, own posts, and blocked users
       const feedActivities = validActivities.filter((a: any) =>
-        !excludedIds.has(a.id) && a.user_id !== currentUserId
+        !excludedIds.has(a.id) && a.user_id !== currentUserId && !blockedIds.has(a.user_id)
       );
       console.log("[Feed] after exclusion count:", feedActivities.length);
 
@@ -631,6 +641,44 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     }
 
     await incrementImIn();
+  };
+
+  const handleBlockReport = () => {
+    if (!currentCard || !user) return;
+    const hostUserId = currentCard.host.user_id;
+    const activityId = currentCard.id;
+    Alert.alert(
+      "",
+      "what would you like to do?",
+      [
+        {
+          text: "block user",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.from("blocked_users").upsert(
+              { blocker_id: user.id, blocked_id: hostUserId },
+              { ignoreDuplicates: true }
+            );
+            setBlockedUserIds(prev => new Set([...prev, hostUserId]));
+            setLiveActivities(prev => prev.filter((a: any) => a.user_id !== hostUserId));
+            showToast("user blocked.");
+          },
+        },
+        {
+          text: "report",
+          onPress: async () => {
+            await supabase.from("user_reports").insert({
+              reporter_id: user.id,
+              reported_user_id: hostUserId,
+              activity_id: activityId,
+              reason: "reported from feed",
+            });
+            showToast("report submitted.");
+          },
+        },
+        { text: "cancel", style: "cancel" },
+      ]
+    );
   };
 
   const handleSkip = async () => {
@@ -1222,6 +1270,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                       }}
                     >
                       <Text style={s.viewProfile}>profile</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={handleBlockReport}
+                      style={{ paddingLeft: 10 }}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={18} color={colors.muted} />
                     </TouchableOpacity>
                   </View>
                 </View>
