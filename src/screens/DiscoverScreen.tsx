@@ -140,9 +140,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("walkthrough_complete").then(val => {
-      if (!val) setShowWalkthrough(true);
-    });
+    (async () => {
+      const walkthroughRaw = await AsyncStorage.getItem("walkthrough_complete");
+      const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+
+      let walkthroughSeen = false;
+      if (walkthroughRaw) {
+        try {
+          const parsed = JSON.parse(walkthroughRaw);
+          walkthroughSeen = parsed.userId === currentUserId && parsed.seen === true;
+        } catch {
+          // Legacy plain string format
+          walkthroughSeen = false;
+        }
+      }
+
+      setShowWalkthrough(!walkthroughSeen);
+    })();
   }, []);
 
   const { tier, isLimited, incrementImIn } = useMembershipTier();
@@ -1289,7 +1303,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           <View style={notifS.handle} />
           <View style={notifS.header}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={notifS.title}>notifications</Text>
+              <Text style={notifS.title}>activity</Text>
               <Ionicons name="notifications-outline" size={22} color={colors.teal} />
             </View>
             <TouchableOpacity onPress={() => setShowNotifications(false)} style={notifS.closeBtn} activeOpacity={0.7}>
@@ -1299,7 +1313,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           <View style={notifS.empty}>
             <SunnyAvatar expression="warm" size={60} />
             <Text style={notifS.emptyTitle}>nothing yet.</Text>
-            <Text style={notifS.emptyDesc}>notifications are on their way. for now, sunny's keeping an eye on things.</Text>
+            <Text style={notifS.emptyDesc}>notifications are coming soon. you'll hear from us when someone joins your plan.</Text>
           </View>
         </View>
       </Modal>

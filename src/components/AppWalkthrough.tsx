@@ -8,6 +8,7 @@ import {
   Animated,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../lib/supabase";
 import SunnyAvatar from "./SunnyAvatar";
 import { colors, radius, gradients } from "../theme";
 import { LinearGradient } from "expo-linear-gradient";
@@ -112,7 +113,12 @@ export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppW
     }
   };
 
-  const finish = () => {
+  const finish = async () => {
+    const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ userId: currentUserId, seen: true })
+    );
     onComplete();
   };
 
@@ -193,7 +199,14 @@ export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppW
 
 export async function shouldShowWalkthrough(): Promise<boolean> {
   const val = await AsyncStorage.getItem(STORAGE_KEY);
-  return !val;
+  if (!val) return true;
+  try {
+    const parsed = JSON.parse(val);
+    const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+    return !(parsed.userId === currentUserId && parsed.seen === true);
+  } catch {
+    return true;
+  }
 }
 
 const s = StyleSheet.create({
