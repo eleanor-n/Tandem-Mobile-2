@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase, handleSupabaseError } from "../lib/supabase";
+import { registerForPushNotifications } from "../lib/notifications";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -95,6 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // All auth methods (email, Google, Apple, phone OTP) — determine correct screen
         setLoading(true);
         checkOnboarding(session.user.id);
+        registerForPushNotifications().catch(() => {}); // non-blocking
       } else if (event === "SIGNED_OUT" || (!session?.user && event !== "INITIAL_SESSION")) {
         // Signed out (explicit or due to token invalidation)
         setOnboardingCompleted(null);

@@ -88,6 +88,22 @@ const getCardGradient = (tag: string): [string, string] => {
   return CATEGORY_GRADIENT[key] ?? CATEGORY_GRADIENT.default;
 };
 
+const calcDistanceMiles = (
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): number => {
+  const R = 3959;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 const FILTERS = [
   { key: "all",      label: "all",       icon: "" },
   { key: "coffee",   label: "coffee",    icon: "cafe-outline" },
@@ -418,12 +434,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       );
       console.log("[Feed] valid (non-ghost) count:", validActivities.length);
 
-      // Fetch all interactions for the current user to build exclusion set
+      // Fetch all interactions, blocked users, and own profile in parallel
       const currentUserId = (await supabase.auth.getUser()).data.user?.id;
       let excludedIds = new Set<string>();
       let blockedIds = new Set<string>();
+      let ownProfile: any = null;
       if (currentUserId) {
-        const [{ data: interactions }, { data: blockedData }] = await Promise.all([
+        const [{ data: interactions }, { data: blockedData }, { data: profileData }] = await Promise.all([
           supabase
             .from("activity_interactions")
             .select("activity_id")
@@ -432,12 +449,22 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             .from("blocked_users")
             .select("blocked_id")
             .eq("blocker_id", currentUserId),
+          supabase
+            .from("profiles")
+            .select("location_lat, location_lng, filter_preferences")
+            .eq("user_id", currentUserId)
+            .maybeSingle(),
         ]);
         excludedIds = new Set((interactions ?? []).map((i: any) => i.activity_id));
         blockedIds = new Set((blockedData ?? []).map((b: any) => b.blocked_id));
+        ownProfile = profileData;
         setBlockedUserIds(blockedIds);
       }
       if (cancelled.current) return;
+
+      const userLat: number | null = ownProfile?.location_lat ?? null;
+      const userLng: number | null = ownProfile?.location_lng ?? null;
+      const distancePref: number = ownProfile?.filter_preferences?.distance ?? 25;
 
       // Log own posts being excluded
       console.log("[Feed] own post ids excluded:", validActivities
@@ -445,18 +472,62 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         .map((a: any) => a.title));
 
       // Exclude interacted activities, own posts, and blocked users
-      const feedActivities = validActivities.filter((a: any) =>
+      const baseFiltered = validActivities.filter((a: any) =>
         !excludedIds.has(a.id) && a.user_id !== currentUserId && !blockedIds.has(a.user_id)
       );
-      console.log("[Feed] after exclusion count:", feedActivities.length);
 
-      setLiveActivities(feedActivities.map((a: any) => ({
+      // Time filter: exclude past activities; for today, exclude if time has passed
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
+      const currentTime = now.toTimeString().split(" ")[0];
+      const afterTime = baseFiltered.filter((a: any) => {
+        if (!a.activity_date) return true;
+        if (a.activity_date > today) return true;
+        if (a.activity_date < today) return false;
+        // today: only include if no time set or time is in the future
+        return !a.activity_time || a.activity_time > currentTime;
+      });
+
+      // Distance filter + attach computed distance
+      const withDistance = afterTime.map((a: any) => {
+        let distanceMiles: number | null = null;
+        if (userLat != null && userLng != null && a.location_lat != null && a.location_lng != null) {
+          distanceMiles = calcDistanceMiles(userLat, userLng, a.location_lat, a.location_lng);
+        }
+        return { ...a, _distanceMiles: distanceMiles };
+      });
+      const afterDistance = withDistance.filter((a: any) => {
+        if (userLat == null || userLng == null) return true;
+        if (a._distanceMiles == null) return true;
+        return a._distanceMiles <= distancePref;
+      });
+
+      console.log("[Feed] filtered by distance/time:", {
+        total: baseFiltered.length,
+        afterTimeFilter: afterTime.length,
+        afterDistanceFilter: afterDistance.length,
+        userLat, userLng, distancePref,
+      });
+
+      // Sort: blend of soon-ness and proximity
+      const nowMs = Date.now();
+      afterDistance.sort((a: any, b: any) => {
+        const aDate = new Date(`${a.activity_date}T${a.activity_time || "23:59:59"}`);
+        const bDate = new Date(`${b.activity_date}T${b.activity_time || "23:59:59"}`);
+        const aHours = Math.max(0, (aDate.getTime() - nowMs) / (60 * 60 * 1000));
+        const bHours = Math.max(0, (bDate.getTime() - nowMs) / (60 * 60 * 1000));
+        const aScore = aHours + (a._distanceMiles ?? 0) * 0.5;
+        const bScore = bHours + (b._distanceMiles ?? 0) * 0.5;
+        return aScore - bScore;
+      });
+
+      setLiveActivities(afterDistance.map((a: any) => ({
         id: a.id,
         title: a.title,
         category: a.tags?.[0] ?? "default",
         photo: FALLBACK_PHOTOS[a.tags?.[0]] ?? FALLBACK_PHOTOS.default,
         image_url: a.image_url ?? null,
-        distance: "",
+        distance: a._distanceMiles != null ? `${a._distanceMiles.toFixed(1)} mi` : "",
         location: a.location_name ?? "",
         date: a.activity_date ?? "",
         time: a.activity_time ?? "",
@@ -775,6 +846,15 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         pendingRequests: prev.pendingRequests.filter(r => r.id !== requesterId),
       } : null);
     }
+    // Persist acceptance to DB
+    supabase
+      .from("join_requests")
+      .update({ status: "accepted" })
+      .eq("activity_id", postId)
+      .eq("requester_id", requesterId)
+      .then(({ error }) => {
+        if (error) console.warn("[handleLetIn] failed to update join_requests:", error.message);
+      });
     showToast(`you're in. get ready for ${activityTitle}.`);
   };
 
@@ -821,6 +901,19 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       const { data: { user: freshUser } } = await supabase.auth.getUser();
       if (!freshUser) {
         showToast("sign in again to post.");
+        setIsPosting(false);
+        return;
+      }
+
+      // Rate limit: max 5 posts per 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from("activities")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", freshUser.id)
+        .gte("created_at", twentyFourHoursAgo);
+      if (count !== null && count >= 5) {
+        showToast("you've hit today's post limit. try again tomorrow.");
         setIsPosting(false);
         return;
       }
