@@ -13,6 +13,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useMembershipTier } from "../hooks/useMembershipTier";
 import { colors, radius, shadows } from "../theme";
 import { getSunnyResponse } from "../lib/sunny";
+import * as Location from "expo-location";
 
 const INITIAL_REGION = {
   latitude: 40.349,
@@ -33,7 +34,42 @@ const MAP_STYLE = [
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
 ];
 
-// Emoji gradient pin
+const CATEGORY_ICON: Record<string, string> = {
+  coffee: "cafe-outline",
+  hiking: "walk-outline",
+  markets: "bag-outline",
+  concerts: "musical-notes-outline",
+  fitness: "barbell-outline",
+  sports: "football-outline",
+  default: "compass-outline",
+};
+
+const CATEGORY_COLOR: Record<string, string> = {
+  coffee: "#C8873A",
+  hiking: "#2D6A4F",
+  markets: "#7B2D8B",
+  concerts: "#E94560",
+  fitness: "#0077B6",
+  sports: "#007200",
+  default: "#2DD4BF",
+};
+
+const FALLBACK_PHOTOS: Record<string, string> = {
+  coffee: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800",
+  hiking: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800",
+  markets: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800",
+  concerts: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800",
+  fitness: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800",
+  default: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800",
+};
+
+const calcDistanceMiles = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 3959;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 interface MapScreenProps {
   activeTab: string;
@@ -57,20 +93,55 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
   const sunnyText = useRef<string | null>(null);
   const [sunnyVisible, setSunnyVisible] = useState(false);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    Location.getForegroundPermissionsAsync().then(({ status }) => {
+      if (status === "granted") {
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(pos => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }).catch(() => {});
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const fetchMapActivities = async () => {
-      const { data } = await supabase
-        .from("activities")
-        .select("id, title, location_name, location_lat, location_lng, activity_date, activity_time, tags")
-        .eq("status", "active")
-        .not("location_lat", "is", null)
-        .not("location_lng", "is", null);
-      setMapActivities(data ?? []);
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
+
+      const [activitiesResult, blockedResult] = await Promise.all([
+        supabase
+          .from("activities")
+          .select("id, title, description, location_name, location_lat, location_lng, activity_date, activity_time, tags, user_id, category")
+          .eq("status", "active")
+          .not("location_lat", "is", null)
+          .not("location_lng", "is", null)
+          .gte("activity_date", today),
+        user
+          ? supabase.from("blocked_users").select("blocked_id").eq("blocker_id", user.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const blocked = new Set((blockedResult.data ?? []).map((r: any) => r.blocked_id));
+      const filtered = (activitiesResult.data ?? []).filter((a: any) => {
+        if (user && a.user_id === user.id) return false;
+        if (blocked.has(a.user_id)) return false;
+        // If activity is today, exclude if time has already passed
+        if (a.activity_date === today && a.activity_time) {
+          const [h, m] = a.activity_time.split(":").map(Number);
+          const actTime = new Date();
+          actTime.setHours(h, m, 0, 0);
+          if (actTime < now) return false;
+        }
+        return true;
+      });
+
+      setMapActivities(filtered);
       setMapLoaded(true);
     };
     fetchMapActivities();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -126,7 +197,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
       const { data } = await supabase.from("profiles").select("saved_activities").eq("user_id", user.id).single();
       const existing: any[] = (data?.saved_activities as any[]) || [];
       if (existing.some((a: any) => a.id === act.id)) return;
-      const entry = { id: act.id, name: act.title, activity: act.title, location: act.location, saved_at: new Date().toISOString() };
+      const entry = { id: act.id, name: act.title, activity: act.title, location: act.location_name, saved_at: new Date().toISOString() };
       await supabase.from("profiles").update({ saved_activities: [...existing, entry] } as any).eq("user_id", user.id);
     } catch { /* saved_activities column may not exist yet */ }
   };
@@ -144,17 +215,23 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
         showsCompass={false}
         toolbarEnabled={false}
       >
-        {mapActivities.map((activity: any) => (
-          <Marker
-            key={activity.id}
-            coordinate={{
-              latitude: activity.location_lat,
-              longitude: activity.location_lng,
-            }}
-            title={activity.title}
-            description={`${activity.location_name} · ${activity.activity_date}`}
-          />
-        ))}
+        {mapActivities.map((activity: any) => {
+          const tag = (activity.tags?.[0] ?? activity.category ?? "default").toLowerCase();
+          const pinColor = CATEGORY_COLOR[tag] ?? CATEGORY_COLOR.default;
+          const iconName = CATEGORY_ICON[tag] ?? CATEGORY_ICON.default;
+          return (
+            <Marker
+              key={activity.id}
+              coordinate={{ latitude: activity.location_lat, longitude: activity.location_lng }}
+              onPress={() => { setSelectedId(activity.id); setSelectedActivity(activity); }}
+            >
+              <View style={[ps.pin, { backgroundColor: pinColor }]}>
+                <Ionicons name={iconName as any} size={14} color="#fff" />
+              </View>
+              <View style={[ps.pinTail, { borderTopColor: pinColor }]} />
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* Floating search bar */}
@@ -203,16 +280,8 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
                 key={act.id}
                 style={[s.nearbyCard, isSelected && s.nearbyCardSelected]}
                 onPress={() => {
-                  if (onPostPressWithLocation && act.location_lat != null && act.location_lng != null) {
-                    onPostPressWithLocation({
-                      name: act.location_name ?? act.title,
-                      lat: act.location_lat,
-                      lng: act.location_lng,
-                    });
-                  } else if (act?.id && act?.title) {
-                    setSelectedId(act.id);
-                    setSelectedActivity(act);
-                  }
+                  setSelectedId(act.id);
+                  setSelectedActivity(act);
                 }}
                 activeOpacity={0.9}
               >
@@ -249,6 +318,13 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
       >
         {selectedActivity && selectedActivity.id && selectedActivity.title && (() => {
           const act = selectedActivity;
+          const tag = (act.tags?.[0] ?? act.category ?? "default").toLowerCase();
+          const iconName = CATEGORY_ICON[tag] ?? CATEGORY_ICON.default;
+          const fallbackPhoto = FALLBACK_PHOTOS[tag] ?? FALLBACK_PHOTOS.default;
+          const distanceStr = userLocation
+            ? `${calcDistanceMiles(userLocation.lat, userLocation.lng, act.location_lat, act.location_lng).toFixed(1)} mi`
+            : null;
+          const dateStr = [act.activity_date, act.activity_time].filter(Boolean).join(" · ");
           return (
             <View style={m.container}>
               {/* Handle + close */}
@@ -264,11 +340,10 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
                 {/* Photo */}
                 <View style={m.photoWrap}>
-                  <Image source={{ uri: act.photo }} style={m.photo} resizeMode="cover" />
-                  {/* Category pill */}
+                  <Image source={{ uri: fallbackPhoto }} style={m.photo} resizeMode="cover" />
                   <View style={m.categoryPill}>
-                    <Ionicons name={act.icon as any} size={12} color={colors.foreground} />
-                    <Text style={m.categoryPillText}>{act.category}</Text>
+                    <Ionicons name={iconName as any} size={12} color={colors.foreground} />
+                    <Text style={m.categoryPillText}>{tag}</Text>
                   </View>
                 </View>
 
@@ -278,34 +353,20 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
 
                   <View style={m.metaRow}>
                     <Ionicons name="location-outline" size={14} color={colors.teal} />
-                    <Text style={m.metaText}>{act.location} · {act.distance}</Text>
+                    <Text style={m.metaText}>{act.location_name}{distanceStr ? ` · ${distanceStr}` : ""}</Text>
                   </View>
-                  <View style={m.metaRow}>
-                    <Ionicons name="calendar-outline" size={14} color={colors.muted} />
-                    <Text style={m.metaText}>{act.date}</Text>
-                  </View>
-
-                  {/* Vibe */}
-                  <View style={m.vibeBox}>
-                    <Text style={m.vibeText}>"{act.vibe}"</Text>
-                  </View>
-
-                  {/* Going */}
-                  <View style={m.goingRow}>
-                    <Ionicons name="people-outline" size={14} color={colors.muted} />
-                    <Text style={m.goingText}>{act.goingCount} going</Text>
-                  </View>
-
-                  {/* Host strip */}
-                  {act.host && (
-                    <View style={m.hostStrip}>
-                      <Image source={{ uri: act.host.photo }} style={m.hostAvatar} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={m.hostLabel}>posted by <Text style={m.hostName}>{act.host.name}</Text></Text>
-                        <Text style={m.hostBio} numberOfLines={1}>{act.host.bio}</Text>
-                      </View>
+                  {dateStr ? (
+                    <View style={m.metaRow}>
+                      <Ionicons name="calendar-outline" size={14} color={colors.muted} />
+                      <Text style={m.metaText}>{dateStr}</Text>
                     </View>
-                  )}
+                  ) : null}
+
+                  {act.description ? (
+                    <View style={m.vibeBox}>
+                      <Text style={m.vibeText}>"{act.description}"</Text>
+                    </View>
+                  ) : null}
                 </View>
               </ScrollView>
 
@@ -347,6 +408,23 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
   );
 };
 
+
+// Custom map pin styles
+const ps = StyleSheet.create({
+  pin: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#fff",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4, elevation: 4,
+  },
+  pinTail: {
+    width: 0, height: 0,
+    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 8,
+    borderLeftColor: "transparent", borderRightColor: "transparent",
+    alignSelf: "center", marginTop: -1,
+  },
+});
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },

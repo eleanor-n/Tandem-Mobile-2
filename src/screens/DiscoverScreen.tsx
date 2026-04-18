@@ -120,6 +120,7 @@ interface DiscoverScreenProps {
   onTabPress: (tab: string) => void;
   onMessagesPress?: () => void;
   onMembershipPress?: () => void;
+  onOpenChat?: (convo: { id: string; name: string; photo: string }) => void;
   openPostModal?: boolean;
   onPostModalOpened?: () => void;
   startOnMyActivity?: boolean;
@@ -127,7 +128,7 @@ interface DiscoverScreenProps {
   onPostPrefillConsumed?: () => void;
 }
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -378,6 +379,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   // I'm In celebration modal
   const [showCelebModal, setShowCelebModal] = useState(false);
   const [celebData, setCelebData] = useState<{ title: string; subtitle: string; onDone: () => void } | null>(null);
+  const [celebTandemData, setCelebTandemData] = useState<{ id: string; name: string; photo: string } | null>(null);
 
   const showImInToast = (title: string, subtitle: string, onDone: () => void) => {
     setCelebData({ title, subtitle, onDone });
@@ -388,6 +390,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setShowCelebModal(false);
     celebData?.onDone();
     setCelebData(null);
+    setCelebTandemData(null);
   };
 
   // Approved counts per post for tier enforcement
@@ -701,8 +704,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         console.warn("join_requests insert failed:", error.message);
       }
 
-      // FIX 12: auto-create tandem so both users can chat immediately
-      // tandems uses user_a_id / user_b_id (verified from MessagesScreen)
+      // auto-create tandem so both users can chat immediately
       if (act?.host?.user_id) {
         await supabase.from("tandems").upsert(
           {
@@ -712,6 +714,20 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           },
           { onConflict: "user_a_id,user_b_id,activity_id", ignoreDuplicates: true }
         );
+        // Fetch the tandem ID so the celebration modal can open the chat directly
+        const { data: tandemRow } = await supabase
+          .from("tandems")
+          .select("id")
+          .eq("activity_id", activityId)
+          .eq("user_a_id", user.id)
+          .maybeSingle();
+        if (tandemRow?.id) {
+          setCelebTandemData({
+            id: tandemRow.id,
+            name: act.host.name ?? "them",
+            photo: act.host.photo ?? "",
+          });
+        }
       }
     }
 
@@ -1648,19 +1664,35 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           <View style={celebS.card}>
             <Text style={celebS.title}>{celebData?.title ?? "you're in!"}</Text>
             <Text style={celebS.subtitle}>{celebData?.subtitle ?? ""}</Text>
-            <TouchableOpacity
-              style={celebS.keepGoingBtn}
-              onPress={handleCelebrationDismiss}
-              activeOpacity={0.88}
-            >
-              <LinearGradient
-                colors={gradients.brand}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={celebS.keepGoingInner}
+            {celebTandemData && onOpenChat ? (
+              <TouchableOpacity
+                style={celebS.keepGoingBtn}
+                onPress={() => { handleCelebrationDismiss(); onOpenChat(celebTandemData); }}
+                activeOpacity={0.88}
               >
-                <Text style={celebS.keepGoingText}>keep going</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={gradients.brand}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={celebS.keepGoingInner}
+                >
+                  <Text style={celebS.keepGoingText}>say hey →</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={celebS.keepGoingBtn}
+                onPress={handleCelebrationDismiss}
+                activeOpacity={0.88}
+              >
+                <LinearGradient
+                  colors={gradients.brand}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={celebS.keepGoingInner}
+                >
+                  <Text style={celebS.keepGoingText}>keep going</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => { handleCelebrationDismiss(); setDiscoverMode("myActivity"); }}
               style={{ paddingTop: 12, paddingBottom: 4 }}

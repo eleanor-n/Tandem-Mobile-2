@@ -325,6 +325,7 @@ const AppInner = () => {
           {...tabProps}
           onMessagesPress={() => setActiveTab("Chat")}
           onMembershipPress={() => setShowMembership(true)}
+          onOpenChat={(c) => { setActiveTab("Chat"); setActiveChat(c); }}
           openPostModal={showPost}
           onPostModalOpened={() => setShowPost(false)}
           startOnMyActivity={showMyActivity}

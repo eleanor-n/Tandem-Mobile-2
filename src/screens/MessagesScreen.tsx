@@ -16,6 +16,7 @@ export interface Conversation {
   lastMessage: string;
   timestamp: string;
   unread: boolean;
+  isNew?: boolean;
 }
 
 const formatTimestamp = (iso: string): string => {
@@ -83,14 +84,14 @@ export const MessagesScreen = ({ onOpenChat, activeTab, onTabPress, onPostPress 
           const partnerId = t.user_a_id === user.id ? t.user_b_id : t.user_a_id;
           const profile = profiles.find((p: any) => p.user_id === partnerId);
           const msg = messageResults[i].data;
-          if (!msg) return null; // skip tandems with no messages yet
           return {
             id: t.id,
             name: profile?.first_name ?? "user",
             photo: profile?.avatar_url ?? "",
-            lastMessage: msg.content,
-            timestamp: formatTimestamp(msg.created_at),
-            unread: msg.sender_id !== user.id,
+            lastMessage: msg ? msg.content : "tap to say hey",
+            timestamp: msg ? formatTimestamp(msg.created_at) : "",
+            unread: msg ? msg.sender_id !== user.id : false,
+            isNew: !msg,
           };
         })
         .filter(Boolean) as Conversation[];
@@ -155,7 +156,7 @@ export const MessagesScreen = ({ onOpenChat, activeTab, onTabPress, onPostPress 
                   <Text style={[s.name, c.unread && s.nameUnread]}>{c.name}</Text>
                   <Text style={s.time}>{c.timestamp}</Text>
                 </View>
-                <Text style={[s.preview, c.unread && s.previewUnread]} numberOfLines={1}>
+                <Text style={[s.preview, c.unread && s.previewUnread, c.isNew && s.previewNew]} numberOfLines={1}>
                   {c.lastMessage}
                 </Text>
               </View>
@@ -211,4 +212,5 @@ const s = StyleSheet.create({
   time: { fontSize: 12, color: "#9CA3AF" },
   preview: { fontSize: 13, color: colors.muted, lineHeight: 18 },
   previewUnread: { color: colors.foreground, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  previewNew: { fontStyle: "italic", color: colors.teal },
 });
