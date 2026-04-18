@@ -48,6 +48,7 @@ interface AppWalkthroughProps {
 export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppWalkthroughProps) => {
   const [stepIndex, setStepIndex] = useState(0);
   const opacity = useRef(new Animated.Value(0)).current;
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -114,12 +115,14 @@ export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppW
   };
 
   const finish = async () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
     const currentUserId = (await supabase.auth.getUser()).data.user?.id;
     await AsyncStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({ userId: currentUserId, seen: true })
     );
-    onComplete();
+    onComplete?.();
   };
 
   // Clamp tooltip card to screen bounds

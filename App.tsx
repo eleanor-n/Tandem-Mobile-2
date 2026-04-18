@@ -22,7 +22,6 @@ import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
-import { AppWalkthrough } from "./src/components/AppWalkthrough";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
@@ -42,7 +41,6 @@ const AppInner = () => {
   const [showScrapbook, setShowScrapbook] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
   const [showSplash, setShowSplash] = useState(false);
-  const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showPost, setShowPost] = useState(false);
   const [showMyActivity, setShowMyActivity] = useState(false);
   const [postPrefill, setPostPrefill] = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -51,7 +49,7 @@ const AppInner = () => {
   const sunnyWelcomed = useRef(false);
 
   useEffect(() => {
-    if (!onboardingCompleted || !user || showSplash || showWalkthrough || sunnyWelcomed.current) return;
+    if (!onboardingCompleted || !user || showSplash || sunnyWelcomed.current) return;
     const checkWelcome = async () => {
       const seen = await AsyncStorage.getItem("tandem_sunny_welcomed");
       if (seen) return;
@@ -67,19 +65,17 @@ const AppInner = () => {
       }, 3500);
     };
     checkWelcome();
-  }, [onboardingCompleted, user, showSplash, showWalkthrough]);
+  }, [onboardingCompleted, user, showSplash]);
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
       const hasOnboarded = await AsyncStorage.getItem("tandem_has_onboarded");
       const splashKey = `splash_seen_${user?.id ?? "unknown"}`;
-      const walkthroughKey = `walkthrough_${user?.id ?? "unknown"}`;
       if (!hasOnboarded) {
         // Existing user who used the app before the splash feature was added
         await AsyncStorage.multiSet([
           ["tandem_has_onboarded", "true"],
           [splashKey, "true"],
-          [walkthroughKey, "true"],
         ]);
         return;
       }
@@ -268,8 +264,6 @@ const AppInner = () => {
         onComplete={async () => {
           await AsyncStorage.setItem(`splash_seen_${user?.id ?? "unknown"}`, "true");
           setShowSplash(false);
-          const walkthroughSeen = await AsyncStorage.getItem(`walkthrough_${user?.id ?? "unknown"}`);
-          if (!walkthroughSeen) setShowWalkthrough(true);
         }}
       />
     );
@@ -327,26 +321,16 @@ const AppInner = () => {
       break;
     default:
       tabContent = (
-        <>
-          <DiscoverScreen
-            {...tabProps}
-            onMessagesPress={() => setActiveTab("Chat")}
-            onMembershipPress={() => setShowMembership(true)}
-            openPostModal={showPost}
-            onPostModalOpened={() => setShowPost(false)}
-            startOnMyActivity={showMyActivity}
-            postPrefill={postPrefill}
-            onPostPrefillConsumed={() => setPostPrefill(null)}
-          />
-          {showWalkthrough && (
-            <AppWalkthrough
-              onComplete={async () => {
-                await AsyncStorage.setItem(`walkthrough_${user?.id ?? "unknown"}`, "true");
-                setShowWalkthrough(false);
-              }}
-            />
-          )}
-        </>
+        <DiscoverScreen
+          {...tabProps}
+          onMessagesPress={() => setActiveTab("Chat")}
+          onMembershipPress={() => setShowMembership(true)}
+          openPostModal={showPost}
+          onPostModalOpened={() => setShowPost(false)}
+          startOnMyActivity={showMyActivity}
+          postPrefill={postPrefill}
+          onPostPrefillConsumed={() => setPostPrefill(null)}
+        />
       );
   }
 

@@ -456,6 +456,11 @@ const BirthdayInput = ({ onSubmit }: { onSubmit: (v: string) => void }) => {
           autoCorrect={false}
           textContentType="none"
           importantForAutofill="no"
+          onFocus={(e) => {
+            if (Platform.OS === "ios") {
+              e.currentTarget.setNativeProps({ style: { backgroundColor: "white" } });
+            }
+          }}
         />
         </View>
         <TouchableOpacity
@@ -759,6 +764,11 @@ const PromptInput = ({
             autoCorrect={false}
             textContentType="none"
             importantForAutofill="no"
+            onFocus={(e) => {
+              if (Platform.OS === "ios") {
+                e.currentTarget.setNativeProps({ style: { backgroundColor: "white" } });
+              }
+            }}
           />
           </View>
           <TouchableOpacity
@@ -820,8 +830,9 @@ const ChatTextInput = ({
   return (
     <View style={styles.textInputContainer}>
       <View style={styles.textInputRow}>
+        <View style={{ backgroundColor: "white", borderRadius: 12, flex: 1 }}>
         <TextInput
-          style={styles.textInput}
+          style={[styles.textInput, { backgroundColor: "white" }]}
           value={value}
           onChangeText={setValue}
           placeholder={placeholder || "Type here..."}
@@ -829,7 +840,17 @@ const ChatTextInput = ({
           onSubmitEditing={() => { if (value.trim()) { onSubmit(value.trim()); setValue(""); } }}
           returnKeyType="send"
           autoFocus
+          autoComplete="off"
+          autoCorrect={false}
+          textContentType="none"
+          importantForAutofill="no"
+          onFocus={(e) => {
+            if (Platform.OS === "ios") {
+              e.currentTarget.setNativeProps({ style: { backgroundColor: "white" } });
+            }
+          }}
         />
+        </View>
         <TouchableOpacity
           onPress={() => { if (value.trim()) { onSubmit(value.trim()); setValue(""); } }}
           disabled={!value.trim()}

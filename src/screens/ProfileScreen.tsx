@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView, Platform, Share,
 } from "react-native";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -158,6 +158,12 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     console.log("[Voice] attempting to play:", uri);
     console.log("[Voice] url from profile:", profile?.deep_prompts, profile?.photos);
 
+    // file:// URIs are device-local and won't play on a different device
+    if (uri.startsWith("file://")) {
+      Alert.alert("voice memo unavailable", "this file is only available on the device it was recorded on.");
+      return;
+    }
+
     // Confirm URL is reachable before attempting playback
     try {
       const check = await fetch(uri, { method: "HEAD" });
@@ -170,6 +176,18 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       console.log("[Voice] HEAD check failed:", headErr.message);
       Alert.alert("voice memo unavailable", "could not connect to the audio file.");
       return;
+    }
+
+    // Configure iOS audio session — critical for playback on ringer-silent devices
+    try {
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+        shouldPlayInBackground: false,
+        interruptionMode: "doNotMix",
+      });
+    } catch (audioModeErr: any) {
+      console.warn("[Voice] setAudioModeAsync failed:", audioModeErr.message);
     }
 
     if (player.playing) {

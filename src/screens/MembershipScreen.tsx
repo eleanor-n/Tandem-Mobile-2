@@ -11,28 +11,33 @@ import { colors, radius, shadows, gradients } from "../theme";
 import { useAuth } from "../contexts/AuthContext";
 import { getSunnyResponse } from "../lib/sunny";
 
-type Period = "weekly" | "monthly" | "threeMonth" | "sixMonth";
+// REQUIRED Supabase edge function secrets:
+// - STRIPE_SECRET_KEY (sk_live_...)
+// - STRIPE_WEBHOOK_SECRET (whsec_...)
+// Set at: supabase.com/dashboard/project/ccntlaunczirvntnsjbm/functions
+
+type Period = "weekly" | "monthly" | "threeMonth" | "annual";
 type Tier = "go" | "trail";
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: "weekly",     label: "weekly" },
   { key: "monthly",    label: "monthly" },
   { key: "threeMonth", label: "3 months" },
-  { key: "sixMonth",   label: "6 months" },
+  { key: "annual",     label: "annual" },
 ];
 
 const PRICES: Record<Tier, Record<Period, { id: string; perWeek: string; billingNote: string; total: string }>> = {
   go: {
-    weekly:     { id: "price_1T6Xe1QtlSTTnULkTpBp1mxM", perWeek: "$5.99",  billingNote: "billed weekly",         total: "$5.99"   },
-    monthly:    { id: "price_1T6XqKQtlSTTnULkkkm1vB5D", perWeek: "$3.69",  billingNote: "billed monthly",        total: "$15.99"  },
-    threeMonth: { id: "price_1T6XqQQtlSTTnULkHPrMv0Vo", perWeek: "$2.77",  billingNote: "billed every 3 months", total: "$35.99"  },
-    sixMonth:   { id: "price_1THMmpQtlSTTnULkYuEn9Lmc", perWeek: "$3.08",  billingNote: "billed every 6 months", total: "$79.99"  },
+    weekly:     { id: "price_1T6Xe1QtlSTTnULkTpBp1mxM", perWeek: "$5.99",  billingNote: "billed weekly",        total: "$5.99"   },
+    monthly:    { id: "price_1T6XqKQtlSTTnULkkkm1vB5D", perWeek: "$3.69",  billingNote: "billed monthly",       total: "$15.99"  },
+    threeMonth: { id: "price_1T6XqQQtlSTTnULkHPrMv0Vo", perWeek: "$2.77",  billingNote: "billed every 3 months",total: "$35.99"  },
+    annual:     { id: "price_1T6XqRQtlSTTnULk9QguocAx", perWeek: "$2.31",  billingNote: "billed annually",      total: "$119.99" },
   },
   trail: {
-    weekly:     { id: "price_1T6XiSQtlSTTnULkFUO91T1d", perWeek: "$7.99",  billingNote: "billed weekly",         total: "$7.99"   },
-    monthly:    { id: "price_1T6XqSQtlSTTnULk8FOPYTiK", perWeek: "$5.54",  billingNote: "billed monthly",        total: "$23.99"  },
-    threeMonth: { id: "price_1T6XqTQtlSTTnULkwga3Xwr6", perWeek: "$4.15",  billingNote: "every 3 months",        total: "$53.99"  },
-    sixMonth:   { id: "price_1THMmsQtlSTTnULkWc52qIoe", perWeek: "$4.62",  billingNote: "every 6 months",        total: "$119.99" },
+    weekly:     { id: "price_1T6XiSQtlSTTnULkFUO91T1d", perWeek: "$7.99",  billingNote: "billed weekly",        total: "$7.99"   },
+    monthly:    { id: "price_1T6XqSQtlSTTnULk8FOPYTiK", perWeek: "$5.54",  billingNote: "billed monthly",       total: "$23.99"  },
+    threeMonth: { id: "price_1T6XqTQtlSTTnULkwga3Xwr6", perWeek: "$4.15",  billingNote: "billed every 3 months",total: "$53.99"  },
+    annual:     { id: "price_1T6XqUQtlSTTnULkkCs6dJyP", perWeek: "$3.46",  billingNote: "billed annually",      total: "$179.99" },
   },
 };
 
@@ -40,13 +45,13 @@ const BILLING_LABEL: Record<Period, string> = {
   weekly:     "weekly",
   monthly:    "monthly",
   threeMonth: "every 3 months",
-  sixMonth:   "every 6 months",
+  annual:     "annually",
 };
 
 // Savings vs weekly rate
 const SAVINGS: Record<Tier, Partial<Record<Period, string>>> = {
-  go:    { threeMonth: "save 54%", sixMonth: "save 49%" },
-  trail: { threeMonth: "save 48%", sixMonth: "save 42%" },
+  go:    { threeMonth: "save 54%", annual: "save 61%" },
+  trail: { threeMonth: "save 48%", annual: "save 57%" },
 };
 
 const GO_FEATURES = [
@@ -98,19 +103,22 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
     if (!user) return;
     setLoadingTier(tier);
     try {
+      const priceId = PRICES[tier][period].id;
+      console.log("[Stripe] invoking checkout:", { tier, period, priceId });
       const res = await fetch(
         "https://ccntlaunczirvntnsjbm.supabase.co/functions/v1/create-checkout-session",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            priceId: PRICES[tier][period].id,
+            priceId,
             userId: user.id,
             userEmail: user.email,
           }),
         }
       );
       const result = await res.json();
+      console.log("[Stripe] checkout response:", result);
       const { url } = result;
       if (!url) {
         console.error("No checkout URL returned:", result);
@@ -150,7 +158,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
   };
 
   const savingsBadge = (tier: Tier) => {
-    if (period === "threeMonth" || period === "sixMonth") {
+    if (period === "threeMonth" || period === "annual") {
       return SAVINGS[tier][period];
     }
     return null;

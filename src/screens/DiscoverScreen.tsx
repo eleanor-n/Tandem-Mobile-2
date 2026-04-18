@@ -146,6 +146,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [activeFilter, setActiveFilter] = useState("all");
   const [showNotifications, setShowNotifications] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const walkthroughShownRef = useRef(false);
   const [toggleY, setToggleY] = useState(120);
   const hasUnread = false;
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
@@ -157,6 +158,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   }, []);
 
   useEffect(() => {
+    if (walkthroughShownRef.current) return;
     (async () => {
       const walkthroughRaw = await AsyncStorage.getItem("walkthrough_complete");
       const currentUserId = (await supabase.auth.getUser()).data.user?.id;
@@ -167,14 +169,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           const parsed = JSON.parse(walkthroughRaw);
           walkthroughSeen = parsed.userId === currentUserId && parsed.seen === true;
         } catch {
-          // Legacy plain string format
           walkthroughSeen = false;
         }
       }
 
-      setShowWalkthrough(!walkthroughSeen);
+      if (!walkthroughSeen) {
+        walkthroughShownRef.current = true;
+        setShowWalkthrough(true);
+      }
     })();
-  }, []);
+  }, [user]);
 
   const { tier, isLimited, incrementImIn } = useMembershipTier();
 
