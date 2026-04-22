@@ -20,6 +20,7 @@ import {
   Quicksand_600SemiBold,
   Quicksand_700Bold,
 } from "@expo-google-fonts/quicksand";
+import { Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
@@ -414,6 +415,8 @@ export default function App() {
     Quicksand_500Medium,
     Quicksand_600SemiBold,
     Quicksand_700Bold,
+    Caveat_400Regular,
+    Caveat_700Bold,
   });
 
   if (!fontsLoaded) return null;
