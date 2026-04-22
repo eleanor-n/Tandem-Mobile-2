@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, TextInput, KeyboardAvoidingView,
-  Platform, ScrollView, Linking,
+  Platform, ScrollView, Linking, Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
@@ -31,6 +31,10 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   React.useEffect(() => {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
@@ -66,6 +70,22 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
       Alert.alert("Error", err.message || "Something went wrong.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+        redirectTo: "tandem://auth/reset",
+      });
+      if (error) throw error;
+      setForgotSent(true);
+    } catch (err: any) {
+      Alert.alert("couldn't send reset email", err.message || "try again.");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -312,6 +332,13 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           />
         </View>
 
+        {/* Forgot password — only on sign in */}
+        {mode === "signin" && (
+          <TouchableOpacity onPress={() => { setShowForgotModal(true); setForgotSent(false); setForgotEmail(""); }} activeOpacity={0.7} style={{ alignSelf: "flex-end", marginTop: -4 }}>
+            <Text style={styles.forgotText}>forgot password?</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Submit */}
         <GradientButton
           label={loading ? "..." : mode === "signin" ? "welcome back" : "let's go"}
@@ -364,6 +391,47 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
           .
         </Text>
       </ScrollView>
+      {/* Forgot password modal */}
+      <Modal
+        visible={showForgotModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowForgotModal(false)}
+      >
+        <View style={styles.forgotBackdrop}>
+          <View style={styles.forgotCard}>
+            <Text style={styles.forgotTitle}>reset password</Text>
+            {forgotSent ? (
+              <>
+                <Text style={styles.forgotSent}>check your email for a reset link.</Text>
+                <TouchableOpacity onPress={() => setShowForgotModal(false)} activeOpacity={0.8} style={styles.forgotBtn}>
+                  <Text style={styles.forgotBtnText}>done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.forgotInput}
+                  placeholder="your email"
+                  placeholderTextColor="#9CA3AF"
+                  value={forgotEmail}
+                  onChangeText={setForgotEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+                <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.88} style={styles.forgotBtn} disabled={forgotLoading}>
+                  {forgotLoading
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.forgotBtnText}>send reset link</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowForgotModal(false)} activeOpacity={0.7} style={{ paddingTop: 8 }}>
+                  <Text style={styles.forgotCancel}>cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -459,4 +527,13 @@ const styles = StyleSheet.create({
     color: colors.teal,
     textDecorationLine: "underline",
   },
+  forgotText: { fontSize: 13, color: colors.teal, fontFamily: "Quicksand_500Medium" },
+  forgotBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
+  forgotCard: { backgroundColor: colors.background, borderRadius: 16, padding: 24, width: "100%", gap: 14 },
+  forgotTitle: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, textAlign: "center" },
+  forgotInput: { height: 48, borderRadius: 10, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 16, fontSize: 15, color: colors.foreground },
+  forgotBtn: { height: 48, borderRadius: 24, backgroundColor: colors.teal, alignItems: "center", justifyContent: "center" },
+  forgotBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#fff" },
+  forgotCancel: { fontSize: 14, color: colors.muted, textAlign: "center", fontFamily: "Quicksand_400Regular" },
+  forgotSent: { fontSize: 14, color: colors.secondary, textAlign: "center", lineHeight: 20, fontFamily: "Quicksand_400Regular" },
 });

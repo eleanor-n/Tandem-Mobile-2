@@ -9,6 +9,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
 import { getSunnyResponse } from "../lib/sunny";
 
 // REQUIRED Supabase edge function secrets:
@@ -96,6 +97,8 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [sunnyBanner, setSunnyBanner] = useState<string | null>(null);
   const sunnyBannerOpacity = useRef(new Animated.Value(0)).current;
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   const isCurrentPlan = (tier: string) => tier === currentTier;
 
@@ -154,6 +157,46 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
       console.warn("Checkout error:", e);
     } finally {
       setLoadingTier(null);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (!user) return;
+    setRestoringPurchases(true);
+    try {
+      const { data } = await supabase.functions.invoke("restore-purchases", {
+        body: { user_id: user.id },
+      });
+      if (data?.active_subscription) {
+        await refreshOnboarding();
+        Alert.alert("subscription restored", `your ${data.tier} plan is active.`);
+      } else {
+        Alert.alert("no active subscription", "we couldn't find an active subscription for this account.");
+      }
+    } catch {
+      Alert.alert("something went wrong", "try again in a moment.");
+    } finally {
+      setRestoringPurchases(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    if (!user) return;
+    setOpeningPortal(true);
+    try {
+      const { data } = await supabase.functions.invoke("create-portal-session", {
+        body: { user_id: user.id },
+      });
+      if (data?.url) {
+        await WebBrowser.openBrowserAsync(data.url);
+        await refreshOnboarding();
+      } else {
+        Alert.alert("couldn't open portal", "try again in a moment.");
+      }
+    } catch {
+      Alert.alert("something went wrong", "try again in a moment.");
+    } finally {
+      setOpeningPortal(false);
     }
   };
 
@@ -363,6 +406,31 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
           )}
         </LinearGradient>
 
+        {/* Manage / restore */}
+        {currentTier !== "free" ? (
+          <TouchableOpacity
+            style={s.manageSub}
+            onPress={handleManageSubscription}
+            activeOpacity={0.7}
+            disabled={openingPortal}
+          >
+            {openingPortal
+              ? <ActivityIndicator color={colors.teal} size="small" />
+              : <Text style={s.manageSubText}>manage subscription →</Text>}
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          style={s.restoreBtn}
+          onPress={handleRestorePurchases}
+          activeOpacity={0.7}
+          disabled={restoringPurchases}
+        >
+          {restoringPurchases
+            ? <ActivityIndicator color={colors.muted} size="small" />
+            : <Text style={s.restoreBtnText}>restore purchases</Text>}
+        </TouchableOpacity>
+
         {/* Comparison table */}
         <Text style={s.compTitle}>COMPARE PLANS</Text>
         <View style={s.compTable}>
@@ -520,6 +588,10 @@ const s = StyleSheet.create({
   trailCtaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal },
 
   // Comparison
+  manageSub: { alignSelf: "center", paddingVertical: 8 },
+  manageSubText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
+  restoreBtn: { alignSelf: "center", paddingVertical: 8 },
+  restoreBtnText: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
   compTitle: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2, marginTop: 4 },
   compTable: {
     backgroundColor: colors.white, borderRadius: radius.xl,

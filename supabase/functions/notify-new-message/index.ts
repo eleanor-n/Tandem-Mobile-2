@@ -11,14 +11,12 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 Deno.serve(async (req) => {
   try {
     const { record } = await req.json();
-    // record is the new row from messages
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get the tandem to find both participants
     const { data: tandem } = await supabase
       .from("tandems")
       .select("user_a_id, user_b_id")
@@ -27,24 +25,24 @@ Deno.serve(async (req) => {
 
     if (!tandem) return new Response("no tandem", { status: 404 });
 
-    // Recipient is whichever participant is NOT the sender
     const recipientId =
-      tandem.user_a_id === record.sender_id
-        ? tandem.user_b_id
-        : tandem.user_a_id;
+      tandem.user_a_id === record.sender_id ? tandem.user_b_id : tandem.user_a_id;
 
-    // Get recipient's push token
     const { data: recipientProfile } = await supabase
       .from("profiles")
-      .select("expo_push_token")
+      .select("expo_push_token, notification_preferences")
       .eq("user_id", recipientId)
       .single();
+
+    // Check opt-out
+    if (recipientProfile?.notification_preferences?.new_message === false) {
+      return new Response("user opted out", { status: 200 });
+    }
 
     if (!recipientProfile?.expo_push_token) {
       return new Response("no push token", { status: 200 });
     }
 
-    // Get sender's first name
     const { data: senderProfile } = await supabase
       .from("profiles")
       .select("first_name")
@@ -54,7 +52,6 @@ Deno.serve(async (req) => {
     const senderName = senderProfile?.first_name ?? "someone";
     const messageText = (record.content ?? "").slice(0, 80);
 
-    // Send via Expo Push API
     await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +65,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response("ok", { status: 200 });
-  } catch (err) {
+  } catch (err: any) {
     return new Response(`error: ${err.message}`, { status: 500 });
   }
 });

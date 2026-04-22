@@ -11,9 +11,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 Deno.serve(async (req) => {
   try {
     const { record } = await req.json();
-    // record is the updated row from join_requests
 
-    // Only fire when status was just set to "accepted"
     if (record.status !== "accepted") {
       return new Response("not accepted", { status: 200 });
     }
@@ -23,7 +21,6 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Get the activity and its owner's name
     const { data: activity } = await supabase
       .from("activities")
       .select("user_id, title")
@@ -38,12 +35,16 @@ Deno.serve(async (req) => {
       .eq("user_id", activity.user_id)
       .single();
 
-    // Get requester's push token
     const { data: requesterProfile } = await supabase
       .from("profiles")
-      .select("expo_push_token, first_name")
+      .select("expo_push_token, notification_preferences")
       .eq("user_id", record.requester_id)
       .single();
+
+    // Check opt-out
+    if (requesterProfile?.notification_preferences?.accepted === false) {
+      return new Response("user opted out", { status: 200 });
+    }
 
     if (!requesterProfile?.expo_push_token) {
       return new Response("no push token", { status: 200 });
@@ -51,7 +52,6 @@ Deno.serve(async (req) => {
 
     const ownerName = ownerProfile?.first_name ?? "they";
 
-    // Send via Expo Push API
     await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response("ok", { status: 200 });
-  } catch (err) {
+  } catch (err: any) {
     return new Response(`error: ${err.message}`, { status: 500 });
   }
 });

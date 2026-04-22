@@ -1,3 +1,16 @@
+// SENTRY SETUP (uncomment after installing):
+// 1. npm install sentry-expo @sentry/react-native --legacy-peer-deps
+// 2. cd ios && pod install
+// 3. Create a project at sentry.io → React Native → copy the DSN
+// 4. Add to .env: EXPO_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
+// 5. Uncomment the Sentry lines below and in the export default
+// import * as Sentry from 'sentry-expo';
+// Sentry.init({
+//   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+//   enableInExpoDevelopment: false,
+//   debug: __DEV__,
+// });
+
 import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -22,6 +35,7 @@ import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
+import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
@@ -30,7 +44,7 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 
 type Tab = "Discover" | "Map" | "Chat" | "Profile";
-type UnauthScreen = "welcome" | "auth";
+type UnauthScreen = "welcome" | "auth" | "resetPassword";
 
 const AppInner = () => {
   const { user, loading, onboardingCompleted, refreshOnboarding } = useAuth();
@@ -114,6 +128,21 @@ const AppInner = () => {
       if (!url) return;
       // Only process tandem:// deep links
       if (!url.startsWith("tandem://")) return;
+      // Password reset deep link
+      if (url.includes("auth/reset") || url.includes("type=recovery")) {
+        setUnauthScreen("resetPassword");
+        // Let Supabase parse the recovery token from the URL
+        const hashIndex = url.indexOf("#");
+        if (hashIndex !== -1) {
+          const params = new URLSearchParams(url.substring(hashIndex + 1));
+          const at = params.get("access_token");
+          const rt = params.get("refresh_token");
+          if (at && rt) {
+            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          }
+        }
+        return;
+      }
       console.log("[OAuth] deep link received:", url);
       try {
         // 1. PKCE code in query string (most common with Supabase PKCE flow)
@@ -185,6 +214,9 @@ const AppInner = () => {
 
   // ── Not logged in ──────────────────────────────────────────
   if (!user) {
+    if (unauthScreen === "resetPassword") {
+      return <ResetPasswordScreen onComplete={() => setUnauthScreen("auth")} />;
+    }
     if (unauthScreen === "auth") {
       return <AuthScreen onBack={() => setUnauthScreen("welcome")} />;
     }
@@ -373,6 +405,8 @@ const appS = StyleSheet.create({
   },
 });
 
+// Wrap with Sentry once installed:
+// export default Sentry.Native.wrap(App);
 export default function App() {
   const [fontsLoaded] = useFonts({
     Quicksand_400Regular,

@@ -24,6 +24,7 @@ import { colors, radius, shadows, gradients } from "../theme";
 import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
 import { getCardRotation } from "../theme/scrapbookTheme";
 import { getSunnyResponse } from "../lib/sunny";
+import { NotificationSettingsScreen } from "./NotificationSettingsScreen";
 
 const calculateAge = (birthday: string | null): number | null => {
   if (!birthday) return null;
@@ -86,7 +87,7 @@ const ProfileVideo = ({ uri }: { uri: string }) => {
 
 export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress, onScrapbookPress }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -107,6 +108,9 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   const [profilePublic, setProfilePublic] = useState(true);
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
@@ -777,6 +781,12 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </TouchableOpacity>
         </View>
 
+        {/* Notification preferences */}
+        <TouchableOpacity onPress={() => setShowNotifSettings(true)} style={s.privacyToggle} activeOpacity={0.7}>
+          <Text style={s.privacyToggleText}>notification preferences →</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+        </TouchableOpacity>
+
         {/* Privacy */}
         <TouchableOpacity onPress={() => setShowPrivacy(!showPrivacy)} style={s.privacyToggle} activeOpacity={0.7}>
           <Text style={s.privacyToggleText}>manage what others see →</Text>
@@ -815,6 +825,9 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               </LinearGradient>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={() => setShowDeleteModal(true)} activeOpacity={0.7} style={{ alignSelf: "center", paddingVertical: 8 }}>
+            <Text style={s.deleteAccountText}>delete my account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -1040,6 +1053,64 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Notification settings */}
+      <Modal
+        visible={showNotifSettings}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotifSettings(false)}
+      >
+        <NotificationSettingsScreen onBack={() => setShowNotifSettings(false)} />
+      </Modal>
+
+      {/* Delete account confirmation modal */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={del.backdrop}>
+          <View style={del.card}>
+            <Text style={del.title}>delete your account?</Text>
+            <Text style={del.body}>
+              this deletes your profile, posts, messages, and scrapbook permanently. this cannot be undone.
+            </Text>
+            <TouchableOpacity
+              style={del.deleteBtn}
+              activeOpacity={0.88}
+              disabled={deletingAccount}
+              onPress={async () => {
+                setDeletingAccount(true);
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session?.access_token) throw new Error("no session");
+                  const res = await fetch(
+                    "https://ccntlaunczirvntnsjbm.supabase.co/functions/v1/delete-account",
+                    {
+                      method: "POST",
+                      headers: { Authorization: `Bearer ${session.access_token}` },
+                    }
+                  );
+                  if (!res.ok) throw new Error(await res.text());
+                  await signOut();
+                } catch (err: any) {
+                  Alert.alert("something went wrong", err.message || "try again.");
+                  setDeletingAccount(false);
+                }
+              }}
+            >
+              {deletingAccount
+                ? <ActivityIndicator color={colors.white} size="small" />
+                : <Text style={del.deleteBtnText}>delete forever</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDeleteModal(false)} activeOpacity={0.7} style={{ paddingVertical: 12 }}>
+              <Text style={del.cancelText}>cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Leave a note bottom sheet */}
@@ -1291,6 +1362,7 @@ const s = StyleSheet.create({
 
   toast: { position: "absolute", bottom: 100, alignSelf: "center", backgroundColor: "rgba(15,23,42,0.85)", borderRadius: radius.full, paddingHorizontal: 20, paddingVertical: 10 },
   toastText: { fontSize: 13, color: colors.white, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
+  deleteAccountText: { fontSize: 13, color: "#EF4444", fontFamily: "Quicksand_500Medium" },
 
   // Memories
   memoriesHeader: { fontSize: 16, color: "#1a1a1a" },
@@ -1360,6 +1432,17 @@ const ls = StyleSheet.create({
   submitBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   submitBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   cancelBtn: { alignItems: "center", paddingVertical: 16 },
+  cancelText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted },
+});
+
+// Delete account modal styles
+const del = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
+  card: { backgroundColor: colors.background, borderRadius: radius.xl, padding: 24, width: "100%", gap: 12, alignItems: "center" },
+  title: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: "#EF4444", textAlign: "center" },
+  body: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.secondary, textAlign: "center", lineHeight: 20 },
+  deleteBtn: { width: "100%", height: 48, borderRadius: radius.full, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", marginTop: 4 },
+  deleteBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   cancelText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted },
 });
 

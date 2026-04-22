@@ -20,6 +20,7 @@
       "bundleIdentifier": "com.thetandemapp.app",
       "buildNumber": "21",
       "usesAppleSignIn": true,
+      "_appleSignInNote": "If sign-in fails in TestFlight with 'unacceptable audience', delete the iOS provisioning profile at expo.dev/accounts/the_tandem_app/projects/tandem/credentials and rebuild.",
       "config": {
         "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
       },
