@@ -23,6 +23,7 @@ import {
 import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import { WelcomeScreen } from "./src/screens/WelcomeScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { SunnyScreen } from "./src/screens/SunnyScreen";
@@ -420,9 +421,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <AuthProvider>
-        <AppInner />
-      </AuthProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <AppInner />
+        </AuthProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

@@ -28,6 +28,7 @@ import { UpsellSheet } from "../components/UpsellSheet";
 import { AppWalkthrough } from "../components/AppWalkthrough";
 import { useMembershipTier } from "../hooks/useMembershipTier";
 import { supabase } from "../lib/supabase";
+import { logError } from "../lib/errorLogger";
 import { getSunnyResponse } from "../lib/sunny";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
@@ -779,8 +780,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           { activity_id: currentCard.id, user_id: user.id, action: "decline" },
           { ignoreDuplicates: true }
         );
-      } catch {
-        // non-blocking
+      } catch (err: any) {
+        logError(err, { screen: "DiscoverScreen", action: "handleSkip" });
       }
     }
     setCurrentIndex(prev => prev + 1);
@@ -795,8 +796,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           { ignoreDuplicates: true }
         );
       }
-    } catch {
-      // non-blocking
+    } catch (err: any) {
+      logError(err, { screen: "DiscoverScreen", action: "handleMaybeLater_upsert" });
     }
     // Also persist to AsyncStorage so the Saved tab can load without a Supabase round-trip
     try {
@@ -811,8 +812,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         location: currentCard.location,
       };
       await AsyncStorage.setItem("saved_activities_meta", JSON.stringify(meta));
-    } catch {
-      // non-blocking
+    } catch (err: any) {
+      logError(err, { screen: "DiscoverScreen", action: "handleMaybeLater_storage" });
     }
     showToast("saved to your private list.");
     setCurrentIndex(prev => prev + 1);
@@ -843,8 +844,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             }))
         );
       }
-    } catch {
-      // non-blocking
+    } catch (err: any) {
+      logError(err, { screen: "DiscoverScreen", action: "fetchSaved" });
     } finally {
       setLoadingSaved(false);
     }
@@ -997,8 +998,9 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setShowGroupNudge(false);
       setFeedRefreshKey(k => k + 1);
       showToast("posted! check back soon.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("[Post] exception:", err);
+      logError(err, { screen: "DiscoverScreen", action: "handleSubmitPost" });
       Alert.alert("couldn't create post", "something went wrong. try again?");
     } finally {
       setIsPosting(false);

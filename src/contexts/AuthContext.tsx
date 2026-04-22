@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase, handleSupabaseError } from "../lib/supabase";
+import { logError } from "../lib/errorLogger";
 import { registerForPushNotifications } from "../lib/notifications";
 import type { Session, User } from "@supabase/supabase-js";
 
@@ -49,7 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setOnboardingCompleted(data.onboarding_completed === true);
       }
-    } catch {
+    } catch (err: any) {
+      logError(err, { screen: "AuthContext", action: "checkOnboarding" });
       setOnboardingCompleted(false);
     } finally {
       clearTimeout(timeout);
