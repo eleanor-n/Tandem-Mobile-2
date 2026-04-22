@@ -21,7 +21,7 @@ import {
   Quicksand_700Bold,
 } from "@expo-google-fonts/quicksand";
 import { Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
-import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet } from "react-native";
+import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
@@ -38,6 +38,8 @@ import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const TrustStackPreview = __DEV__ ? require("./src/screens/_dev/TrustStackPreview").TrustStackPreview : null;
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./src/lib/supabase";
 import { colors } from "./src/theme";
@@ -55,6 +57,7 @@ const AppInner = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
   const [showScrapbook, setShowScrapbook] = useState(false);
+  const [showDevPreview, setShowDevPreview] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
   const [showSplash, setShowSplash] = useState(false);
   const [showPost, setShowPost] = useState(false);
@@ -303,6 +306,11 @@ const AppInner = () => {
     );
   }
 
+  // Dev-only preview screen — never compiled into release builds
+  if (__DEV__ && showDevPreview && TrustStackPreview) {
+    return <TrustStackPreview onBack={() => setShowDevPreview(false)} />;
+  }
+
   // Overlay screens (highest priority first)
   if (showScrapbook) {
     return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setShowPost(true); }} />;
@@ -377,6 +385,15 @@ const AppInner = () => {
           <Text style={appS.sunnyToastText}>{sunnyToast}</Text>
         </Animated.View>
       ) : null}
+      {__DEV__ ? (
+        <TouchableOpacity
+          style={appS.devBtn}
+          onPress={() => setShowDevPreview(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={appS.devBtnText}>dev</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };
@@ -404,6 +421,21 @@ const appS = StyleSheet.create({
     fontSize: 13,
     color: "#888",
     textAlign: "center",
+  },
+  devBtn: {
+    position: "absolute",
+    top: 60,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  devBtnText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
   },
 });
 
