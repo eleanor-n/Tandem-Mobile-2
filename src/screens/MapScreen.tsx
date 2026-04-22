@@ -267,32 +267,38 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
           </TouchableOpacity>
         </View>
 
-        {/* Horizontal card scroll */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.cardsContent}
-        >
-          {mapActivities.map((act: any) => {
-            const isSelected = selectedId === act.id;
-            return (
-              <TouchableOpacity
-                key={act.id}
-                style={[s.nearbyCard, isSelected && s.nearbyCardSelected]}
-                onPress={() => {
-                  setSelectedId(act.id);
-                  setSelectedActivity(act);
-                }}
-                activeOpacity={0.9}
-              >
-                <View style={s.nearbyBody}>
-                  <Text style={s.nearbyTitle} numberOfLines={1}>{act.title}</Text>
-                  <Text style={s.nearbyLocation} numberOfLines={1}>{act.location_name}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Sunny empty state sits below the header as a flow element */}
+        {sunnyVisible && sunnyText.current && mapActivities.length === 0 ? (
+          <Animated.Text style={[ms.sunnyLine, { opacity: sunnyOpacity }]} numberOfLines={3}>
+            {sunnyText.current}
+          </Animated.Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.cardsContent}
+          >
+            {mapActivities.map((act: any) => {
+              const isSelected = selectedId === act.id;
+              return (
+                <TouchableOpacity
+                  key={act.id}
+                  style={[s.nearbyCard, isSelected && s.nearbyCardSelected]}
+                  onPress={() => {
+                    setSelectedId(act.id);
+                    setSelectedActivity(act);
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <View style={s.nearbyBody}>
+                    <Text style={s.nearbyTitle} numberOfLines={1}>{act.title}</Text>
+                    <Text style={s.nearbyLocation} numberOfLines={1}>{act.location_name}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {!!toast && (
@@ -300,12 +306,6 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
           <Text style={s.toastText}>{toast}</Text>
         </View>
       )}
-
-      {sunnyVisible && sunnyText.current && mapActivities.length === 0 ? (
-        <Animated.Text style={[ms.sunnyLine, { opacity: sunnyOpacity, bottom: 80 + insets.bottom }]} numberOfLines={2}>
-          {sunnyText.current}
-        </Animated.Text>
-      ) : null}
 
       <BottomNav activeTab={activeTab} onTabPress={onTabPress} onPostPress={onPostPress} />
 
@@ -538,9 +538,11 @@ const m = StyleSheet.create({
 
 const ms = StyleSheet.create({
   sunnyLine: {
-    position: "absolute", left: 0, right: 0,
-    textAlign: "center", fontStyle: "italic",
-    fontSize: 13, color: "#888",
-    paddingHorizontal: 24,
+    fontStyle: "italic",
+    fontSize: 13,
+    color: "#888",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    lineHeight: 20,
   },
 });
