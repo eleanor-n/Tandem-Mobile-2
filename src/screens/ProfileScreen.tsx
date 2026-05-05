@@ -25,6 +25,7 @@ import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/
 import { getCardRotation } from "../theme/scrapbookTheme";
 import { getSunnyResponse } from "../lib/sunny";
 import { NotificationSettingsScreen } from "./NotificationSettingsScreen";
+import { TrustStack } from "../components/safety/TrustStack";
 
 const calculateAge = (birthday: string | null): number | null => {
   if (!birthday) return null;
@@ -532,6 +533,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             <Text style={s.location}>{profile?.location_name || "Princeton, NJ"}</Text>
           </View>
         </View>
+
+        {/* Verification + trust signals */}
+        {user?.id && (
+          <View style={{ marginTop: 12, marginBottom: 4 }}>
+            <TrustStack userId={user.id} viewerId={user.id} variant="profile" />
+          </View>
+        )}
 
         {/* Stat pills */}
         <View style={s.statsRow}>

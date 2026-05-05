@@ -16,7 +16,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
+import PlacesAutocomplete from "expo-google-places-autocomplete";
+import type { Place } from "expo-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,6 +33,7 @@ import { logError } from "../lib/errorLogger";
 import { getSunnyResponse } from "../lib/sunny";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
+import { TrustStack } from "../components/safety/TrustStack";
 
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -128,6 +130,123 @@ interface DiscoverScreenProps {
   postPrefill?: { name: string; lat: number; lng: number } | null;
   onPostPrefillConsumed?: () => void;
 }
+
+type LocationAutocompleteProps = {
+  value: string;
+  placeholder?: string;
+  onSelect: (place: { description: string; lat: number; lng: number }) => void;
+};
+
+const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocompleteProps) => {
+  const [query, setQuery] = useState(value);
+  const [predictions, setPredictions] = useState<Place[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  const handleChangeText = (text: string) => {
+    setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!text.trim()) {
+      setPredictions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const result = await PlacesAutocomplete.findPlaces(text);
+        const places = result?.places ?? [];
+        console.log("[PLACES]", { query: text, resultsCount: places.length, error: null });
+        setPredictions(places);
+      } catch (err: any) {
+        console.log("[PLACES]", { query: text, resultsCount: 0, error: err?.message ?? String(err) });
+        setPredictions([]);
+      }
+    }, 250);
+  };
+
+  const handlePick = async (place: Place) => {
+    try {
+      const details = await PlacesAutocomplete.placeDetails(place.placeId);
+      const lat = details.coordinate?.latitude;
+      const lng = details.coordinate?.longitude;
+      if (typeof lat === "number" && typeof lng === "number") {
+        onSelect({ description: place.fullText || place.description, lat, lng });
+      }
+      setQuery(place.fullText || place.description);
+      setPredictions([]);
+    } catch (err: any) {
+      console.log("[PLACES]", { stage: "placeDetails", placeId: place.placeId, error: err?.message ?? String(err) });
+    }
+  };
+
+  return (
+    <View style={{ position: "relative", zIndex: 9999 }}>
+      <TextInput
+        value={query}
+        onChangeText={handleChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        style={modalLocationS.input}
+        autoCorrect={false}
+        returnKeyType="search"
+      />
+      {predictions.length > 0 && (
+        <View style={modalLocationS.listView}>
+          {predictions.map((p) => (
+            <TouchableOpacity
+              key={p.placeId}
+              style={modalLocationS.row}
+              onPress={() => handlePick(p)}
+              activeOpacity={0.7}
+            >
+              <Text style={modalLocationS.rowText} numberOfLines={1}>
+                {p.fullText || p.description}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const modalLocationS = StyleSheet.create({
+  input: {
+    height: 50,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: colors.foreground,
+    fontFamily: "Quicksand_700Bold",
+  },
+  listView: {
+    position: "absolute",
+    top: 54,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    zIndex: 9999,
+    elevation: 9999,
+    overflow: "hidden",
+  },
+  row: {
+    padding: 12,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rowText: {
+    fontSize: 14,
+    color: colors.foreground,
+    fontFamily: "Quicksand_500Medium",
+  },
+});
 
 export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
@@ -1376,6 +1495,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                         <Text style={s.hostStripName}>{currentCard.host.name}</Text>
                       </Text>
                       <Text style={s.hostStripBio} numberOfLines={1}>{currentCard.host.bio}</Text>
+                      {currentCard.host.user_id && user?.id && (
+                        <TrustStack
+                          userId={currentCard.host.user_id}
+                          viewerId={user.id}
+                          variant="post-card"
+                        />
+                      )}
                     </View>
                     <TouchableOpacity
                       activeOpacity={0.7}
@@ -1396,6 +1522,17 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   </View>
                 </View>
               </ScrollView>
+
+              {/* Trust signal — above action buttons */}
+              {currentCard.host.user_id && user?.id && currentCard.host.user_id !== user?.id && (
+                <View style={{ paddingHorizontal: 16 }}>
+                  <TrustStack
+                    userId={currentCard.host.user_id}
+                    viewerId={user.id}
+                    variant="post-detail"
+                  />
+                </View>
+              )}
 
               {/* Action buttons — pinned below card */}
               <View style={[s.actionRow, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
@@ -1771,54 +1908,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             )}
 
             <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
-            <GooglePlacesAutocomplete
+            <LocationAutocomplete
+              value={postLocation}
               placeholder="search for a location"
-              onPress={(data, details = null) => {
-                setPostLocation(data.description);
-                if (details?.geometry?.location) {
-                  setPostLocationLat(details.geometry.location.lat);
-                  setPostLocationLng(details.geometry.location.lng);
-                }
-              }}
-              query={{
-                key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
-                language: "en",
-              }}
-              fetchDetails={true}
-              enablePoweredByContainer={false}
-              keyboardShouldPersistTaps="handled"
-              listViewDisplayed="auto"
-              isRowScrollable={false}
-              minLength={2}
-              nearbyPlacesAPI="GooglePlacesSearch"
-              styles={{
-                container: { flex: 0, zIndex: 9999, elevation: 9999 },
-                textInput: {
-                  height: 50,
-                  borderRadius: 999,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
-                  backgroundColor: colors.white,
-                  paddingHorizontal: 16,
-                  fontSize: 14,
-                  color: colors.foreground,
-                  marginBottom: 0,
-                },
-                listView: {
-                  backgroundColor: colors.white,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginTop: 4,
-                  zIndex: 9999,
-                  elevation: 9999,
-                  position: "absolute",
-                  top: 50,
-                  left: 0,
-                  right: 0,
-                },
-                row: { padding: 12, backgroundColor: colors.white },
-                description: { fontSize: 14, color: colors.foreground },
+              onSelect={({ description, lat, lng }) => {
+                setPostLocation(description);
+                setPostLocationLat(lat);
+                setPostLocationLng(lng);
               }}
             />
 

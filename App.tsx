@@ -46,6 +46,7 @@ import { colors } from "./src/theme";
 import { getSunnyResponse } from "./src/lib/sunny";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
+import PlacesAutocomplete from "expo-google-places-autocomplete";
 
 type Tab = "Discover" | "Map" | "Chat" | "Profile";
 type UnauthScreen = "welcome" | "auth" | "resetPassword";
@@ -450,6 +451,11 @@ export default function App() {
     Caveat_400Regular,
     Caveat_700Bold,
   });
+
+  useEffect(() => {
+    const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (key) PlacesAutocomplete.initPlaces(key);
+  }, []);
 
   if (!fontsLoaded) return null;
 

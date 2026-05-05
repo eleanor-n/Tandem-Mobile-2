@@ -276,9 +276,12 @@ export function TrustStack({ userId, variant, viewerId, mockTrust }: Props) {
       getTandemsCount(userId),
       getSharedTandemsCount(viewerId, userId),
     ]).then(([profile, tandemsCount, sharedCount]) => {
-      if (cancelled || !profile) return;
-      setTrust({ profile, tandemsCount, sharedCount });
+      if (cancelled) return;
       setLoading(false);
+      if (!profile) return;
+      setTrust({ profile, tandemsCount, sharedCount });
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
     });
 
     return () => { cancelled = true; };
