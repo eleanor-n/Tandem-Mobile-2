@@ -14,6 +14,7 @@ import { colors, radius, shadows, gradients } from "../theme";
 interface SettingsScreenProps {
   onBack: () => void;
   onMembershipPress?: () => void;
+  onSafetyPress?: () => void;
 }
 
 const ChevronRight = () => <Ionicons name="chevron-forward" size={16} color={colors.muted} />;
@@ -43,7 +44,7 @@ const MEMBERSHIP_FEATURES = [
   { label: "Trail adventures", free: false, go: false, trail: true },
 ];
 
-export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProps) => {
+export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress }: SettingsScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
 
@@ -178,6 +179,11 @@ export const SettingsScreen = ({ onBack, onMembershipPress }: SettingsScreenProp
           <View style={s.divider} />
           <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setShowPrivacy(true)}>
             <Text style={s.rowLabel}>Privacy</Text>
+            <ChevronRight />
+          </TouchableOpacity>
+          <View style={s.divider} />
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => onSafetyPress?.()}>
+            <Text style={s.rowLabel}>Safety</Text>
             <ChevronRight />
           </TouchableOpacity>
         </View>

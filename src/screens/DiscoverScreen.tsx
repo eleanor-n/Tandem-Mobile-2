@@ -34,6 +34,10 @@ import { getSunnyResponse } from "../lib/sunny";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
 import { TrustStack } from "../components/safety/TrustStack";
+import { SafetyCheckIn } from "../components/safety/SafetyCheckIn";
+import { PrivateLocationNudge, shouldNudgeLocation } from "../components/safety/PrivateLocationNudge";
+import { FirstJoinReminder } from "../components/safety/FirstJoinReminder";
+import { hasSeenFirstJoinReminder, markFirstJoinReminderSeen } from "../lib/safetyStorage";
 
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -129,12 +133,13 @@ interface DiscoverScreenProps {
   startOnMyActivity?: boolean;
   postPrefill?: { name: string; lat: number; lng: number } | null;
   onPostPrefillConsumed?: () => void;
+  onSafetyPress?: () => void;
 }
 
 type LocationAutocompleteProps = {
   value: string;
   placeholder?: string;
-  onSelect: (place: { description: string; lat: number; lng: number }) => void;
+  onSelect: (place: { description: string; lat: number; lng: number; raw: Place }) => void;
 };
 
 const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocompleteProps) => {
@@ -170,7 +175,7 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
       const lat = details.coordinate?.latitude;
       const lng = details.coordinate?.longitude;
       if (typeof lat === "number" && typeof lng === "number") {
-        onSelect({ description: place.fullText || place.description, lat, lng });
+        onSelect({ description: place.fullText || place.description, lat, lng, raw: place });
       }
       setQuery(place.fullText || place.description);
       setPredictions([]);
@@ -248,7 +253,7 @@ const modalLocationS = StyleSheet.create({
   },
 });
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed, onSafetyPress }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -313,6 +318,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [viewerProfileData, setViewerProfileData] = useState<{ id: string; name: string; photo: string } | null>(null);
   const [viewerProfileFetched, setViewerProfileFetched] = useState<any | null>(null);
   const [viewerProfileLoading, setViewerProfileLoading] = useState(false);
+  const [safetyCheckInActivity, setSafetyCheckInActivity] = useState<any | null>(null);
+  const [showFirstJoinReminder, setShowFirstJoinReminder] = useState(false);
+  const [pendingNudgePlace, setPendingNudgePlace] = useState<any | null>(null);
+  const [showLocationNudge, setShowLocationNudge] = useState(false);
 
   // Fetch full profile when viewer modal opens
   useEffect(() => {
@@ -793,11 +802,17 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     return activeFilter === "all" ? liveActivities : liveActivities.filter((a: any) => a.category === activeFilter);
   })();
 
-  const handleImIn = async (activityId: string) => {
+  const handleImIn = (activityId: string) => {
     if (isLimited) {
       setShowUpsell(true);
       return;
     }
+    const act = liveActivities.find((a: any) => a.id === activityId);
+    if (!act) return;
+    setSafetyCheckInActivity(act);
+  };
+
+  const executeImIn = async (activityId: string) => {
     const act = liveActivities.find((a: any) => a.id === activityId);
 
     // Show celebration immediately — before any async work
@@ -852,6 +867,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     }
 
     await incrementImIn();
+
+    const seen = await hasSeenFirstJoinReminder();
+    if (!seen) {
+      await markFirstJoinReminderSeen();
+      setShowFirstJoinReminder(true);
+    }
   };
 
   const handleBlockReport = () => {
@@ -1911,10 +1932,14 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             <LocationAutocomplete
               value={postLocation}
               placeholder="search for a location"
-              onSelect={({ description, lat, lng }) => {
+              onSelect={({ description, lat, lng, raw }) => {
                 setPostLocation(description);
                 setPostLocationLat(lat);
                 setPostLocationLng(lng);
+                if (shouldNudgeLocation(raw)) {
+                  setPendingNudgePlace(raw);
+                  setShowLocationNudge(true);
+                }
               }}
             />
 
@@ -2517,6 +2542,46 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           </ScrollView>
         </View>
       </Modal>
+
+      <SafetyCheckIn
+        visible={!!safetyCheckInActivity}
+        onConfirm={() => {
+          const act = safetyCheckInActivity;
+          setSafetyCheckInActivity(null);
+          if (act) executeImIn(act.id);
+        }}
+        onDismiss={() => setSafetyCheckInActivity(null)}
+        activityTitle={safetyCheckInActivity?.title ?? ""}
+        location={safetyCheckInActivity?.location ?? ""}
+        dateTime={`${safetyCheckInActivity?.date ?? ""}${safetyCheckInActivity?.time ? ` at ${safetyCheckInActivity.time}` : ""}`}
+        posterFirstName={safetyCheckInActivity?.host?.name ?? "them"}
+        posterId={safetyCheckInActivity?.host?.user_id ?? ""}
+      />
+
+      <PrivateLocationNudge
+        visible={showLocationNudge}
+        onChangeLocation={() => {
+          setShowLocationNudge(false);
+          setPendingNudgePlace(null);
+          setPostLocation("");
+          setPostLocationLat(null);
+          setPostLocationLng(null);
+        }}
+        onKeepAsIs={() => {
+          setShowLocationNudge(false);
+          setPendingNudgePlace(null);
+        }}
+        onDismiss={() => setShowLocationNudge(false)}
+      />
+
+      <FirstJoinReminder
+        visible={showFirstJoinReminder}
+        onPress={() => {
+          setShowFirstJoinReminder(false);
+          onSafetyPress?.();
+        }}
+        onDismiss={() => setShowFirstJoinReminder(false)}
+      />
     </View>
   );
 };

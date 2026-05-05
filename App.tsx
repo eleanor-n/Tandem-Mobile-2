@@ -36,6 +36,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
+import { SafetySettingsScreen } from "./src/screens/SafetySettingsScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -56,6 +57,7 @@ const AppInner = () => {
   const [unauthScreen, setUnauthScreen] = useState<UnauthScreen>("welcome");
   const [activeTab, setActiveTab] = useState<Tab>("Discover");
   const [showSettings, setShowSettings] = useState(false);
+  const [showSafety, setShowSafety] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
   const [showScrapbook, setShowScrapbook] = useState(false);
   const [showDevPreview, setShowDevPreview] = useState(false);
@@ -316,11 +318,15 @@ const AppInner = () => {
   if (showScrapbook) {
     return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setShowPost(true); }} />;
   }
+  if (showSafety) {
+    return <SafetySettingsScreen onBack={() => setShowSafety(false)} />;
+  }
   if (showSettings) {
     return (
       <SettingsScreen
         onBack={() => setShowSettings(false)}
         onMembershipPress={() => { setShowSettings(false); setShowMembership(true); }}
+        onSafetyPress={() => { setShowSettings(false); setShowSafety(true); }}
       />
     );
   }
@@ -374,6 +380,7 @@ const AppInner = () => {
           startOnMyActivity={showMyActivity}
           postPrefill={postPrefill}
           onPostPrefillConsumed={() => setPostPrefill(null)}
+          onSafetyPress={() => setShowSafety(true)}
         />
       );
   }
