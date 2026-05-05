@@ -114,6 +114,23 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [trustRefreshKey, setTrustRefreshKey] = useState(0);
+
+  // Realtime: refresh TrustStack when this user's verification flips.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`profile-verification-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
+        () => setTrustRefreshKey((k) => k + 1)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
   const [editFirstName, setEditFirstName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editOccupation, setEditOccupation] = useState("");
@@ -537,7 +554,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Verification + trust signals */}
         {user?.id && (
           <View style={{ marginTop: 12, marginBottom: 4 }}>
-            <TrustStack userId={user.id} viewerId={user.id} variant="profile" />
+            <TrustStack key={trustRefreshKey} userId={user.id} viewerId={user.id} variant="profile" />
           </View>
         )}
 

@@ -7,19 +7,27 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, shadows, gradients } from "../theme";
+import { useVerificationGate } from "../lib/verificationGate";
+import { VerificationGateModal } from "../components/safety/VerificationGateModal";
 
 interface ChatScreenProps {
   convo: { id: string; name: string; photo: string; age?: number };
   onBack: () => void;
+  onTakeSelfie?: () => void;
 }
 
-export const ChatScreen = ({ convo, onBack }: ChatScreenProps) => {
+export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<{ id: string; text: string; sent: boolean }[]>([]);
+  const gate = useVerificationGate();
 
   const sendMessage = () => {
     if (!message.trim()) return;
+    if (!gate.isVerified) {
+      gate.showGate();
+      return;
+    }
     setMessages(prev => [...prev, { id: Date.now().toString(), text: message.trim(), sent: true }]);
     setMessage("");
   };
@@ -118,6 +126,13 @@ export const ChatScreen = ({ convo, onBack }: ChatScreenProps) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      <VerificationGateModal
+        visible={gate.gateVisible}
+        hasSelfieUploaded={gate.hasSelfieUploaded}
+        onClose={gate.hideGate}
+        onTakeSelfie={onTakeSelfie}
+      />
     </KeyboardAvoidingView>
   );
 };

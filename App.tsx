@@ -37,6 +37,8 @@ import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SafetySettingsScreen } from "./src/screens/SafetySettingsScreen";
+import { SelfieCaptureScreen } from "./src/screens/SelfieCaptureScreen";
+import { AdminReviewScreen } from "./src/screens/AdminReviewScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -63,6 +65,9 @@ const AppInner = () => {
   const [showDevPreview, setShowDevPreview] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
   const [showSplash, setShowSplash] = useState(false);
+  const [pendingSelfieOnboarding, setPendingSelfieOnboarding] = useState(false);
+  const [showStandaloneSelfie, setShowStandaloneSelfie] = useState(false);
+  const [showAdminReview, setShowAdminReview] = useState(false);
   const [showPost, setShowPost] = useState(false);
   const [showMyActivity, setShowMyActivity] = useState(false);
   const [postPrefill, setPostPrefill] = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -290,6 +295,7 @@ const AppInner = () => {
           }
           // Mark that this user has onboarded so checkFirstLaunch knows to show splash
           await AsyncStorage.setItem("tandem_has_onboarded", "true");
+          setPendingSelfieOnboarding(true);
           // Re-fetch profile so onboardingCompleted flips to true → routes to Discover
           await refreshOnboarding();
         }}
@@ -298,6 +304,14 @@ const AppInner = () => {
   }
 
   // ── Logged in, onboarding done → Main app ─────────────────
+  if (pendingSelfieOnboarding) {
+    return (
+      <SelfieCaptureScreen
+        onComplete={() => setPendingSelfieOnboarding(false)}
+        onSkip={() => setPendingSelfieOnboarding(false)}
+      />
+    );
+  }
   if (showSplash) {
     return (
       <SplashAnimationScreen
@@ -318,6 +332,18 @@ const AppInner = () => {
   if (showScrapbook) {
     return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setShowPost(true); }} />;
   }
+  if (showStandaloneSelfie) {
+    return (
+      <SelfieCaptureScreen
+        isStandalone
+        onComplete={() => setShowStandaloneSelfie(false)}
+        onSkip={() => setShowStandaloneSelfie(false)}
+      />
+    );
+  }
+  if (showAdminReview) {
+    return <AdminReviewScreen onBack={() => setShowAdminReview(false)} />;
+  }
   if (showSafety) {
     return <SafetySettingsScreen onBack={() => setShowSafety(false)} />;
   }
@@ -327,6 +353,7 @@ const AppInner = () => {
         onBack={() => setShowSettings(false)}
         onMembershipPress={() => { setShowSettings(false); setShowMembership(true); }}
         onSafetyPress={() => { setShowSettings(false); setShowSafety(true); }}
+        onAdminReviewPress={() => { setShowSettings(false); setShowAdminReview(true); }}
       />
     );
   }
@@ -353,7 +380,7 @@ const AppInner = () => {
       break;
     case "Chat":
       tabContent = activeChat
-        ? <ChatScreen convo={activeChat} onBack={() => setActiveChat(null)} />
+        ? <ChatScreen convo={activeChat} onBack={() => setActiveChat(null)} onTakeSelfie={() => setShowStandaloneSelfie(true)} />
         : <MessagesScreen {...tabProps} onOpenChat={(c) => setActiveChat(c)} />;
       break;
     case "Profile":
@@ -381,6 +408,7 @@ const AppInner = () => {
           postPrefill={postPrefill}
           onPostPrefillConsumed={() => setPostPrefill(null)}
           onSafetyPress={() => setShowSafety(true)}
+          onTakeSelfie={() => setShowStandaloneSelfie(true)}
         />
       );
   }
@@ -461,7 +489,18 @@ export default function App() {
 
   useEffect(() => {
     const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (key) PlacesAutocomplete.initPlaces(key);
+    if (!key) {
+      console.warn("[PLACES] API key missing — dropdown will not work. Check EAS env vars.");
+      (globalThis as any).__TANDEM_PLACES_INIT_OK__ = false;
+      return;
+    }
+    try {
+      PlacesAutocomplete.initPlaces(key);
+      (globalThis as any).__TANDEM_PLACES_INIT_OK__ = true;
+    } catch (err) {
+      console.warn("[PLACES] init failed:", (err as any)?.message ?? err);
+      (globalThis as any).__TANDEM_PLACES_INIT_OK__ = false;
+    }
   }, []);
 
   if (!fontsLoaded) return null;

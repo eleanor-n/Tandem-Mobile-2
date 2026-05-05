@@ -15,6 +15,7 @@ interface SettingsScreenProps {
   onBack: () => void;
   onMembershipPress?: () => void;
   onSafetyPress?: () => void;
+  onAdminReviewPress?: () => void;
 }
 
 const ChevronRight = () => <Ionicons name="chevron-forward" size={16} color={colors.muted} />;
@@ -44,11 +45,24 @@ const MEMBERSHIP_FEATURES = [
   { label: "Trail adventures", free: false, go: false, trail: true },
 ];
 
-export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress }: SettingsScreenProps) => {
+export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdminReviewPress }: SettingsScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data?.is_admin) setIsAdmin(true);
+      });
+  }, [user]);
   const [membershipTier, setMembershipTier] = useState("Free");
   const [whoToSee, setWhoToSee] = useState("Everyone");
   const [visibility, setVisibility] = useState<Record<string, boolean>>({
@@ -186,6 +200,15 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress }: Set
             <Text style={s.rowLabel}>Safety</Text>
             <ChevronRight />
           </TouchableOpacity>
+          {isAdmin && (
+            <>
+              <View style={s.divider} />
+              <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => onAdminReviewPress?.()}>
+                <Text style={s.rowLabel}>Review Pending Verifications</Text>
+                <ChevronRight />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* ACCOUNT */}

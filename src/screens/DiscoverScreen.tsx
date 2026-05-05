@@ -38,6 +38,8 @@ import { SafetyCheckIn } from "../components/safety/SafetyCheckIn";
 import { PrivateLocationNudge, shouldNudgeLocation } from "../components/safety/PrivateLocationNudge";
 import { FirstJoinReminder } from "../components/safety/FirstJoinReminder";
 import { hasSeenFirstJoinReminder, markFirstJoinReminderSeen } from "../lib/safetyStorage";
+import { useVerificationGate } from "../lib/verificationGate";
+import { VerificationGateModal } from "../components/safety/VerificationGateModal";
 
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -134,26 +136,48 @@ interface DiscoverScreenProps {
   postPrefill?: { name: string; lat: number; lng: number } | null;
   onPostPrefillConsumed?: () => void;
   onSafetyPress?: () => void;
+  onTakeSelfie?: () => void;
 }
 
 type LocationAutocompleteProps = {
   value: string;
   placeholder?: string;
-  onSelect: (place: { description: string; lat: number; lng: number; raw: Place }) => void;
+  onSelect: (place: { description: string; lat: number; lng: number; raw: Place | null }) => void;
 };
 
 const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocompleteProps) => {
   const [query, setQuery] = useState(value);
   const [predictions, setPredictions] = useState<Place[]>([]);
+  const [showFallbackLink, setShowFallbackLink] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setQuery(value); }, [value]);
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+  }, []);
+
+  const armFallbackLink = () => {
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = setTimeout(() => setShowFallbackLink(true), 1000);
+  };
+
+  const cancelFallbackArm = () => {
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  };
 
   const handleChangeText = (text: string) => {
     setQuery(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!text.trim()) {
       setPredictions([]);
+      cancelFallbackArm();
+      setShowFallbackLink(false);
       return;
     }
     debounceRef.current = setTimeout(async () => {
@@ -162,9 +186,16 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
         const places = result?.places ?? [];
         console.log("[PLACES]", { query: text, resultsCount: places.length, error: null });
         setPredictions(places);
+        if (places.length > 0) {
+          cancelFallbackArm();
+          setShowFallbackLink(false);
+        } else if (text.trim().length >= 3) {
+          armFallbackLink();
+        }
       } catch (err: any) {
         console.log("[PLACES]", { query: text, resultsCount: 0, error: err?.message ?? String(err) });
         setPredictions([]);
+        if (text.trim().length >= 3) armFallbackLink();
       }
     }, 250);
   };
@@ -179,10 +210,39 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
       }
       setQuery(place.fullText || place.description);
       setPredictions([]);
+      setShowFallbackLink(false);
     } catch (err: any) {
       console.log("[PLACES]", { stage: "placeDetails", placeId: place.placeId, error: err?.message ?? String(err) });
     }
   };
+
+  const handleManualChange = (text: string) => {
+    setQuery(text);
+    if (!text.trim()) {
+      setManualMode(false);
+      setShowFallbackLink(false);
+      onSelect({ description: "", lat: 0, lng: 0, raw: null });
+      return;
+    }
+    onSelect({ description: text, lat: NaN, lng: NaN, raw: null });
+  };
+
+  if (manualMode) {
+    return (
+      <View>
+        <TextInput
+          value={query}
+          onChangeText={handleManualChange}
+          placeholder="type the address"
+          placeholderTextColor={colors.muted}
+          style={modalLocationS.input}
+          autoCorrect={false}
+          returnKeyType="done"
+        />
+        <Text style={modalLocationS.manualHint}>typing manually. clear the field to switch back.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ position: "relative", zIndex: 9999 }}>
@@ -210,6 +270,19 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
             </TouchableOpacity>
           ))}
         </View>
+      )}
+      {showFallbackLink && predictions.length === 0 && (
+        <TouchableOpacity
+          onPress={() => {
+            setManualMode(true);
+            setShowFallbackLink(false);
+            setPredictions([]);
+          }}
+          activeOpacity={0.7}
+          style={modalLocationS.fallbackBtn}
+        >
+          <Text style={modalLocationS.fallbackText}>having trouble? type the location manually</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -251,9 +324,44 @@ const modalLocationS = StyleSheet.create({
     color: colors.foreground,
     fontFamily: "Quicksand_500Medium",
   },
+  fallbackBtn: {
+    marginTop: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  fallbackText: {
+    fontSize: 12,
+    color: colors.teal,
+    fontFamily: "Quicksand_500Medium",
+    textDecorationLine: "underline",
+  },
+  manualHint: {
+    fontSize: 11,
+    color: colors.muted,
+    fontFamily: "Quicksand_400Regular",
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
 });
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed, onSafetyPress }: DiscoverScreenProps) => {
+const placesDevBannerS = StyleSheet.create({
+  banner: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    alignItems: "center",
+    zIndex: 99999,
+  },
+  text: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: "Quicksand_700Bold",
+    letterSpacing: 0.5,
+  },
+});
+
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed, onSafetyPress, onTakeSelfie }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -322,6 +430,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [showFirstJoinReminder, setShowFirstJoinReminder] = useState(false);
   const [pendingNudgePlace, setPendingNudgePlace] = useState<any | null>(null);
   const [showLocationNudge, setShowLocationNudge] = useState(false);
+  const verificationGate = useVerificationGate();
 
   // Fetch full profile when viewer modal opens
   useEffect(() => {
@@ -803,6 +912,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   })();
 
   const handleImIn = (activityId: string) => {
+    if (!verificationGate.isVerified) {
+      verificationGate.showGate();
+      return;
+    }
     if (isLimited) {
       setShowUpsell(true);
       return;
@@ -1045,6 +1158,10 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   };
 
   const handleSubmitPost = async () => {
+    if (!verificationGate.isVerified) {
+      verificationGate.showGate();
+      return;
+    }
     if (!postTitle.trim()) {
       showToast("add a title to post.");
       return;
@@ -1155,8 +1272,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const cardImageUrl: string | null = currentCard?.image_url ?? null;
   const cardGradient = currentCard ? getCardGradient(currentCard.category) : CATEGORY_GRADIENT.default;
 
+  const placesInitOk = (globalThis as any).__TANDEM_PLACES_INIT_OK__;
+
   return (
     <View style={s.container}>
+      {__DEV__ && placesInitOk !== undefined ? (
+        <View
+          style={[
+            placesDevBannerS.banner,
+            { backgroundColor: placesInitOk ? "#16A34A" : "#DC2626", top: insets.top },
+          ]}
+          pointerEvents="none"
+        >
+          <Text style={placesDevBannerS.text}>
+            Places SDK init: {placesInitOk ? "OK" : "FAILED"}
+          </Text>
+        </View>
+      ) : null}
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
         <View style={s.headerLeft}>
@@ -1934,9 +2066,11 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               placeholder="search for a location"
               onSelect={({ description, lat, lng, raw }) => {
                 setPostLocation(description);
-                setPostLocationLat(lat);
-                setPostLocationLng(lng);
-                if (shouldNudgeLocation(raw)) {
+                const validLat = Number.isFinite(lat) ? lat : null;
+                const validLng = Number.isFinite(lng) ? lng : null;
+                setPostLocationLat(validLat);
+                setPostLocationLng(validLng);
+                if (raw && shouldNudgeLocation(raw)) {
                   setPendingNudgePlace(raw);
                   setShowLocationNudge(true);
                 }
@@ -2581,6 +2715,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           onSafetyPress?.();
         }}
         onDismiss={() => setShowFirstJoinReminder(false)}
+      />
+
+      <VerificationGateModal
+        visible={verificationGate.gateVisible}
+        hasSelfieUploaded={verificationGate.hasSelfieUploaded}
+        onClose={verificationGate.hideGate}
+        onTakeSelfie={onTakeSelfie}
       />
     </View>
   );

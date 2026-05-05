@@ -59,7 +59,7 @@ Deno.serve(async (_req) => {
           ],
           headings: { en: "happy birthday" },
           contents: {
-            en: "it's sunny. today's your day. do something worth tandeming about.",
+            en: "today's your day. do something worth tandeming about.",
           },
           name: "birthday_notification",
         }),
