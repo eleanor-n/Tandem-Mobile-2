@@ -21,7 +21,7 @@ import { BottomNav } from "../components/BottomNav";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
-import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import { getCardRotation } from "../theme/scrapbookTheme";
 import { getSunnyResponse } from "../lib/sunny";
 import { NotificationSettingsScreen } from "./NotificationSettingsScreen";
@@ -92,8 +92,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [noteVibe, setNoteVibe] = useState("");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
-  const caveat = (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined;
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
+  const caveat = (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_500Medium_Italic" : "Fraunces_500Medium_Italic") : undefined;
   const [memories, setMemories] = useState<any[]>([]);
   const [voiceUri, setVoiceUri] = useState<string | null>(null);
   const player = useAudioPlayer(voiceUri ? { uri: voiceUri } : null);
@@ -397,7 +397,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       const name = profile?.first_name || "someone";
       await Share.share({
         title: `${name} is on Tandem`,
-        message: `${name} is on Tandem — the app where you find people to do things with. never go alone: https://thetandemweb.com`,
+        message: `${name} is on Tandem, the companionship app. never go alone: https://thetandemweb.com`,
       });
     } catch (err: any) {
       console.warn("Share failed:", err.message);
@@ -589,7 +589,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         <View style={s.section}>
           <Text style={s.sectionLabel}>HOSTING NOW</Text>
           <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
-            <Text style={s.emptyCardCtaText}>+ post an activity</Text>
+            <Text style={s.emptyCardCtaText}>+ Post a tandem</Text>
           </TouchableOpacity>
         </View>
 

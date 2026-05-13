@@ -15,7 +15,7 @@ const { width: W, height: H } = Dimensions.get("window");
 const PANELS = [
   {
     photo: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800",
-    text: "never go alone.",
+    text: "Never go alone.",
   },
   {
     photo: "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800",
@@ -104,7 +104,7 @@ export const SplashAnimationScreen = ({ onComplete }: SplashAnimationScreenProps
       ) : (
         <Animated.View style={[s.sunnyWrap, { opacity: sunnyOpacity }]}>
           <SunnyAvatar expression="warm" size={80} />
-          <Text style={s.sunnyText}>let's find your people.</Text>
+          <Text style={s.sunnyText}>Easy plans, easier connection.</Text>
         </Animated.View>
       )}
     </View>

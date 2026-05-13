@@ -26,7 +26,7 @@ export const TermsScreen = ({ onBack }: TermsScreenProps) => {
         showsVerticalScrollIndicator={false}
       >
         <Text style={s.wordmark}>tandem</Text>
-        <Text style={s.tagline}>Never Go Alone — but make sure you read this first.</Text>
+        <Text style={s.tagline}>Never go alone. Make sure you read this first.</Text>
         <Text style={s.meta}>Effective Date: March 1, 2025 · Last Updated: February 27, 2026</Text>
         <Text style={s.intro}>
           PLEASE READ THESE TERMS CAREFULLY. By creating an account or using Tandem, you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree, do not use the Service. These Terms contain an arbitration clause and class action waiver that affect your legal rights.
@@ -213,7 +213,7 @@ export const TermsScreen = ({ onBack }: TermsScreenProps) => {
           <Text style={s.footerText}>Tandem App, Inc.</Text>
           <Text style={s.footerText}>tandemapp.hq@gmail.com · www.thetandemweb.com</Text>
           <Text style={s.footerText}>© 2026 Tandem App, Inc. All rights reserved.</Text>
-          <Text style={s.footerBrand}>Never Go Alone</Text>
+          <Text style={s.footerBrand}>Never go alone.</Text>
         </View>
       </ScrollView>
     </View>

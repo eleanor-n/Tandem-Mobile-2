@@ -29,8 +29,8 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to: profile.expo_push_token,
-        title: "small thing",
-        body: "your selfie didn't quite work. try again from your profile.",
+        title: "Verify your identity to start tandeming.",
+        body: "",
         sound: "default",
         data: { type: "verification_rejected" },
       }),

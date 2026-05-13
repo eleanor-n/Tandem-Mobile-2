@@ -44,8 +44,8 @@ Deno.serve(async (_req) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             to: token,
-            title: "sunny here",
-            body: "haven't tandemed in a week. see who's up to something.",
+            title: "hey, you.",
+            body: "tandem with someone today?",
             sound: "default",
             data: { type: "weekly_checkin" },
           }),

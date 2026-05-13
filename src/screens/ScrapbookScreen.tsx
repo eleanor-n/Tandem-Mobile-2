@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
@@ -646,7 +646,7 @@ const EmptyState = ({ caveat, onPost, sunnyLine, sunnyOpacity }: {
     ) : null}
     <TouchableOpacity style={em.btn} activeOpacity={0.88} onPress={onPost}>
       <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={em.btnInner}>
-        <Text style={em.btnText}>post an activity</Text>
+        <Text style={em.btnText}>Post a tandem</Text>
       </LinearGradient>
     </TouchableOpacity>
   </View>
@@ -680,7 +680,7 @@ interface ScrapbookScreenProps {
 export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: ScrapbookScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
   const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
   const [memories, setMemories] = useState<ScrapbookMemory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -726,12 +726,12 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
   }, [loading, memories.length]);
 
   const caveat = useCallback(
-    (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined,
+    (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_500Medium_Italic" : "Fraunces_500Medium_Italic") : undefined,
     [fontsLoaded]
   );
 
   const handleMenu = (memory: ScrapbookMemory) => {
-    const options = ["edit memory", "delete memory", "cancel"];
+    const options = ["edit memory", "delete memory", "Cancel"];
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
         { options, destructiveButtonIndex: 1, cancelButtonIndex: 2 },
@@ -739,7 +739,7 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
           if (idx === 0) setSelectedMemory(memory);
           if (idx === 1) {
             Alert.alert("delete memory?", "this can't be undone.", [
-              { text: "cancel", style: "cancel" },
+              { text: "Cancel", style: "cancel" },
               {
                 text: "delete", style: "destructive",
                 onPress: async () => {
@@ -757,14 +757,14 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
         {
           text: "delete memory", style: "destructive",
           onPress: () => Alert.alert("delete?", "this can't be undone.", [
-            { text: "cancel", style: "cancel" },
+            { text: "Cancel", style: "cancel" },
             { text: "delete", style: "destructive", onPress: async () => {
               setMemories(prev => prev.filter(m => m.id !== memory.id));
               await supabase.from("scrapbook_memories").delete().eq("id", memory.id);
             }},
           ]),
         },
-        { text: "cancel", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
       ]);
     }
   };

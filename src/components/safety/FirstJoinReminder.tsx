@@ -60,7 +60,7 @@ const s = StyleSheet.create({
   },
   line: {
     flex: 1,
-    fontFamily: "Caveat_700Bold",
+    fontFamily: "Fraunces_500Medium_Italic",
     fontSize: 18,
     fontStyle: "italic",
     color: colors.foreground,

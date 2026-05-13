@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, Modal, Animated,
 } from "react-native";
-import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -83,7 +83,7 @@ interface MapScreenProps {
 
 export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithLocation }: MapScreenProps) => {
   const insets = useSafeAreaInsets();
-  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
   const [mapActivities, setMapActivities] = useState<any[]>([]);
@@ -304,7 +304,7 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
           <View style={ms.emptyTop}>
             <SunnyAvatar expression="warm" size={84} />
           </View>
-          <Text style={[ms.emptyMessage, fontsLoaded ? { fontFamily: "Caveat_700Bold", fontStyle: "italic" } : null]}>
+          <Text style={[ms.emptyMessage, fontsLoaded ? { fontFamily: "Fraunces_500Medium_Italic", fontStyle: "italic" } : null]}>
             no one's tandeming nearby yet. you could be the first.
           </Text>
           <TouchableOpacity onPress={() => onPostPress?.()} activeOpacity={0.88} style={ms.emptyCta}>
@@ -391,14 +391,14 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
                   activeOpacity={0.8}
                   style={{ flex: 1, height: 52, borderRadius: 100, borderWidth: 1, borderColor: "#E0D8C8", alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#888" }}>pass</Text>
+                  <Text style={{ fontFamily: fontsLoaded ? "Fraunces_500Medium_Italic" : undefined, fontSize: 16, color: "#888" }}>pass</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => { saveActivityForLater(act); setSelectedActivity(null); }}
                   activeOpacity={0.8}
                   style={{ flex: 1.4, height: 52, borderRadius: 100, borderWidth: 1.5, borderColor: "#1D9E75", alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#1D9E75" }}>save for later</Text>
+                  <Text style={{ fontFamily: fontsLoaded ? "Fraunces_500Medium_Italic" : undefined, fontSize: 16, color: "#1D9E75" }}>Save for later</Text>
                 </TouchableOpacity>
                 {!requestedSet.has(act.id) ? (
                   <TouchableOpacity
@@ -406,11 +406,11 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
                     activeOpacity={0.88}
                     style={{ flex: 2, height: 52, borderRadius: 100, backgroundColor: "#1D9E75", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Text style={{ fontFamily: fontsLoaded ? "Caveat_700Bold" : undefined, fontSize: 18, color: "white" }}>i'm in</Text>
+                    <Text style={{ fontFamily: fontsLoaded ? "Fraunces_500Medium_Italic" : undefined, fontSize: 18, color: "white" }}>i'm in</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={{ flex: 2, height: 52, borderRadius: 100, borderWidth: 1, borderColor: "#E0D8C8", alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontFamily: fontsLoaded ? "Caveat_400Regular" : undefined, fontSize: 16, color: "#888" }}>requested</Text>
+                    <Text style={{ fontFamily: fontsLoaded ? "Fraunces_500Medium_Italic" : undefined, fontSize: 16, color: "#888" }}>requested</Text>
                   </View>
                 )}
               </View>

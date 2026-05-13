@@ -67,8 +67,8 @@ Deno.serve(async (_req) => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               to: token,
-              title: "tandem in an hour",
-              body: `${activity.title} starts soon. get ready.`,
+              title: "shoes on, tandem in 30.",
+              body: `${activity.title}.`,
               sound: "default",
               data: { type: "activity_reminder", activity_id: activity.id },
             }),

@@ -26,7 +26,7 @@ export const PrivacyScreen = ({ onBack }: PrivacyScreenProps) => {
         showsVerticalScrollIndicator={false}
       >
         <Text style={s.wordmark}>tandem</Text>
-        <Text style={s.tagline}>Never Go Alone — but your data stays yours.</Text>
+        <Text style={s.tagline}>Never go alone. Your data stays yours.</Text>
         <Text style={s.intro}>
           Welcome to Tandem ("we," "us," or "our"). Tandem is a companionship app designed to connect people for shared activities — not dating, not networking, just genuine human connection. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and related services (collectively, the "Service"). Please read this policy carefully. By using Tandem, you agree to the practices described here.
         </Text>
@@ -151,7 +151,7 @@ export const PrivacyScreen = ({ onBack }: PrivacyScreenProps) => {
 
         <View style={s.footer}>
           <Text style={s.footerText}>© 2026 Tandem App, Inc. All rights reserved.</Text>
-          <Text style={s.footerBrand}>Never Go Alone</Text>
+          <Text style={s.footerBrand}>Never go alone.</Text>
         </View>
       </ScrollView>
     </View>

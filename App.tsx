@@ -20,7 +20,7 @@ import {
   Quicksand_600SemiBold,
   Quicksand_700Bold,
 } from "@expo-google-fonts/quicksand";
-import { Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import { View, ActivityIndicator, Linking, Alert, Animated, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
@@ -484,8 +484,7 @@ export default function App() {
     Quicksand_500Medium,
     Quicksand_600SemiBold,
     Quicksand_700Bold,
-    Caveat_400Regular,
-    Caveat_700Bold,
+    Fraunces_500Medium_Italic,
   });
 
   useEffect(() => {

@@ -19,7 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import PlacesAutocomplete from "expo-google-places-autocomplete";
 import type { Place } from "expo-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useFonts, Caveat_400Regular } from "@expo-google-fonts/caveat";
+import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -475,7 +475,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [loadingMyPosts, setLoadingMyPosts] = useState(false);
 
-  const [fontsLoaded] = useFonts({ Caveat_400Regular });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
@@ -1007,7 +1007,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       "what would you like to do?",
       [
         {
-          text: "block user",
+          text: "Block",
           style: "destructive",
           onPress: async () => {
             await supabase.from("blocked_users").upsert(
@@ -1020,7 +1020,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           },
         },
         {
-          text: "report",
+          text: "Report",
           onPress: async () => {
             await supabase.from("user_reports").insert({
               reporter_id: user.id,
@@ -1031,7 +1031,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             showToast("report submitted.");
           },
         },
-        { text: "cancel", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
       ]
     );
   };
@@ -1747,7 +1747,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
       {saveToastVisible && (
         <Animated.View style={[s.saveToast, { opacity: saveToastOpacity }]} pointerEvents="none">
-          <Text style={[s.saveToastText, fontsLoaded ? { fontFamily: "Caveat_400Regular" } : {}]}>
+          <Text style={[s.saveToastText, fontsLoaded ? { fontFamily: "Fraunces_500Medium_Italic" } : {}]}>
             {'saved to your profile · find it under "saved"'}
           </Text>
         </Animated.View>
@@ -3175,7 +3175,7 @@ const modalS = StyleSheet.create({
     backgroundColor: colors.white, borderWidth: 1, borderColor: "#E0D8C8",
   },
   categoryPillActive: { backgroundColor: "#1D9E75", borderColor: "#1D9E75" },
-  categoryPillText: { fontSize: 14, color: "#444", fontFamily: "Caveat_400Regular" },
+  categoryPillText: { fontSize: 14, color: "#444", fontFamily: "Fraunces_500Medium_Italic" },
   categoryPillTextActive: { color: colors.white },
   customCategoryInput: {
     marginTop: 10, borderWidth: 0.5, borderColor: "#E0D8C8",
@@ -3189,7 +3189,7 @@ const modalS = StyleSheet.create({
     borderRadius: 10, padding: 14,
     backgroundColor: colors.white,
   },
-  dateFieldText: { fontFamily: "Caveat_400Regular", fontSize: 16, color: colors.foreground },
+  dateFieldText: { fontFamily: "Fraunces_500Medium_Italic", fontSize: 16, color: colors.foreground },
   dateFieldHint: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted },
 
   photoPicker: {

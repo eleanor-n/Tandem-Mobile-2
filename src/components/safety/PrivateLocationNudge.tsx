@@ -119,7 +119,7 @@ const s = StyleSheet.create({
 
 const m = StyleSheet.create({
   title: {
-    fontFamily: "Caveat_700Bold",
+    fontFamily: "Fraunces_500Medium_Italic",
     fontSize: 22,
     fontStyle: "italic",
     color: colors.foreground,

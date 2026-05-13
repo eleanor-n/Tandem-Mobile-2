@@ -56,7 +56,7 @@ export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppW
 
   const STEPS: Step[] = [
     {
-      message: "never go alone. this is where the action is.",
+      message: "Never go alone. this is where the action is.",
       highlightX: tabCenterX(0),
       highlightY: NAV_TOP + 28,
       highlightR: 32,
@@ -74,7 +74,7 @@ export const AppWalkthrough = ({ toggleY = 120, insetTop = 0, onComplete }: AppW
       arrowLeft: W / 2 - 24,
     },
     {
-      message: "share what you want to do. post a plan and someone will show up.",
+      message: "share what you want to do. Post a tandem and someone will show up.",
       highlightX: tabCenterX(2),
       highlightY: NAV_TOP + 10,
       highlightR: 36,

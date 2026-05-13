@@ -1133,7 +1133,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
         "photo access needed",
         "please go to Settings > Tandem and allow photo library access.",
         [
-          { text: "cancel", style: "cancel" },
+          { text: "Cancel", style: "cancel" },
           { text: "open settings", onPress: () => Linking.openSettings() },
         ]
       );

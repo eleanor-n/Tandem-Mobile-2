@@ -29,8 +29,8 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to: profile.expo_push_token,
-        title: "you're in",
-        body: "selfie verified. go tandem with someone.",
+        title: "Your profile is verified.",
+        body: "Welcome to Tandem.",
         sound: "default",
         data: { type: "verification_approved" },
       }),

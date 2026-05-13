@@ -68,30 +68,34 @@ export async function sendLocalNotification(title: string, body: string) {
   });
 }
 
-// Sunny-voiced notification copy
+// Locked notification templates.
+// Sunny voice (lowercase, soft): connection/activity/social triggers.
+// Tandem voice (sentence case): safety/payment/account triggers.
 export const NOTIFICATION_COPY = {
-  joinRequest: (activityTitle: string) => ({
-    title: "someone wants to tandem.",
-    body: `a new request for "${activityTitle}". go check them out.`,
+  // Sunny voice
+  joinRequest: (requesterName: string) => ({
+    title: "company incoming.",
+    body: `${requesterName} just joined your tandem.`,
   }),
-  approved: (activityTitle: string) => ({
-    title: "you're in.",
-    body: `your request for "${activityTitle}" was approved. time to make a plan.`,
+  approved: () => ({
+    title: "locked in.",
+    body: "see you there.",
   }),
-  rejected: (activityTitle: string) => ({
-    title: "not this time.",
-    body: `"${activityTitle}" didn't work out. there's more out there.`,
+  postFirstJoin: () => ({
+    title: "someone said yes.",
+    body: "",
   }),
-  sayHey: (senderName: string) => ({
-    title: `${senderName} said hey.`,
-    body: "go say something back.",
+  newMessage: (senderName: string, messageText: string) => ({
+    title: senderName,
+    body: messageText,
   }),
-  activityTomorrow: (activityTitle: string) => ({
-    title: "tomorrow. just so you know.",
-    body: `"${activityTitle}" is happening tomorrow. don't bail.`,
+  // Tandem voice
+  verificationApproved: () => ({
+    title: "Your profile is verified.",
+    body: "Welcome to Tandem.",
   }),
-  newMessage: (senderName: string) => ({
-    title: `${senderName} messaged you.`,
-    body: "sunny thinks you should reply.",
+  verificationNeeded: () => ({
+    title: "Verify your identity to start tandeming.",
+    body: "",
   }),
 };

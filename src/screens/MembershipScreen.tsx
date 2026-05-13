@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
-import { useFonts, Caveat_400Regular, Caveat_700Bold } from "@expo-google-fonts/caveat";
+import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -94,7 +94,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
   const { user, refreshOnboarding } = useAuth();
   const [period, setPeriod] = useState<Period>("monthly");
   const [loadingTier, setLoadingTier] = useState<Tier | null>(null);
-  const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
   const [sunnyBanner, setSunnyBanner] = useState<string | null>(null);
   const sunnyBannerOpacity = useRef(new Animated.Value(0)).current;
   const [restoringPurchases, setRestoringPurchases] = useState(false);
@@ -230,7 +230,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
           end={{ x: 1, y: 1 }}
           style={s.hero}
         >
-          <Text style={s.heroTitle}>find your people.</Text>
+          <Text style={s.heroTitle}>Never go alone.</Text>
           <Text style={s.heroSub}>unlock the full tandem experience.</Text>
         </LinearGradient>
 
@@ -294,7 +294,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                 </View>
               )}
             </View>
-            <Text style={[s.goPrice, fontsLoaded && { fontFamily: "Caveat_700Bold" }]}>{PRICES.go[period].perWeek}</Text>
+            <Text style={[s.goPrice, fontsLoaded && { fontFamily: "Fraunces_500Medium_Italic" }]}>{PRICES.go[period].perWeek}</Text>
             <Text style={s.perWeekLabel}>per week</Text>
             <Text style={s.billingNote}>{PRICES.go[period].billingNote} · {PRICES.go[period].total}</Text>
           </View>
@@ -359,7 +359,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                 </View>
               )}
             </View>
-            <Text style={[s.trailPrice, fontsLoaded && { fontFamily: "Caveat_700Bold" }]}>{PRICES.trail[period].perWeek}</Text>
+            <Text style={[s.trailPrice, fontsLoaded && { fontFamily: "Fraunces_500Medium_Italic" }]}>{PRICES.trail[period].perWeek}</Text>
             <Text style={s.trailPerWeekLabel}>per week</Text>
             <Text style={s.trailBillingNote}>{PRICES.trail[period].billingNote} · {PRICES.trail[period].total}</Text>
           </View>
@@ -507,7 +507,7 @@ const s = StyleSheet.create({
   ctaWrap: { paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
   renewNote: {
     textAlign: "center", fontSize: 11, color: "#aaa",
-    fontFamily: "Caveat_400Regular",
+    fontFamily: "Fraunces_500Medium_Italic",
   },
   renewNoteWhite: { color: "rgba(255,255,255,0.6)" },
 

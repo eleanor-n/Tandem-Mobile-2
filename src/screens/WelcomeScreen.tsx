@@ -111,11 +111,9 @@ export const WelcomeScreen = ({
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        <Text style={s.hero}>Never Go{"\n"}Alone.</Text>
+        <Text style={s.hero}>Never go{"\n"}alone.</Text>
         <Text style={s.sub}>
-          find your people. every{" "}
-          <Text style={s.subTeal}>icebreaker</Text>
-          {", handled."}
+          Easy plans, easier connection.
         </Text>
 
         <TouchableOpacity

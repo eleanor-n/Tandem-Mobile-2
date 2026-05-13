@@ -414,7 +414,7 @@ const m = StyleSheet.create({
     ...shadows.card,
   },
   modalTitle: {
-    fontFamily: "Caveat_700Bold",
+    fontFamily: "Fraunces_500Medium_Italic",
     fontSize: 22,
     fontStyle: "italic",
     color: colors.foreground,

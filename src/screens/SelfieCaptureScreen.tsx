@@ -281,7 +281,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 32,
   },
   sunnyDeniedLine: {
-    fontFamily: "Caveat_700Bold",
+    fontFamily: "Fraunces_500Medium_Italic",
     fontSize: 22,
     fontStyle: "italic",
     color: colors.foreground,
@@ -290,7 +290,7 @@ const s = StyleSheet.create({
     lineHeight: 28,
   },
   sunnyDoneLine: {
-    fontFamily: "Caveat_700Bold",
+    fontFamily: "Fraunces_500Medium_Italic",
     fontSize: 22,
     fontStyle: "italic",
     color: colors.foreground,
