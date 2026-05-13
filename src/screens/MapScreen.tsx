@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, Modal, Animated,
 } from "react-native";
-import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -83,7 +83,7 @@ interface MapScreenProps {
 
 export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithLocation }: MapScreenProps) => {
   const insets = useSafeAreaInsets();
-  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
   const [mapActivities, setMapActivities] = useState<any[]>([]);

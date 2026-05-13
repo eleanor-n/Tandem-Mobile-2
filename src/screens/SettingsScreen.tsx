@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { colors, radius, shadows, gradients } from "../theme";
+import { EduVerificationModal } from "../components/safety/EduVerificationModal";
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -76,6 +77,7 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdm
   const [showLinkedAccounts, setShowLinkedAccounts] = useState(false);
   const [showTermsScreen, setShowTermsScreen] = useState(false);
   const [showPrivacyScreen, setShowPrivacyScreen] = useState(false);
+  const [showEduVerify, setShowEduVerify] = useState(false);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
@@ -198,6 +200,11 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdm
           <View style={s.divider} />
           <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => onSafetyPress?.()}>
             <Text style={s.rowLabel}>Safety</Text>
+            <ChevronRight />
+          </TouchableOpacity>
+          <View style={s.divider} />
+          <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setShowEduVerify(true)}>
+            <Text style={s.rowLabel}>Verify school email</Text>
             <ChevronRight />
           </TouchableOpacity>
           {isAdmin && (
@@ -438,6 +445,13 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdm
           </ScrollView>
         </View>
       </Modal>
+
+      <EduVerificationModal
+        visible={showEduVerify}
+        onClose={() => setShowEduVerify(false)}
+        onVerified={() => setShowEduVerify(false)}
+        onSkip={() => setShowEduVerify(false)}
+      />
     </View>
   );
 };

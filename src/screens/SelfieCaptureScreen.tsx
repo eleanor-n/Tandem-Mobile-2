@@ -157,7 +157,7 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
   return (
     <View style={s.root}>
       <View style={[s.cameraHeader, { paddingTop: insets.top + 8 }]}>
-        <Text style={s.title}>take a verification selfie</Text>
+        <Text style={s.title}>Verify with a selfie</Text>
         <Text style={s.sub}>so we know it's really you. front-facing, eyes on camera.</Text>
       </View>
       <View style={s.cameraWrap}>

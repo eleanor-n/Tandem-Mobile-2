@@ -22,6 +22,7 @@ import { registerForPushNotifications } from "../lib/notifications";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, gradients, shadows } from "../theme";
+import { EduVerificationModal } from "../components/safety/EduVerificationModal";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -123,7 +124,7 @@ const STEPS = [
     messages: ["last one. why are you here? what are you actually looking for?"],
     expression: "warm" as SunnyExpression,
     inputType: "multi",
-    options: ["Friendship", "Group activities", "Workout buddy", "Exploring the city", "Companionship", "Gaming buddy", "Travel buddy", "Study buddy"],
+    options: ["Companionship", "Group activities", "Workout buddy", "Exploring the city", "Gaming buddy", "Travel buddy", "Study buddy"],
   },
   {
     key: "ideal_saturday",
@@ -163,6 +164,16 @@ const STEPS = [
       "I'm at my best when...",
     ],
     placeholder: "finish the sentence...",
+  },
+  {
+    key: "edu_verify",
+    messages: [
+      "one more thing.",
+      "verify your school email so people can tandem you safely.",
+    ],
+    expression: "warm" as SunnyExpression,
+    inputType: "edu_verify",
+    options: [],
   },
   {
     key: "done",
@@ -207,7 +218,8 @@ const getGenericFallback = () =>
 
 const PROGRESS_MAP: Record<number, number> = {
   0: 8, 1: 18, 2: 28, 3: 36, 4: 44, 5: 52,
-  6: 60, 7: 68, 8: 76, 9: 84, 10: 92, 11: 100,
+  6: 60, 7: 68, 8: 76, 9: 84, 10: 92, 11: 96,
+  12: 100, 13: 100,
 };
 
 // ─── LLM Reaction Helper ─────────────────────────────────────
@@ -1377,8 +1389,8 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
               )
             )}
 
-            {/* Skip link — shown on all skippable steps */}
-            {!UNSKIPPABLE.has(step.key) && (
+            {/* Skip link — shown on all skippable steps (edu_verify has its own skip in the modal) */}
+            {!UNSKIPPABLE.has(step.key) && step.inputType !== "edu_verify" && (
               <TouchableOpacity onPress={handleSkip} style={styles.skipBtn} activeOpacity={0.7}>
                 <Text style={styles.skipText}>skip this question</Text>
               </TouchableOpacity>
@@ -1386,6 +1398,13 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
           </>
         )}
       </View>
+
+      <EduVerificationModal
+        visible={step.inputType === "edu_verify" && isShowingInput}
+        onClose={() => { /* user dismisses sheet — treat as skip */ goNextStep(); }}
+        onVerified={() => goNextStep()}
+        onSkip={() => goNextStep()}
+      />
 
       {/* Notification permission prompt overlay */}
       {showNotifPrompt && (

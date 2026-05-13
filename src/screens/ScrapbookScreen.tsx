@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
@@ -680,7 +680,7 @@ interface ScrapbookScreenProps {
 export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: ScrapbookScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
   const [memories, setMemories] = useState<ScrapbookMemory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -726,7 +726,7 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
   }, [loading, memories.length]);
 
   const caveat = useCallback(
-    (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_500Medium_Italic" : "Fraunces_500Medium_Italic") : undefined,
+    (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_700Bold_Italic" : "Fraunces_500Medium_Italic") : undefined,
     [fontsLoaded]
   );
 

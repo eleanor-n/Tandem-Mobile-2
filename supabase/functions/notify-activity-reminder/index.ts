@@ -14,13 +14,13 @@ Deno.serve(async (_req) => {
     );
 
     const now = new Date();
-    const in55min = new Date(now.getTime() + 55 * 60 * 1000);
-    const in70min = new Date(now.getTime() + 70 * 60 * 1000);
+    const in25min = new Date(now.getTime() + 25 * 60 * 1000);
+    const in35min = new Date(now.getTime() + 35 * 60 * 1000);
 
-    // Fetch activities starting in ~1 hour
-    const targetDate = in55min.toISOString().split("T")[0];
-    const startTime = in55min.toTimeString().split(" ")[0];
-    const endTime = in70min.toTimeString().split(" ")[0];
+    // Fetch activities starting in ~30 minutes (matches the "tandem in 30" push template)
+    const targetDate = in25min.toISOString().split("T")[0];
+    const startTime = in25min.toTimeString().split(" ")[0];
+    const endTime = in35min.toTimeString().split(" ")[0];
 
     const { data: activities } = await supabase
       .from("activities")

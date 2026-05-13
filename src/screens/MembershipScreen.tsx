@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
-import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -94,7 +94,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
   const { user, refreshOnboarding } = useAuth();
   const [period, setPeriod] = useState<Period>("monthly");
   const [loadingTier, setLoadingTier] = useState<Tier | null>(null);
-  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const [sunnyBanner, setSunnyBanner] = useState<string | null>(null);
   const sunnyBannerOpacity = useRef(new Animated.Value(0)).current;
   const [restoringPurchases, setRestoringPurchases] = useState(false);

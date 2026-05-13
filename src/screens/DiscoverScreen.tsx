@@ -19,7 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import PlacesAutocomplete from "expo-google-places-autocomplete";
 import type { Place } from "expo-google-places-autocomplete";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useFonts, Fraunces_500Medium_Italic } from "@expo-google-fonts/fraunces";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -475,7 +475,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [loadingMyPosts, setLoadingMyPosts] = useState(false);
 
-  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (msg: string) => {
