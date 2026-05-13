@@ -10,7 +10,7 @@
 //   customer.subscription.updated
 //   customer.subscription.deleted
 
-import Stripe from "npm:stripe";
+import Stripe from "https://esm.sh/stripe@14?target=deno";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GO_PRICES = new Set([
@@ -27,7 +27,10 @@ const TRAIL_PRICES = new Set([
 ]);
 
 Deno.serve(async (req) => {
-  const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!);
+  const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+    apiVersion: "2024-04-10",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -38,10 +41,14 @@ Deno.serve(async (req) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    // Deno does not have Node's crypto module, so the sync constructEvent
+    // throws here. Use constructEventAsync with SubtleCrypto instead.
+    event = await stripe.webhooks.constructEventAsync(
       body,
       signature!,
-      Deno.env.get("STRIPE_WEBHOOK_SECRET")!
+      Deno.env.get("STRIPE_WEBHOOK_SECRET")!,
+      undefined,
+      Stripe.createSubtleCryptoProvider()
     );
   } catch (err: any) {
     console.error("webhook signature verification failed:", err.message);

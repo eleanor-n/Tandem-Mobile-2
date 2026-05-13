@@ -50,6 +50,7 @@ import { getSunnyResponse } from "./src/lib/sunny";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import PlacesAutocomplete from "expo-google-places-autocomplete";
+import Constants from "expo-constants";
 
 type Tab = "Discover" | "Map" | "Chat" | "Profile";
 type UnauthScreen = "welcome" | "auth" | "resetPassword";
@@ -488,15 +489,20 @@ export default function App() {
   });
 
   useEffect(() => {
-    const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const envKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const cfg = Constants.expoConfig as any;
+    const cfgKey: string | undefined = cfg?.ios?.config?.googleMapsApiKey;
+    const key = envKey || (cfgKey && !cfgKey.startsWith("${") ? cfgKey : undefined);
     if (!key) {
-      console.warn("[PLACES] API key missing — dropdown will not work. Check EAS env vars.");
+      console.warn("[PLACES] API key missing — neither process.env nor Constants.expoConfig.ios.config.googleMapsApiKey is set. Check EAS env vars.");
       (globalThis as any).__TANDEM_PLACES_INIT_OK__ = false;
       return;
     }
     try {
       PlacesAutocomplete.initPlaces(key);
       (globalThis as any).__TANDEM_PLACES_INIT_OK__ = true;
+      (globalThis as any).__TANDEM_PLACES_API_KEY__ = key;
+      console.log("[PLACES] init ok (source:", envKey ? "env" : "constants", ")");
     } catch (err) {
       console.warn("[PLACES] init failed:", (err as any)?.message ?? err);
       (globalThis as any).__TANDEM_PLACES_INIT_OK__ = false;

@@ -108,23 +108,17 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
     try {
       const priceId = PRICES[tier][period].id;
       console.log("[Stripe] invoking checkout:", { tier, period, priceId });
-      const res = await fetch(
-        "https://ccntlaunczirvntnsjbm.supabase.co/functions/v1/create-checkout-session",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            priceId,
-            userId: user.id,
-            userEmail: user.email,
-          }),
-        }
-      );
-      const result = await res.json();
-      console.log("[Stripe] checkout response:", result);
-      const { url } = result;
-      if (!url) {
-        console.error("No checkout URL returned:", result);
+      const { data: result, error: invokeError } = await supabase.functions.invoke("create-checkout-session", {
+        body: {
+          priceId,
+          userId: user.id,
+          userEmail: user.email,
+        },
+      });
+      console.log("[Stripe] checkout response:", result, invokeError);
+      const url = (result as any)?.url;
+      if (invokeError || !url) {
+        console.error("No checkout URL returned:", invokeError ?? result);
         Alert.alert(
           "something went wrong",
           "couldn't open checkout right now. try again in a moment.",

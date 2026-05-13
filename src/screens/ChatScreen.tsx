@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform, Image,
@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useVerificationGate } from "../lib/verificationGate";
 import { VerificationGateModal } from "../components/safety/VerificationGateModal";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 interface ChatScreenProps {
   convo: { id: string; name: string; photo: string; age?: number };
@@ -16,20 +18,84 @@ interface ChatScreenProps {
   onTakeSelfie?: () => void;
 }
 
+interface ChatMessage {
+  id: string;
+  content: string;
+  sender_id: string;
+  created_at: string;
+}
+
 export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<{ id: string; text: string; sent: boolean }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const scrollRef = useRef<ScrollView | null>(null);
   const gate = useVerificationGate();
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
+  // Initial load + realtime subscription on messages for this tandem.
+  useEffect(() => {
+    if (!convo.id) return;
+    let cancelled = false;
+
+    supabase
+      .from("messages")
+      .select("id, content, sender_id, created_at")
+      .eq("tandem_id", convo.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }: any) => {
+        if (cancelled) return;
+        setMessages((data ?? []) as ChatMessage[]);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
+      });
+
+    const channel = supabase
+      .channel(`messages-${convo.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `tandem_id=eq.${convo.id}` },
+        (payload) => {
+          const row = payload.new as ChatMessage;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === row.id)) return prev;
+            return [...prev, row];
+          });
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [convo.id]);
+
+  const sendMessage = async () => {
+    const text = message.trim();
+    if (!text || !user) return;
     if (!gate.isVerified) {
       gate.showGate();
       return;
     }
-    setMessages(prev => [...prev, { id: Date.now().toString(), text: message.trim(), sent: true }]);
     setMessage("");
+    // Optimistic: insert into Supabase. Realtime sub will mirror it back; the
+    // in-memory dedupe by id prevents duplicates.
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ tandem_id: convo.id, sender_id: user.id, content: text } as any)
+      .select("id, content, sender_id, created_at")
+      .maybeSingle();
+    if (error) {
+      console.warn("[ChatScreen] send failed:", error.message);
+      setMessage(text);
+      return;
+    }
+    if (data) {
+      const row = data as unknown as ChatMessage;
+      setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    }
   };
 
   return (
@@ -57,6 +123,7 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
 
       {/* Messages */}
       <ScrollView
+        ref={scrollRef}
         style={s.messages}
         contentContainerStyle={[s.messagesContent, { paddingBottom: 20 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
@@ -74,24 +141,27 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
         </View>
 
         {/* Message bubbles */}
-        {messages.map(m => (
-          <View key={m.id} style={[s.bubbleRow, m.sent && s.bubbleRowSent]}>
-            {m.sent ? (
-              <LinearGradient
-                colors={gradients.brand}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[s.bubble, s.bubbleSent]}
-              >
-                <Text style={s.bubbleTextSent}>{m.text}</Text>
-              </LinearGradient>
-            ) : (
-              <View style={[s.bubble, s.bubbleReceived]}>
-                <Text style={s.bubbleTextReceived}>{m.text}</Text>
-              </View>
-            )}
-          </View>
-        ))}
+        {messages.map(m => {
+          const sent = m.sender_id === user?.id;
+          return (
+            <View key={m.id} style={[s.bubbleRow, sent && s.bubbleRowSent]}>
+              {sent ? (
+                <LinearGradient
+                  colors={gradients.brand}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[s.bubble, s.bubbleSent]}
+                >
+                  <Text style={s.bubbleTextSent}>{m.content}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={[s.bubble, s.bubbleReceived]}>
+                  <Text style={s.bubbleTextReceived}>{m.content}</Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
 
       {/* Input bar */}

@@ -154,6 +154,16 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setQuery(value); }, [value]);
+
+  // Defensive re-init: mirror the bundled component pattern so this works even
+  // if App.tsx's init ran before the key was available.
+  useEffect(() => {
+    const key = (globalThis as any).__TANDEM_PLACES_API_KEY__
+      ?? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key) return;
+    try { PlacesAutocomplete.initPlaces(key); } catch {}
+  }, []);
+
   useEffect(() => () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
@@ -182,7 +192,7 @@ const LocationAutocomplete = ({ value, placeholder, onSelect }: LocationAutocomp
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const result = await PlacesAutocomplete.findPlaces(text);
+        const result = await PlacesAutocomplete.findPlaces(text, { countries: [] } as any);
         const places = result?.places ?? [];
         console.log("[PLACES]", { query: text, resultsCount: places.length, error: null });
         setPredictions(places);
@@ -1276,16 +1286,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
   return (
     <View style={s.container}>
-      {__DEV__ && placesInitOk !== undefined ? (
+      {__DEV__ ? (
         <View
           style={[
             placesDevBannerS.banner,
-            { backgroundColor: placesInitOk ? "#16A34A" : "#DC2626", top: insets.top },
+            { backgroundColor: placesInitOk === true ? "#16A34A" : "#DC2626", top: insets.top },
           ]}
           pointerEvents="none"
         >
           <Text style={placesDevBannerS.text}>
-            Places SDK init: {placesInitOk ? "OK" : "FAILED"}
+            Places SDK: {placesInitOk === true ? "OK" : placesInitOk === false ? "FAILED" : "NOT INITIALIZED"}
           </Text>
         </View>
       ) : null}
@@ -2374,8 +2384,28 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 <TouchableOpacity
                   style={hostS.msgBtn}
                   activeOpacity={0.8}
-                  onPress={() => {
+                  onPress={async () => {
                     setShowHostProfile(false);
+                    const hostId = profileActivity?.host?.user_id;
+                    if (user && hostId && onOpenChat) {
+                      // If a tandem already exists with this host, open the chat directly.
+                      const { data: existing } = await supabase
+                        .from("tandems")
+                        .select("id")
+                        .or(
+                          `and(user_a_id.eq.${user.id},user_b_id.eq.${hostId}),and(user_a_id.eq.${hostId},user_b_id.eq.${user.id})`
+                        )
+                        .limit(1)
+                        .maybeSingle();
+                      if ((existing as any)?.id) {
+                        onOpenChat({
+                          id: (existing as any).id,
+                          name: profileActivity?.host?.name ?? "them",
+                          photo: profileActivity?.host?.photo ?? "",
+                        });
+                        return;
+                      }
+                    }
                     if (onMessagesPress) {
                       onMessagesPress();
                     } else {
