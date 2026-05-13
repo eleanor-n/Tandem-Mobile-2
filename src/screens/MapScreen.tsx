@@ -8,6 +8,9 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav } from "../components/BottomNav";
+import SunnyAvatar from "../components/SunnyAvatar";
+import { LinearGradient } from "expo-linear-gradient";
+import { gradients } from "../theme";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { useMembershipTier } from "../hooks/useMembershipTier";
@@ -262,17 +265,12 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
         {/* Panel header */}
         <View style={s.panelHeader}>
           <Text style={s.panelTitle}>nearby</Text>
-          <TouchableOpacity activeOpacity={0.7}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
             <Text style={s.seeAll}>see all</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Sunny empty state sits below the header as a flow element */}
-        {sunnyVisible && sunnyText.current && mapActivities.length === 0 ? (
-          <Animated.Text style={[ms.sunnyLine, { opacity: sunnyOpacity }]} numberOfLines={3}>
-            {sunnyText.current}
-          </Animated.Text>
-        ) : (
+        {mapLoaded && mapActivities.length === 0 ? null : (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -300,6 +298,22 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
           </ScrollView>
         )}
       </View>
+
+      {mapLoaded && mapActivities.length === 0 && (
+        <View style={[ms.emptyOverlay, { paddingTop: insets.top + 72, paddingBottom: 220 + insets.bottom }]} pointerEvents="box-none">
+          <View style={ms.emptyTop}>
+            <SunnyAvatar expression="warm" size={84} />
+          </View>
+          <Text style={[ms.emptyMessage, fontsLoaded ? { fontFamily: "Caveat_700Bold", fontStyle: "italic" } : null]}>
+            no one's tandeming nearby yet. you could be the first.
+          </Text>
+          <TouchableOpacity onPress={() => onPostPress?.()} activeOpacity={0.88} style={ms.emptyCta}>
+            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.emptyCtaInner}>
+              <Text style={ms.emptyCtaText}>Post a tandem</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!!toast && (
         <View style={s.toast} pointerEvents="none">
@@ -544,5 +558,43 @@ const ms = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     lineHeight: 20,
+  },
+  emptyOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FAF9F6",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 32,
+  },
+  emptyTop: {
+    alignItems: "center",
+  },
+  emptyMessage: {
+    fontSize: 22,
+    color: "#1F2937",
+    textAlign: "center",
+    lineHeight: 28,
+    paddingHorizontal: 12,
+  },
+  emptyCta: {
+    width: "100%",
+    height: 52,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  emptyCtaInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyCtaText: {
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
+    color: "#FFFFFF",
   },
 });

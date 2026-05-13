@@ -679,16 +679,42 @@ interface ScrapbookScreenProps {
 
 export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: ScrapbookScreenProps) => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [fontsLoaded] = useFonts({ Caveat_400Regular, Caveat_700Bold });
   const [viewMode, setViewMode] = useState<"grid" | "timeline">("grid");
   const [memories, setMemories] = useState<ScrapbookMemory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedMemory, setSelectedMemory] = useState<ScrapbookMemory | null>(null);
   const sunnyEmptyText = useRef<string | null>(null);
   const [sunnyEmptyVisible, setSunnyEmptyVisible] = useState(false);
   const sunnyEmptyOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (memories.length === 0) {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("scrapbook_memories")
+      .select("id, user_id, title, partner_name, activity_date, location, cover_photo_url, is_public, caption, stickers, tags, created_at, scrapbook_photos(photo_url, display_order)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }: any) => {
+        if (cancelled) return;
+        const rows = (data ?? []).map((r: any) => ({
+          ...r,
+          stickers: r.stickers ?? [],
+          photos: (r.scrapbook_photos ?? []).slice().sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0)),
+        })) as ScrapbookMemory[];
+        setMemories(rows);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!loading && memories.length === 0) {
       getSunnyResponse({ context: "emptyScrapbook" }).then(text => {
         sunnyEmptyText.current = text;
         setTimeout(() => {
@@ -697,7 +723,7 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
         }, 700);
       });
     }
-  }, []);
+  }, [loading, memories.length]);
 
   const caveat = useCallback(
     (bold?: boolean) => fontsLoaded ? (bold ? "Caveat_700Bold" : "Caveat_400Regular") : undefined,

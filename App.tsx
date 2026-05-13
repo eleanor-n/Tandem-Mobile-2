@@ -330,7 +330,7 @@ const AppInner = () => {
 
   // Overlay screens (highest priority first)
   if (showScrapbook) {
-    return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setShowPost(true); }} />;
+    return <ScrapbookScreen activeTab="Scrapbook" onTabPress={(t) => { setShowScrapbook(false); setActiveTab(t as Tab); }} onPostPress={() => { setShowScrapbook(false); setActiveTab("Discover"); setShowPost(true); }} />;
   }
   if (showStandaloneSelfie) {
     return (

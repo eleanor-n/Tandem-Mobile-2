@@ -52,13 +52,6 @@ const PROMPT_LABELS: Record<string, string> = {
   weekend_vibe: "Weekend vibe",
 };
 
-const VIBE_TAG_OPTIONS = [
-  "adventurous", "chill", "spontaneous", "reliable", "funny",
-  "outdoorsy", "foodie", "creative", "night owl", "early bird",
-  "dog person", "music lover", "bookworm", "gym rat", "homebody",
-];
-
-
 interface ProfileScreenProps {
   activeTab: string;
   onTabPress: (tab: string) => void;
@@ -93,7 +86,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [loading, setLoading] = useState(true);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [visibility, setVisibility] = useState<Record<string, boolean>>({});
-  const [selectedVibeTags, setSelectedVibeTags] = useState<string[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [showLeaveNote, setShowLeaveNote] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -248,7 +240,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           gender: true, sexuality: true, religion: true,
           relationship_status: true, occupation: true, mbti: true, humor_type: true,
         });
-        if (data.vibe_tags) setSelectedVibeTags(data.vibe_tags);
         setProfilePublic(data.is_public !== false);
         setEditFirstName(data.first_name || "");
         setEditBio(data.bio || "");
@@ -417,16 +408,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     const updated = { ...visibility, [key]: !(visibility[key] ?? true) };
     setVisibility(updated);
     if (user) await supabase.from("profiles").update({ profile_visibility: updated } as any).eq("user_id", user.id);
-  };
-
-  const toggleVibeTag = (tag: string) => {
-    setSelectedVibeTags(prev => {
-      const next = prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag];
-      if (user) {
-        supabase.from("profiles").update({ vibe_tags: next } as any).eq("user_id", user.id);
-      }
-      return next;
-    });
   };
 
   const deleteComment = (id: string) => {
@@ -643,45 +624,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             </View>
           </View>
         )}
-
-        {/* Vibe tags */}
-        <View style={s.section}>
-          <View style={s.sectionHeaderRow}>
-            <Text style={s.sectionLabel}>YOUR VIBE</Text>
-            <Text style={s.sectionHint}>{selectedVibeTags.length}/5</Text>
-          </View>
-          <View style={s.vibeTagsWrap}>
-            {VIBE_TAG_OPTIONS.map(tag => {
-              const isSelected = selectedVibeTags.includes(tag);
-              const isDisabled = !isSelected && selectedVibeTags.length >= 5;
-              if (isSelected) {
-                return (
-                  <TouchableOpacity key={tag} onPress={() => toggleVibeTag(tag)} activeOpacity={0.8} style={s.vibeTagBtn}>
-                    <LinearGradient
-                      colors={gradients.brand}
-                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                      style={s.vibeTagSelected}
-                    >
-                      <Text style={s.vibeTagSelectedText}>{tag}</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              }
-              return (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => !isDisabled && toggleVibeTag(tag)}
-                  activeOpacity={isDisabled ? 1 : 0.8}
-                  style={s.vibeTagBtn}
-                >
-                  <View style={[s.vibeTag, isDisabled && s.vibeTagDisabled]}>
-                    <Text style={[s.vibeTagText, isDisabled && s.vibeTagTextDisabled]}>{tag}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
 
         {/* Prompts */}
         {Object.entries(quickPrompts).map(([key, value]) => (
@@ -1307,20 +1249,6 @@ const s = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { backgroundColor: colors.tintTeal, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full },
   chipText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
-
-  // Vibe tags
-  vibeTagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  vibeTagBtn: { overflow: "hidden", borderRadius: radius.full },
-  vibeTagSelected: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full },
-  vibeTagSelectedText: { fontSize: 12, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
-  vibeTag: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  vibeTagDisabled: { opacity: 0.4 },
-  vibeTagText: { fontSize: 12, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground },
-  vibeTagTextDisabled: { color: colors.muted },
 
   // Prompts
   promptBlock: { backgroundColor: colors.tintTeal, borderRadius: radius.md, padding: 16, borderLeftWidth: 3, borderLeftColor: colors.teal },
