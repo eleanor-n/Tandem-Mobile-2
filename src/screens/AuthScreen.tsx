@@ -262,7 +262,7 @@ export const AuthScreen = ({ onBack }: AuthScreenProps) => {
             {mode === "signin" ? "welcome\nback." : "let's get\nyou in."}
           </Text>
           <Text style={styles.subText}>
-            {mode === "signin" ? "find your people. never go alone." : "join tandem. it's free."}
+            {mode === "signin" ? "Never go alone." : "join tandem. it's free."}
           </Text>
         </View>
 
