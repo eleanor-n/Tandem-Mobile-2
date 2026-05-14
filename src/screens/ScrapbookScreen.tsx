@@ -13,6 +13,7 @@ import * as MediaLibrary from "expo-media-library";
 import ViewShot from "react-native-view-shot";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomNav } from "../components/BottomNav";
+import SunnyAvatar from "../components/SunnyAvatar";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { radius, gradients } from "../theme";
@@ -88,99 +89,119 @@ const tog = StyleSheet.create({
 
 // ── Memory Card (polaroid) ────────────────────────────────────────────────
 
+const POLAROID_W = Math.round(W * 0.86);
+
 const MemoryCard = ({
-  memory, caveat, onPress, onMenu,
+  memory, caveat, onPress, onMenu, indexInList,
 }: {
   memory: ScrapbookMemory;
   caveat: (bold?: boolean) => string | undefined;
   onPress: () => void;
   onMenu: () => void;
+  indexInList: number;
 }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const photoUri = memory.cover_photo_url || memory.photos?.[0]?.photo_url;
-  const rotation = `${getCardRotation(memory.id)}deg`;
-  const activeStickerKeys = memory.stickers?.slice(0, 3) || [];
+  // Subtle alternating rotation (-1deg, +1deg) for a scattered-polaroid feel.
+  const rotation = `${indexInList % 2 === 0 ? -1 : 1}deg`;
+  const hasMultiplePhotos = (memory.photos?.length ?? 0) > 1;
+  const caption = memory.caption ?? "";
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={onPress}
-      style={[mc.wrap, { transform: [{ rotate: rotation }] }]}
-    >
-      {/* Photo area */}
-      <View style={mc.photoArea}>
-        {!imgLoaded && (
-          <View style={mc.photoPlaceholder}>
-            {!photoUri && (
-              <Image source={require("../../assets/icon.png")} style={mc.iconPlaceholder} resizeMode="contain" />
-            )}
-            {photoUri && <ActivityIndicator color={SB.border} />}
-          </View>
-        )}
-        {photoUri && (
-          <Image
-            source={{ uri: photoUri }}
-            style={[StyleSheet.absoluteFillObject, !imgLoaded && { opacity: 0 }]}
-            resizeMode="cover"
-            onLoad={() => setImgLoaded(true)}
-          />
-        )}
+    <View style={mc.deckWrap}>
+      {/* Back-of-deck card peeking out for multi-photo memories */}
+      {hasMultiplePhotos && <View style={mc.deckBack} />}
 
-        {/* Visibility badge */}
-        <View style={[mc.badge, memory.is_public ? mc.badgePublic : mc.badgePrivate]}>
-          <Text style={[mc.badgeText, { color: memory.is_public ? SB.tealText : SB.inkFaint, fontFamily: caveat(false) }]}>
-            {memory.is_public ? "on profile" : "private"}
-          </Text>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={onPress}
+        style={[mc.frame, { transform: [{ rotate: rotation }] }]}
+      >
+        {/* Photo area — fills the inner cream frame */}
+        <View style={mc.photoArea}>
+          {!imgLoaded && (
+            <View style={mc.photoPlaceholder}>
+              {!photoUri && (
+                <Image source={require("../../assets/icon.png")} style={mc.iconPlaceholder} resizeMode="contain" />
+              )}
+              {photoUri && <ActivityIndicator color={SB.border} />}
+            </View>
+          )}
+          {photoUri && (
+            <Image
+              source={{ uri: photoUri }}
+              style={[StyleSheet.absoluteFillObject, !imgLoaded && { opacity: 0 }]}
+              resizeMode="cover"
+              onLoad={() => setImgLoaded(true)}
+            />
+          )}
+
+          {/* Visibility badge */}
+          <View style={[mc.badge, memory.is_public ? mc.badgePublic : mc.badgePrivate]}>
+            <Text style={[mc.badgeText, { color: memory.is_public ? SB.tealText : SB.inkFaint, fontFamily: caveat(false) }]}>
+              {memory.is_public ? "on profile" : "private"}
+            </Text>
+          </View>
+
+          {/* ··· menu */}
+          <TouchableOpacity style={mc.menuBtn} onPress={onMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={mc.menuDots}>···</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ··· menu */}
-        <TouchableOpacity style={mc.menuBtn} onPress={onMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={mc.menuDots}>···</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Caption zone */}
-      <View style={mc.body}>
-        <Text style={[mc.title, { fontFamily: caveat(true) }]} numberOfLines={2}>
-          {memory.title}
-        </Text>
-        <Text style={mc.meta}>
-          {[memory.partner_name && `with ${memory.partner_name}`, formatDate(memory.activity_date)]
-            .filter(Boolean).join(" · ")}
-        </Text>
-        {activeStickerKeys.length > 0 && (
-          <View style={mc.stickerRow}>
-            {activeStickerKeys.map(k => {
-              const s = STICKERS.find(s => s.key === k);
-              return s ? (
-                <View key={k} style={[mc.stickerPill, { backgroundColor: s.bg, borderColor: s.border }]}>
-                  <Text style={[mc.stickerText, { color: s.text, fontWeight: s.fontWeight as any }]}>{s.label}</Text>
-                </View>
-              ) : null;
-            })}
-            {memory.stickers.length > 3 && (
-              <View style={[mc.stickerPill, { backgroundColor: SB.borderLight, borderColor: SB.border }]}>
-                <Text style={[mc.stickerText, { color: SB.inkMuted }]}>+{memory.stickers.length - 3}</Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
+        {/* Caption sits in the wider bottom margin — empty if no caption */}
+        <View style={mc.captionRow}>
+          {caption ? (
+            <Text style={mc.caption} numberOfLines={2}>{caption}</Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const mc = StyleSheet.create({
-  wrap: {
-    width: CARD_W, backgroundColor: "#fff",
-    borderWidth: 0.5, borderColor: SB.border, borderRadius: 8,
-    marginBottom: 28, alignSelf: "center",
-    ...SB.cardShadow,
+  deckWrap: {
+    width: POLAROID_W,
+    alignSelf: "center",
+    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Back-of-deck card peeking out behind the front polaroid for multi-photo memories
+  deckBack: {
+    position: "absolute",
+    width: POLAROID_W,
+    aspectRatio: 0.78,
+    backgroundColor: "#FAF9F6",
+    borderRadius: 4,
+    top: 8,
+    left: 10,
+    transform: [{ rotate: "3deg" }],
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  frame: {
+    width: POLAROID_W,
+    backgroundColor: "#FAF9F6",
+    borderRadius: 4,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 28,
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   photoArea: {
-    width: "100%", height: 220,
-    borderTopLeftRadius: 8, borderTopRightRadius: 8, overflow: "hidden",
+    width: "100%",
+    aspectRatio: 1,
     backgroundColor: SB.cream,
+    overflow: "hidden",
   },
   photoPlaceholder: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: SB.cream },
   iconPlaceholder: { width: 48, height: 48, opacity: 0.35 },
@@ -198,12 +219,18 @@ const mc = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 3,
   },
   menuDots: { fontSize: 11, color: "#fff", letterSpacing: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 4 },
-  title: { fontSize: 20, color: SB.ink },
-  meta: { fontSize: 12, color: SB.inkMuted },
-  stickerRow: { flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" },
-  stickerPill: { borderWidth: 0.5, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
-  stickerText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
+  captionRow: {
+    marginTop: 10,
+    minHeight: 20,
+  },
+  caption: {
+    fontSize: 15,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "left",
+    lineHeight: 20,
+  },
 });
 
 // ── Memory Detail Modal ───────────────────────────────────────────────────
@@ -623,27 +650,14 @@ const tl = StyleSheet.create({
 
 // ── Empty State ───────────────────────────────────────────────────────────
 
-const EmptyState = ({ caveat, onPost, sunnyLine, sunnyOpacity }: {
-  caveat: (bold?: boolean) => string | undefined;
+const EmptyState = ({ onPost }: {
   onPost: () => void;
-  sunnyLine?: string | null;
-  sunnyOpacity: Animated.Value;
 }) => (
   <View style={em.wrap}>
-    <View style={em.polaroid}>
-      <View style={em.photoArea}>
-        <Image source={require("../../assets/icon.png")} style={{ width: 52, height: 52, opacity: 0.4 }} resizeMode="contain" />
-      </View>
-      <View style={em.body}>
-        <Text style={[em.title, { fontFamily: caveat(true) }]}>your first memory is waiting</Text>
-        <Text style={[em.desc, { fontFamily: caveat(false) }]}>go do something. i'll be here.</Text>
-      </View>
-    </View>
-    {sunnyLine ? (
-      <Animated.Text style={[em.sunnyLine, { opacity: sunnyOpacity }]} numberOfLines={2}>
-        {sunnyLine}
-      </Animated.Text>
-    ) : null}
+    <SunnyAvatar expression="warm" size={84} />
+    <Text style={em.sunnyLine}>
+      your scrapbook is empty. tandem someone and add a memory.
+    </Text>
     <TouchableOpacity style={em.btn} activeOpacity={0.88} onPress={onPost}>
       <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={em.btnInner}>
         <Text style={em.btnText}>Post a tandem</Text>
@@ -653,20 +667,25 @@ const EmptyState = ({ caveat, onPost, sunnyLine, sunnyOpacity }: {
 );
 
 const em = StyleSheet.create({
-  wrap: { flex: 1, alignItems: "center", paddingTop: 60, paddingHorizontal: 40, gap: 28 },
-  polaroid: {
-    width: W * 0.62, backgroundColor: "#fff",
-    borderWidth: 1.5, borderStyle: "dashed", borderColor: "#D4C9B0", borderRadius: 8,
-    ...SB.cardShadow,
+  wrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 24,
   },
-  photoArea: { height: 160, backgroundColor: SB.amberLight, alignItems: "center", justifyContent: "center", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
-  body: { padding: 14, alignItems: "center", gap: 4 },
-  title: { fontSize: 18, color: SB.inkMuted, textAlign: "center" },
-  desc: { fontSize: 13, color: SB.inkMuted, textAlign: "center" },
-  btn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden" },
+  sunnyLine: {
+    fontSize: 22,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    lineHeight: 28,
+    paddingHorizontal: 8,
+  },
+  btn: { width: "100%", height: 52, borderRadius: radius.full, overflow: "hidden", marginTop: 8 },
   btnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   btnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#fff" },
-  sunnyLine: { fontStyle: "italic", fontSize: 13, color: "#888", textAlign: "center", paddingHorizontal: 8 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────
@@ -685,9 +704,6 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
   const [memories, setMemories] = useState<ScrapbookMemory[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMemory, setSelectedMemory] = useState<ScrapbookMemory | null>(null);
-  const sunnyEmptyText = useRef<string | null>(null);
-  const [sunnyEmptyVisible, setSunnyEmptyVisible] = useState(false);
-  const sunnyEmptyOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!user) {
@@ -713,17 +729,6 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
     return () => { cancelled = true; };
   }, [user]);
 
-  useEffect(() => {
-    if (!loading && memories.length === 0) {
-      getSunnyResponse({ context: "emptyScrapbook" }).then(text => {
-        sunnyEmptyText.current = text;
-        setTimeout(() => {
-          setSunnyEmptyVisible(true);
-          Animated.timing(sunnyEmptyOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-        }, 700);
-      });
-    }
-  }, [loading, memories.length]);
 
   const caveat = useCallback(
     (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_700Bold_Italic" : "Fraunces_500Medium_Italic") : undefined,
@@ -782,7 +787,10 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
     <View style={[sc.container]}>
       {/* Header */}
       <View style={[sc.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={[sc.title, { fontFamily: caveat(true) }]}>scrapbook</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={sc.title}>your scrapbook</Text>
+          <Text style={sc.subtitle}>every tandem you've made memories from.</Text>
+        </View>
         <View style={sc.headerRight}>
           <TouchableOpacity
             style={[sc.timelineBtn, viewMode === "timeline" && sc.timelineBtnActive]}
@@ -807,24 +815,20 @@ export const ScrapbookScreen = ({ activeTab, onTabPress, onPostPress }: Scrapboo
       {viewMode === "timeline" ? (
         <TimelineView memories={memories} caveat={caveat} onPress={setSelectedMemory} bottomPad={bottomPad} />
       ) : memories.length === 0 ? (
-        <EmptyState
-          caveat={caveat}
-          onPost={() => onPostPress?.()}
-          sunnyLine={sunnyEmptyVisible ? sunnyEmptyText.current : null}
-          sunnyOpacity={sunnyEmptyOpacity}
-        />
+        <EmptyState onPost={() => onPostPress?.()} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 24, paddingBottom: bottomPad }}
         >
-          {memories.map(m => (
+          {memories.map((m, i) => (
             <MemoryCard
               key={m.id}
               memory={m}
               caveat={caveat}
               onPress={() => setSelectedMemory(m)}
               onMenu={() => handleMenu(m)}
+              indexInList={i}
             />
           ))}
         </ScrollView>
@@ -851,7 +855,14 @@ const sc = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: SB.border,
     backgroundColor: SB.cream,
   },
-  title: { fontSize: 26, color: SB.ink },
+  title: { fontSize: 22, color: SB.ink, fontFamily: "Quicksand_700Bold", fontWeight: "700" },
+  subtitle: {
+    fontSize: 13,
+    color: SB.inkMuted,
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    marginTop: 2,
+  },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   timelineBtn: {
     paddingHorizontal: 12, paddingVertical: 6,

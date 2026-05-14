@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomNav } from "../components/BottomNav";
+import SunnyAvatar from "../components/SunnyAvatar";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, shadows, gradients } from "../theme";
@@ -675,41 +676,66 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </View>
         )}
 
-        {/* Memories section */}
-        {memories.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeaderRow}>
-              <Text style={[s.memoriesHeader, { fontFamily: caveat(true) }]}>memories</Text>
-              <TouchableOpacity onPress={() => Alert.alert("see all memories", "coming soon.")} activeOpacity={0.7}>
-                <Text style={s.memoriesSeeAll}>see all →</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
-              {memories.map(m => {
+        {/* Recent tandems — polaroid strip */}
+        <View style={s.section}>
+          <View style={s.sectionHeaderRow}>
+            <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+            <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7}>
+              <Text style={s.memoriesSeeAll}>See all →</Text>
+            </TouchableOpacity>
+          </View>
+          {memories.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, paddingBottom: 8, paddingHorizontal: 2 }}
+            >
+              {memories.slice(0, 3).map((m) => {
                 const photoUri = m.cover_photo_url || m.scrapbook_photos?.[0]?.photo_url;
-                const rotation = `${getCardRotation(m.id)}deg`;
                 return (
-                  <View key={m.id} style={[ms.miniCard, { transform: [{ rotate: rotation }] }]}>
-                    <View style={ms.miniPhoto}>
-                      {photoUri
-                        ? <Image source={{ uri: photoUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                        : <Image source={require("../../assets/icon.png")} style={{ width: 24, height: 24, opacity: 0.3 }} resizeMode="contain" />}
+                  <TouchableOpacity
+                    key={m.id}
+                    activeOpacity={0.85}
+                    onPress={() => onScrapbookPress?.()}
+                    style={ms.miniFrame}
+                  >
+                    <View style={ms.miniPhotoArea}>
+                      {photoUri ? (
+                        <Image
+                          source={{ uri: photoUri }}
+                          style={{ width: "100%", height: "100%" }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Image
+                          source={require("../../assets/icon.png")}
+                          style={{ width: 28, height: 28, opacity: 0.35 }}
+                          resizeMode="contain"
+                        />
+                      )}
                     </View>
-                    <Text style={[ms.miniTitle, { fontFamily: caveat(false) }]} numberOfLines={1}>{m.title}</Text>
-                    {m.is_public
-                      ? <View style={ms.publicDot} />
-                      : <View style={ms.privateDot} />}
-                  </View>
+                    {m.caption ? (
+                      <Text style={ms.miniCaption} numberOfLines={1}>{m.caption}</Text>
+                    ) : (
+                      <View style={ms.miniCaptionSpacer} />
+                    )}
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          </View>
-        ) : (
-          <View style={s.section}>
-            <Text style={[s.memoriesHeader, { fontFamily: caveat(true) }]}>memories</Text>
-            <Text style={ms.emptyHint}>memories you mark public will show up here</Text>
-          </View>
-        )}
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => onScrapbookPress?.()}
+              style={ms.miniFrameEmpty}
+            >
+              <View style={ms.miniPhotoArea}>
+                <SunnyAvatar expression="warm" size={56} />
+              </View>
+              <Text style={ms.miniCaption} numberOfLines={1}>no tandems yet</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Comments from tandem companions */}
         <View style={s.section}>
@@ -1330,26 +1356,60 @@ const s = StyleSheet.create({
   sunnyLine: { fontStyle: "italic", fontSize: 13, fontFamily: "Quicksand_400Regular", color: "#888", textAlign: "center", paddingHorizontal: 20, marginBottom: 8 },
 });
 
-// Mini memory card styles
+// Mini polaroid styles (profile recent-tandems strip)
 const ms = StyleSheet.create({
-  miniCard: {
-    width: 82, backgroundColor: "#fff",
-    borderWidth: 0.5, borderColor: "#E0D8C8", borderRadius: 4,
-    padding: 4, paddingBottom: 10,
-    shadowColor: "#8B7A5A", shadowOpacity: 0.12, shadowRadius: 5, shadowOffset: { width: 0, height: 2 },
+  recentTandemsHeader: {
+    fontSize: 16,
+    color: "#1F2937",
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+  },
+  miniFrame: {
+    width: 160,
+    backgroundColor: "#FAF9F6",
+    borderRadius: 4,
+    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 22,
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  miniFrameEmpty: {
+    width: 160,
+    backgroundColor: "#FAF9F6",
+    borderRadius: 4,
+    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 22,
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 3,
     alignItems: "center",
   },
-  miniPhoto: {
-    width: "100%", height: 64, backgroundColor: "#FAF0D4",
-    borderRadius: 3, overflow: "hidden",
-    alignItems: "center", justifyContent: "center",
-    marginBottom: 4,
+  miniPhotoArea: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#F0EDE6",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  miniTitle: { fontSize: 9, color: "#1a1a1a", textAlign: "center" },
-  publicDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#1D9E75", marginTop: 3 },
-  privateDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#E0D8C8", marginTop: 3 },
-  emptyHint: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: "#A08040", fontStyle: "italic" },
+  miniCaption: {
+    fontSize: 12,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    marginTop: 8,
+  },
+  miniCaptionSpacer: {
+    height: 18,
+    marginTop: 8,
+  },
 });
 
 // Leave a note modal styles

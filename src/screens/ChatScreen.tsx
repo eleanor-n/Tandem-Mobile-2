@@ -140,6 +140,11 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
           <Text style={s.matchedHint}>you're both in. coordinate the details.</Text>
         </View>
 
+        {/* Empty state — chat exists but no messages yet */}
+        {messages.length === 0 && (
+          <Text style={s.emptySunnyLine}>fresh chat. say hey.</Text>
+        )}
+
         {/* Message bubbles */}
         {messages.map(m => {
           const sent = m.sender_id === user?.id;
@@ -261,6 +266,16 @@ const s = StyleSheet.create({
   },
   bubbleTextSent: { fontSize: 15, color: colors.white, lineHeight: 21 },
   bubbleTextReceived: { fontSize: 15, color: colors.foreground, lineHeight: 21 },
+  emptySunnyLine: {
+    fontSize: 18,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 24,
+    marginBottom: 8,
+    paddingHorizontal: 32,
+  },
 
   // Input
   inputBar: {

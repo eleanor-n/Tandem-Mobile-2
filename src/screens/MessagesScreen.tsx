@@ -5,9 +5,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SunnyAvatar from "../components/SunnyAvatar";
 import { BottomNav } from "../components/BottomNav";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, radius } from "../theme";
+import { colors, radius, gradients } from "../theme";
 
 export interface Conversation {
   id: string;
@@ -123,9 +124,20 @@ export const MessagesScreen = ({ onOpenChat, activeTab, onTabPress, onPostPress 
 
       {conversations.length === 0 && !loadingConversations ? (
         <View style={s.empty}>
-          <SunnyAvatar expression="warm" size={60} />
-          <Text style={s.emptyTitle}>no chats yet.</Text>
-          <Text style={s.emptyDesc}>say "i'm in" on someone's plan and you can start chatting right away.</Text>
+          <SunnyAvatar expression="warm" size={84} />
+          <Text style={s.emptySunnyLine}>
+            no tandems yet. when someone joins your plans, this is where you'll talk.
+          </Text>
+          <TouchableOpacity activeOpacity={0.88} onPress={() => onPostPress?.()} style={s.emptyCta}>
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.emptyCtaInner}
+            >
+              <Text style={s.emptyCtaText}>Post a tandem</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
@@ -180,9 +192,21 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
 
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingBottom: 100 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20, paddingBottom: 100, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
   emptyDesc: { fontSize: 14, color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  emptySunnyLine: {
+    fontSize: 22,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    lineHeight: 28,
+    paddingHorizontal: 8,
+  },
+  emptyCta: { width: "100%", height: 52, borderRadius: 999, overflow: "hidden", marginTop: 8 },
+  emptyCtaInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  emptyCtaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#fff" },
 
   row: {
     flexDirection: "row", alignItems: "center",

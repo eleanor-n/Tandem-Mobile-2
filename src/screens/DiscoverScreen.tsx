@@ -1524,9 +1524,24 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
           {!loadingActivities && (isDone || deck.length === 0) ? (
             <View style={s.deckDone}>
-              <SunnyAvatar expression="warm" size={64} />
-              <Text style={s.deckDoneTitle}>that's everyone nearby for now.</Text>
-              <Text style={s.deckDoneDesc}>{sunnyDeckDoneDesc}</Text>
+              <SunnyAvatar expression="warm" size={84} />
+              <Text style={s.deckDoneSunnyLine}>
+                nothing matches your filters right now. widen them or post your own.
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => setShowPostModal(true)}
+                style={s.deckDoneCta}
+              >
+                <LinearGradient
+                  colors={gradients.brand}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={s.deckDoneCtaInner}
+                >
+                  <Text style={s.deckDoneCtaText}>Post a tandem</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           ) : !currentCard ? null : (
             <>
@@ -2864,9 +2879,21 @@ const s = StyleSheet.create({
   // Card deck
   deckContainer: { flex: 1, paddingHorizontal: 16, paddingBottom: 80 },
   deckProgress: { fontSize: 12, fontFamily: "Quicksand_400Regular", color: colors.muted, paddingTop: 10, paddingBottom: 6 },
-  deckDone: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingBottom: 80 },
+  deckDone: { flex: 1, alignItems: "center", justifyContent: "center", gap: 20, paddingBottom: 80, paddingHorizontal: 32 },
   deckDoneTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, textAlign: "center" },
   deckDoneDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
+  deckDoneSunnyLine: {
+    fontSize: 22,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    lineHeight: 28,
+    paddingHorizontal: 8,
+  },
+  deckDoneCta: { width: "100%", height: 52, borderRadius: 999, overflow: "hidden", marginTop: 8 },
+  deckDoneCtaInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+  deckDoneCtaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: "#fff" },
 
   // Card scroll
   cardScroll: { flex: 1 },

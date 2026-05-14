@@ -167,10 +167,7 @@ const STEPS = [
   },
   {
     key: "edu_verify",
-    messages: [
-      "one more thing.",
-      "verify your school email so people can tandem you safely.",
-    ],
+    messages: [],
     expression: "warm" as SunnyExpression,
     inputType: "edu_verify",
     options: [],
