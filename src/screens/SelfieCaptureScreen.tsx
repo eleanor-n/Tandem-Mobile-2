@@ -9,7 +9,6 @@ import {
   Animated,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +29,7 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [showSunnyDone, setShowSunnyDone] = useState(false);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
 
@@ -58,17 +58,18 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
   const handleUseThis = async () => {
     if (!photoUri || !user) return;
     setUploading(true);
+    setUploadError(null);
     try {
-      const base64 = await FileSystem.readAsStringAsync(photoUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      // FormData pattern — works reliably on iOS/Hermes. atob/Blob conversions
+      // through fetch(uri).blob() can fail silently on RN.
       const path = `${user.id}.jpg`;
+      const formData = new FormData();
+      formData.append("file", { uri: photoUri, name: `${user.id}.jpg`, type: "image/jpeg" } as any);
 
       const { error: uploadErr } = await supabase
         .storage
         .from("selfies")
-        .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+        .upload(path, formData, { contentType: "image/jpeg", upsert: true });
       if (uploadErr) throw uploadErr;
 
       const { error: updateErr } = await supabase
@@ -83,7 +84,9 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
       setShowSunnyDone(true);
       Animated.timing(sunnyOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
       setTimeout(() => onComplete(), 2000);
-    } catch (err) {
+    } catch (err: any) {
+      console.warn("[SelfieCapture] upload failed:", err?.message ?? err);
+      setUploadError("We couldn't save your selfie. Try again.");
       setUploading(false);
     }
   };
@@ -135,20 +138,26 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
         <Text style={s.title}>look good?</Text>
         <Image source={{ uri: photoUri }} style={s.preview} />
         {uploading ? (
-          <View style={{ alignItems: "center", marginTop: 24 }}>
+          <View style={s.uploadingRow}>
             <ActivityIndicator color={colors.teal} />
+            <Text style={s.uploadingText}>Uploading...</Text>
           </View>
         ) : (
-          <View style={s.previewBtnRow}>
-            <TouchableOpacity onPress={handleRetake} activeOpacity={0.85} style={s.outlineBtn}>
-              <Text style={s.outlineBtnText}>retake</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleUseThis} activeOpacity={0.88} style={{ flex: 1 }}>
-              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.cta}>
-                <Text style={s.ctaText}>use this</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+          <>
+            {uploadError ? (
+              <Text style={s.errorText}>{uploadError}</Text>
+            ) : null}
+            <View style={s.previewBtnRow}>
+              <TouchableOpacity onPress={handleRetake} activeOpacity={0.85} style={s.outlineBtn}>
+                <Text style={s.outlineBtnText}>retake</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleUseThis} activeOpacity={0.88} style={{ flex: 1 }}>
+                <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.cta}>
+                  <Text style={s.ctaText}>use this</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
     );
@@ -263,6 +272,27 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: colors.secondary,
     fontFamily: "Quicksand_600SemiBold",
+  },
+  uploadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 24,
+  },
+  uploadingText: {
+    fontSize: 15,
+    color: colors.secondary,
+    fontFamily: "Quicksand_600SemiBold",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#DC2626",
+    fontFamily: "Quicksand_500Medium",
+    textAlign: "center",
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 24,
   },
   cta: {
     borderRadius: radius.full,

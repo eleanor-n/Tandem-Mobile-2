@@ -6,7 +6,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Animated, KeyboardAvoidingView, Platform,
-  Dimensions, Alert, Image, Linking,
+  Dimensions, Alert, Image, Linking, ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
@@ -167,7 +167,7 @@ const STEPS = [
   },
   {
     key: "edu_verify",
-    messages: [],
+    messages: ["one quick thing."],
     expression: "warm" as SunnyExpression,
     inputType: "edu_verify",
     options: [],
@@ -506,6 +506,7 @@ const PromptInput = ({
   const [mode, setMode] = useState<ResponseMode>("text");
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -549,6 +550,7 @@ const PromptInput = ({
         let submitUri = uri;
         const isVideoFile = uri.includes(".mov") || uri.includes(".mp4");
         if (userId) {
+          setIsSaving(true);
           try {
             const timestamp = Date.now();
             if (isVideoFile) {
@@ -559,19 +561,23 @@ const PromptInput = ({
               const { error } = await supabase.storage
                 .from("videos")
                 .upload(path, formData, { contentType: "video/mp4", upsert: true });
-              if (!error) {
-                const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
-                const publicUrl = urlData.publicUrl;
-                console.log("[Voice/video] upload success:", publicUrl);
-                await supabase
-                  .from("profiles")
-                  .update({ video_url: publicUrl } as any)
-                  .eq("user_id", userId);
-                // Don't call onSubmit for deep_prompts — video is saved to video_url
-                return;
-              } else {
+              if (error) {
                 console.warn("[Voice/video] upload failed:", error.message);
+                Alert.alert("Upload failed", "We couldn't save your video. Try again.");
+                setIsSaving(false);
+                return;
               }
+              const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+              const publicUrl = urlData.publicUrl;
+              console.log("[Voice/video] upload success:", publicUrl);
+              await supabase
+                .from("profiles")
+                .update({ video_url: publicUrl } as any)
+                .eq("user_id", userId);
+              setIsSaving(false);
+              // Forward the public URL so deep_prompt_media stores a usable url
+              onSubmit(publicUrl, "video");
+              return;
             } else {
               const path = `${userId}/${timestamp}.m4a`;
               console.log("[Voice] uploading to deep-prompt-media:", path);
@@ -580,17 +586,23 @@ const PromptInput = ({
               const { error } = await supabase.storage
                 .from("deep-prompt-media")
                 .upload(path, formData, { contentType: "audio/mp4", upsert: true });
-              if (!error) {
-                const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
-                submitUri = urlData.publicUrl;
-                console.log("[Voice] upload success, public url:", submitUri);
-              } else {
+              if (error) {
                 console.warn("[Voice] upload failed:", error.message);
+                Alert.alert("Upload failed", "We couldn't save your voice memo. Try again.");
+                setIsSaving(false);
+                return;
               }
+              const { data: urlData } = supabase.storage.from("deep-prompt-media").getPublicUrl(path);
+              submitUri = urlData.publicUrl;
+              console.log("[Voice] upload success, public url:", submitUri);
             }
-          } catch (uploadErr) {
-            console.warn("[Voice] upload error:", uploadErr);
+          } catch (uploadErr: any) {
+            console.warn("[Voice] upload error:", uploadErr?.message ?? uploadErr);
+            Alert.alert("Upload failed", "We couldn't save your recording. Try again.");
+            setIsSaving(false);
+            return;
           }
+          setIsSaving(false);
         } else {
           console.log("[Voice] no userId, skipping upload — using local uri");
         }
@@ -694,44 +706,72 @@ const PromptInput = ({
 
       if (result.canceled) return;
       const asset = result.assets?.[0];
-      if (!asset?.uri) return;
-
-      // Upload to Supabase storage
-      if (userId) {
-        try {
-          const timestamp = Date.now();
-          const path = `${userId}/${timestamp}.mp4`;
-          const formData = new FormData();
-          formData.append("file", { uri: asset.uri, name: `${timestamp}.mp4`, type: "video/mp4" } as any);
-          const { error: uploadError } = await supabase.storage
-            .from("videos")
-            .upload(path, formData, { contentType: "video/mp4", upsert: true });
-          if (uploadError) {
-            console.error("[Video] upload failed:", uploadError.message);
-            Alert.alert("upload failed", uploadError.message);
-            return;
-          }
-          const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
-          console.log("[Video] upload success:", urlData?.publicUrl);
-          if (urlData?.publicUrl) {
-            await supabase
-              .from("profiles")
-              .update({ video_url: urlData.publicUrl } as any)
-              .eq("user_id", userId);
-          }
-        } catch (uploadErr) {
-          console.warn("[Video] upload error:", uploadErr);
-        }
+      if (!asset?.uri) {
+        Alert.alert("Recording failed", "We couldn't read the video file. Try again.");
+        return;
       }
 
-      onSubmit(asset.uri, "video");
+      // Upload to Supabase storage. If this fails, do NOT advance — the
+      // recording is lost otherwise.
+      if (!userId) {
+        Alert.alert("Sign in required", "Sign in again to save your video.");
+        return;
+      }
+
+      setIsSaving(true);
+      try {
+        const timestamp = Date.now();
+        const path = `${userId}/${timestamp}.mp4`;
+        const formData = new FormData();
+        formData.append("file", { uri: asset.uri, name: `${timestamp}.mp4`, type: "video/mp4" } as any);
+        const { error: uploadError } = await supabase.storage
+          .from("videos")
+          .upload(path, formData, { contentType: "video/mp4", upsert: true });
+        if (uploadError) {
+          console.error("[Video] upload failed:", uploadError.message);
+          Alert.alert("Upload failed", "We couldn't save your video. Try again.");
+          setIsSaving(false);
+          return;
+        }
+        const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+        const publicUrl = urlData?.publicUrl;
+        console.log("[Video] upload success:", publicUrl);
+        if (publicUrl) {
+          await supabase
+            .from("profiles")
+            .update({ video_url: publicUrl } as any)
+            .eq("user_id", userId);
+          setIsSaving(false);
+          onSubmit(publicUrl, "video");
+          return;
+        }
+        // No public URL — treat as upload failure.
+        Alert.alert("Upload failed", "We couldn't save your video. Try again.");
+        setIsSaving(false);
+      } catch (uploadErr: any) {
+        console.warn("[Video] upload error:", uploadErr?.message ?? uploadErr);
+        Alert.alert("Upload failed", "We couldn't save your video. Try again.");
+        setIsSaving(false);
+      }
     } catch (err: any) {
+      setIsSaving(false);
       Alert.alert(
         "video recording failed",
         err.message || "something went wrong. try again."
       );
     }
   };
+
+  if (isSaving) {
+    return (
+      <View style={styles.textInputContainer}>
+        <View style={styles.savingRow}>
+          <ActivityIndicator color={colors.teal} />
+          <Text style={styles.savingText}>Saving...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.textInputContainer}>
@@ -1646,6 +1686,18 @@ const styles = StyleSheet.create({
 
   // Text inputs
   textInputContainer: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, gap: 8 },
+  savingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 18,
+  },
+  savingText: {
+    fontSize: 15,
+    color: colors.secondary,
+    fontFamily: "Quicksand_600SemiBold",
+  },
   textInputRow: { flexDirection: "row", gap: 8, alignItems: "flex-end" },
   textInput: {
     flex: 1,

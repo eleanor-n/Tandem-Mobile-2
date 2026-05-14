@@ -161,7 +161,9 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip }: P
         style={s.backdrop}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Pressable style={s.backdropTouchable} onPress={onClose} />
+        {/* Backdrop is non-dismissing — taps must hit the X or in-modal buttons.
+            Prevents stray taps leaking through during the open-transition. */}
+        <View style={s.backdropTouchable} pointerEvents="none" />
         <View style={[s.card, { paddingBottom: insets.bottom + 24 }]}>
           <View style={s.handle} />
 
