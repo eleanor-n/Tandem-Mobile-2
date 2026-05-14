@@ -71,9 +71,9 @@ const ProfileVideo = ({ uri }: { uri: string }) => {
   return (
     <VideoView
       player={player}
-      style={{ width: "100%", height: 220, borderRadius: 12 }}
+      style={{ width: "100%", height: "100%" }}
       nativeControls
-      contentFit="contain"
+      contentFit="cover"
       allowsFullscreen
       allowsPictureInPicture={false}
     />
@@ -96,6 +96,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [fontsLoaded] = useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const caveat = (bold?: boolean) => fontsLoaded ? (bold ? "Fraunces_700Bold_Italic" : "Fraunces_500Medium_Italic") : undefined;
   const [memories, setMemories] = useState<any[]>([]);
+  const [recordingIntroVideo, setRecordingIntroVideo] = useState(false);
   const [voiceUri, setVoiceUri] = useState<string | null>(null);
   const player = useAudioPlayer(voiceUri ? { uri: voiceUri } : null);
   const pendingPlayRef = useRef(false);
@@ -393,6 +394,53 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     }
   };
 
+  const handleRecordIntroVideo = async () => {
+    if (!user || recordingIntroVideo) return;
+    try {
+      const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraPerm.status !== "granted") {
+        Alert.alert("camera access needed", "go to Settings → Tandem → allow Camera, then try again.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["videos"] as any,
+        videoMaxDuration: 30,
+        allowsEditing: false,
+        quality: 0.5,
+      });
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        Alert.alert("Recording failed", "We couldn't read the video file. Try again.");
+        return;
+      }
+      setRecordingIntroVideo(true);
+      const timestamp = Date.now();
+      const path = `${user.id}/${timestamp}.mp4`;
+      const formData = new FormData();
+      formData.append("file", { uri: asset.uri, name: `${timestamp}.mp4`, type: "video/mp4" } as any);
+      const { error: uploadErr } = await supabase.storage
+        .from("videos")
+        .upload(path, formData, { contentType: "video/mp4", upsert: true });
+      if (uploadErr) {
+        console.warn("[Intro video] upload failed:", uploadErr.message);
+        Alert.alert("Upload failed", "We couldn't save your video. Try again.");
+        setRecordingIntroVideo(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+      const publicUrl = urlData?.publicUrl;
+      if (publicUrl) {
+        await supabase.from("profiles").update({ video_url: publicUrl } as any).eq("user_id", user.id);
+        setProfile((p: any) => p ? { ...p, video_url: publicUrl } : p);
+      }
+      setRecordingIntroVideo(false);
+    } catch (err: any) {
+      console.warn("[Intro video] error:", err?.message ?? err);
+      setRecordingIntroVideo(false);
+    }
+  };
+
   const handleShareProfile = async () => {
     try {
       const name = profile?.first_name || "someone";
@@ -588,7 +636,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Hosting now */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>HOSTING NOW</Text>
+          <Text style={s.sectionLabel}>hosting now</Text>
           <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
             <Text style={s.emptyCardCtaText}>+ Post a tandem</Text>
           </TouchableOpacity>
@@ -596,7 +644,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
         {/* Been to */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>BEEN TO</Text>
+          <Text style={s.sectionLabel}>been to</Text>
           <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
             <Text style={s.emptyCardCtaText}>go find something to join →</Text>
           </TouchableOpacity>
@@ -605,7 +653,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* About chips from real profile */}
         {(profile?.occupation || profile?.personality_type || profile?.humor_type?.length) && (
           <View style={s.card}>
-            <Text style={s.cardLabel}>ABOUT</Text>
+            <Text style={s.cardLabel}>about</Text>
             <View style={s.chips}>
               {profile?.occupation && (
                 <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8} style={s.chip}>
@@ -629,7 +677,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         {/* Prompts */}
         {Object.entries(quickPrompts).map(([key, value]) => (
           <TouchableOpacity key={key} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
-            <Text style={s.promptLabel}>{(PROMPT_LABELS[key] || key).toUpperCase()}</Text>
+            <Text style={s.promptLabel}>{(PROMPT_LABELS[key] || key).toLowerCase()}</Text>
             <Text style={s.promptAnswer}>"{String(value)}"</Text>
           </TouchableOpacity>
         ))}
@@ -643,7 +691,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
           return (
             <View key={prompt} style={s.promptBlock}>
-              <Text style={s.promptLabel}>{prompt.toUpperCase()}</Text>
+              <Text style={s.promptLabel}>{prompt.toLowerCase()}</Text>
               {isVoice ? (
                 <TouchableOpacity
                   onPress={() => playVoiceMemo(answerStr)}
@@ -660,7 +708,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                   </Text>
                 </TouchableOpacity>
               ) : isVideo ? (
-                <ProfileVideo uri={answerStr} />
+                <View style={ivS.wrap}>
+                  <View style={ivS.frame}>
+                    <View style={ivS.photoArea}>
+                      <ProfileVideo uri={answerStr} />
+                    </View>
+                  </View>
+                </View>
               ) : (
                 <Text style={s.promptAnswer}>"{answerStr}"</Text>
               )}
@@ -668,13 +722,32 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           );
         })}
 
-        {/* Also show profile video_url if it exists */}
-        {profile?.video_url && (
-          <View style={s.promptBlock}>
-            <Text style={s.promptLabel}>intro video</Text>
-            <ProfileVideo uri={profile.video_url} />
-          </View>
-        )}
+        {/* Intro video — polaroid frame for visual continuity with scrapbook */}
+        <View style={ivS.wrap}>
+          <TouchableOpacity
+            activeOpacity={profile?.video_url ? 1 : 0.85}
+            onPress={profile?.video_url ? undefined : handleRecordIntroVideo}
+            disabled={recordingIntroVideo}
+            style={ivS.frame}
+          >
+            <View style={ivS.photoArea}>
+              {recordingIntroVideo ? (
+                <ActivityIndicator color={colors.teal} />
+              ) : profile?.video_url ? (
+                <ProfileVideo uri={profile.video_url} />
+              ) : (
+                <SunnyAvatar expression="warm" size={84} />
+              )}
+            </View>
+            <Text style={ivS.caption}>
+              {recordingIntroVideo
+                ? "saving your intro video..."
+                : profile?.video_url
+                  ? "intro video"
+                  : "tap to add an intro video"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Recent tandems — polaroid strip */}
         <View style={s.section}>
@@ -726,20 +799,21 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           ) : (
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={() => onScrapbookPress?.()}
+              onPress={() => onPostPress?.()}
               style={ms.miniFrameEmpty}
             >
-              <View style={ms.miniPhotoArea}>
-                <SunnyAvatar expression="warm" size={56} />
+              <View style={[ms.miniPhotoArea, ms.miniPhotoAreaEmpty]}>
+                <View style={ms.miniPhotoAreaEmptyTint} pointerEvents="none" />
+                <SunnyAvatar expression="warm" size={96} />
               </View>
-              <Text style={ms.miniCaption} numberOfLines={1}>no tandems yet</Text>
+              <Text style={ms.miniCaption} numberOfLines={1}>first tandem coming soon</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Comments from tandem companions */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>FROM PEOPLE I'VE TANDEM'D WITH</Text>
+          <Text style={s.sectionLabel}>from people i've tandem'd with</Text>
           {comments.map(c => (
             <View key={c.id} style={s.commentRow}>
               {c.avatar ? (
@@ -1175,7 +1249,22 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
-  gearBtn: { position: "absolute", right: 16, zIndex: 10, width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  gearBtn: {
+    position: "absolute",
+    right: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, gap: 14 },
 
@@ -1357,6 +1446,47 @@ const s = StyleSheet.create({
 });
 
 // Mini polaroid styles (profile recent-tandems strip)
+// Intro video polaroid frame (matches scrapbook MemoryCard pattern)
+const ivS = StyleSheet.create({
+  wrap: {
+    alignSelf: "center",
+    width: "90%",
+    marginVertical: 12,
+    alignItems: "center",
+  },
+  frame: {
+    width: "100%",
+    backgroundColor: "#FAF9F6",
+    borderRadius: 4,
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 28,
+    transform: [{ rotate: "1deg" }],
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  photoArea: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#F0EDE6",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  caption: {
+    fontSize: 15,
+    color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "left",
+    marginTop: 10,
+    lineHeight: 20,
+  },
+});
+
 const ms = StyleSheet.create({
   recentTandemsHeader: {
     fontSize: 16,
@@ -1379,6 +1509,7 @@ const ms = StyleSheet.create({
   },
   miniFrameEmpty: {
     width: 160,
+    alignSelf: "flex-start",
     backgroundColor: "#FAF9F6",
     borderRadius: 4,
     paddingTop: 10,
@@ -1389,7 +1520,6 @@ const ms = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
-    alignItems: "center",
   },
   miniPhotoArea: {
     width: "100%",
@@ -1398,6 +1528,16 @@ const ms = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Approximate radial gradient with a faint teal-tinted background.
+  // RN doesn't support true radial gradients without extra libs.
+  miniPhotoAreaEmpty: {
+    backgroundColor: "#FAF9F6",
+  },
+  miniPhotoAreaEmptyTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#E5F6F3",
+    opacity: 0.55,
   },
   miniCaption: {
     fontSize: 12,

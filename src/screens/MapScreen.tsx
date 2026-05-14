@@ -207,12 +207,13 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
 
   return (
     <View style={s.container}>
-      {/* Full-screen map */}
+      {/* Full-screen map — default Google Maps styling so streets, labels,
+          and POIs are visible. Renders unconditionally so the user always sees
+          context, even when there are zero nearby activities. */}
       <MapView
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_DEFAULT}
         initialRegion={INITIAL_REGION}
-        customMapStyle={MAP_STYLE}
         showsUserLocation
         showsMyLocationButton={false}
         showsCompass={false}
@@ -260,17 +261,15 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
         </TouchableOpacity>
       </View>
 
-      {/* Bottom peek panel */}
-      <View style={[s.bottomPanel, { paddingBottom: 80 + insets.bottom }]}>
-        {/* Panel header */}
-        <View style={s.panelHeader}>
-          <Text style={s.panelTitle}>nearby</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
-            <Text style={s.seeAll}>see all</Text>
-          </TouchableOpacity>
-        </View>
-
-        {mapLoaded && mapActivities.length === 0 ? null : (
+      {/* Bottom peek panel — only when there's something nearby */}
+      {mapLoaded && mapActivities.length > 0 && (
+        <View style={[s.bottomPanel, { paddingBottom: 80 + insets.bottom }]}>
+          <View style={s.panelHeader}>
+            <Text style={s.panelTitle}>nearby</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => onTabPress("Discover")}>
+              <Text style={s.seeAll}>see all</Text>
+            </TouchableOpacity>
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -296,20 +295,20 @@ export const MapScreen = ({ activeTab, onTabPress, onPostPress, onPostPressWithL
               );
             })}
           </ScrollView>
-        )}
-      </View>
+        </View>
+      )}
 
+      {/* Empty state — card sheet at the bottom, map remains visible behind. */}
       {mapLoaded && mapActivities.length === 0 && (
-        <View style={[ms.emptyOverlay, { paddingTop: insets.top + 72, paddingBottom: 220 + insets.bottom }]} pointerEvents="box-none">
-          <View style={ms.emptyTop}>
-            <SunnyAvatar expression="warm" size={84} />
-          </View>
-          <Text style={[ms.emptyMessage, fontsLoaded ? { fontFamily: "Fraunces_500Medium_Italic", fontStyle: "italic" } : null]}>
+        <View style={[ms.emptySheet, { bottom: 80 + insets.bottom + 16 }]}>
+          <View style={ms.emptySheetHandle} />
+          <SunnyAvatar expression="warm" size={64} />
+          <Text style={ms.emptySheetLine}>
             no one's tandeming nearby yet. you could be the first.
           </Text>
-          <TouchableOpacity onPress={() => onPostPress?.()} activeOpacity={0.88} style={ms.emptyCta}>
-            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.emptyCtaInner}>
-              <Text style={ms.emptyCtaText}>Post a tandem</Text>
+          <TouchableOpacity onPress={() => onPostPress?.()} activeOpacity={0.88} style={ms.emptySheetCta}>
+            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={ms.emptySheetCtaInner}>
+              <Text style={ms.emptySheetCtaText}>Post a tandem</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -559,39 +558,52 @@ const ms = StyleSheet.create({
     paddingVertical: 12,
     lineHeight: 20,
   },
-  emptyOverlay: {
+  // Empty-state card sheet — map remains visible behind.
+  emptySheet: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: "5%",
+    right: "5%",
     backgroundColor: "#FAF9F6",
+    borderRadius: 16,
+    padding: 20,
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 32,
+    gap: 12,
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 6,
   },
-  emptyTop: {
-    alignItems: "center",
+  emptySheetHandle: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+    marginTop: -8,
+    marginBottom: 4,
   },
-  emptyMessage: {
-    fontSize: 22,
+  emptySheetLine: {
+    fontSize: 18,
     color: "#1F2937",
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
     textAlign: "center",
-    lineHeight: 28,
-    paddingHorizontal: 12,
+    lineHeight: 24,
+    paddingHorizontal: 4,
   },
-  emptyCta: {
+  emptySheetCta: {
     width: "100%",
-    height: 52,
+    height: 48,
     borderRadius: 999,
     overflow: "hidden",
+    marginTop: 4,
   },
-  emptyCtaInner: {
+  emptySheetCtaInner: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyCtaText: {
+  emptySheetCtaText: {
     fontSize: 15,
     fontWeight: "700",
     fontFamily: "Quicksand_700Bold",

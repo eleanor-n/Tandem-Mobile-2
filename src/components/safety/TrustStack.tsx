@@ -118,10 +118,6 @@ const EXPLAINER_ROWS = [
     body: "we check that you're a real person and that your selfie matches your profile photo.",
   },
   {
-    label: "phone verification",
-    body: "we send a code to your number to confirm it's yours.",
-  },
-  {
     label: ".edu verification",
     body: "we confirm your college email so you know everyone here is actually a student.",
   },
@@ -190,11 +186,6 @@ function ProfileTrust({ trust }: { trust: TrustState }) {
         voiceLabel={profile.selfieVerified ? "selfie verified" : "selfie not verified"}
       />
       <VerifiedBadge
-        verified={profile.phoneVerified}
-        label="phone"
-        voiceLabel={profile.phoneVerified ? "phone verified" : "phone not verified"}
-      />
-      <VerifiedBadge
         verified={profile.eduVerified}
         label=".edu"
         voiceLabel={profile.eduVerified ? "dot edu verified" : "dot edu not verified"}
@@ -210,7 +201,7 @@ function ProfileTrust({ trust }: { trust: TrustState }) {
 function PostCardTrust({ trust }: { trust: TrustState }) {
   const { profile, sharedCount } = trust;
   const months = monthsOnTandem(profile.createdAt);
-  const anyVerified = profile.selfieVerified || profile.phoneVerified || profile.eduVerified;
+  const anyVerified = profile.selfieVerified || profile.eduVerified;
   return (
     <View style={s.cardRow}>
       <Text style={s.cardName}>{profile.firstName}</Text>
