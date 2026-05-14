@@ -722,24 +722,25 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           );
         })}
 
-        {/* Intro video — polaroid frame for visual continuity with scrapbook */}
-        <View style={ivS.wrap}>
+        {/* Intro video — polaroid frame. Empty state renders smaller so it
+            reads as a placeholder, not a giant cream rectangle. */}
+        <View style={[ivS.wrap, !profile?.video_url && ivS.wrapEmpty]}>
           <TouchableOpacity
             activeOpacity={profile?.video_url ? 1 : 0.85}
             onPress={profile?.video_url ? undefined : handleRecordIntroVideo}
             disabled={recordingIntroVideo}
-            style={ivS.frame}
+            style={[ivS.frame, !profile?.video_url && ivS.frameEmpty]}
           >
-            <View style={ivS.photoArea}>
+            <View style={[ivS.photoArea, !profile?.video_url && ivS.photoAreaEmpty]}>
               {recordingIntroVideo ? (
                 <ActivityIndicator color={colors.teal} />
               ) : profile?.video_url ? (
                 <ProfileVideo uri={profile.video_url} />
               ) : (
-                <SunnyAvatar expression="warm" size={84} />
+                <SunnyAvatar expression="warm" size={64} />
               )}
             </View>
-            <Text style={ivS.caption}>
+            <Text style={[ivS.caption, !profile?.video_url && ivS.captionEmpty]}>
               {recordingIntroVideo
                 ? "saving your intro video..."
                 : profile?.video_url
@@ -1484,6 +1485,24 @@ const ivS = StyleSheet.create({
     textAlign: "left",
     marginTop: 10,
     lineHeight: 20,
+  },
+  // Empty-state overrides — compact, centered, less dominant.
+  wrapEmpty: {
+    width: "60%",
+    marginVertical: 6,
+  },
+  frameEmpty: {
+    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 20,
+  },
+  photoAreaEmpty: {
+    aspectRatio: 4 / 5,
+  },
+  captionEmpty: {
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 18,
   },
 });
 

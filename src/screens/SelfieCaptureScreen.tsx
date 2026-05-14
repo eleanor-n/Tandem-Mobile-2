@@ -62,9 +62,13 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
     try {
       // FormData pattern — works reliably on iOS/Hermes. atob/Blob conversions
       // through fetch(uri).blob() can fail silently on RN.
-      const path = `${user.id}.jpg`;
+      // Path uses folder structure so storage RLS can check
+      //   (storage.foldername(name))[1] = auth.uid()::text
+      // — same pattern as the videos bucket.
+      const fileName = `selfie_${Date.now()}.jpg`;
+      const path = `${user.id}/${fileName}`;
       const formData = new FormData();
-      formData.append("file", { uri: photoUri, name: `${user.id}.jpg`, type: "image/jpeg" } as any);
+      formData.append("file", { uri: photoUri, name: fileName, type: "image/jpeg" } as any);
 
       const { error: uploadErr } = await supabase
         .storage
@@ -85,6 +89,13 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
       Animated.timing(sunnyOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
       setTimeout(() => onComplete(), 2000);
     } catch (err: any) {
+      // Detailed log so we can see the actual Supabase error code/message in
+      // device logs (Xcode Console / `npx react-native log-ios`).
+      try {
+        console.log("[selfie upload]", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      } catch {
+        console.log("[selfie upload] raw error:", err);
+      }
       console.warn("[SelfieCapture] upload failed:", err?.message ?? err);
       setUploadError("We couldn't save your selfie. Try again.");
       setUploading(false);
