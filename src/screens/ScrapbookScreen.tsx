@@ -105,7 +105,7 @@ const MemoryCard = ({
   // Subtle alternating rotation (-1deg, +1deg) for a scattered-polaroid feel.
   const rotation = `${indexInList % 2 === 0 ? -1 : 1}deg`;
   const hasMultiplePhotos = (memory.photos?.length ?? 0) > 1;
-  const caption = memory.caption ?? "";
+  const caption = memory.caption || memory.title || "";
 
   return (
     <View style={mc.deckWrap}>

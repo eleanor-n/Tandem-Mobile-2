@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useVerificationGate } from "../lib/verificationGate";
 import { VerificationGateModal } from "../components/safety/VerificationGateModal";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -27,6 +28,7 @@ interface ChatMessage {
 
 export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
+  useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const { user } = useAuth();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);

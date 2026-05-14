@@ -714,8 +714,8 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
                         />
                       )}
                     </View>
-                    {m.caption ? (
-                      <Text style={ms.miniCaption} numberOfLines={1}>{m.caption}</Text>
+                    {m.caption || m.title ? (
+                      <Text style={ms.miniCaption} numberOfLines={1}>{m.caption || m.title}</Text>
                     ) : (
                       <View style={ms.miniCaptionSpacer} />
                     )}

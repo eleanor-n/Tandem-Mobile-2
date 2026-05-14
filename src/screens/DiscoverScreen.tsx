@@ -137,6 +137,7 @@ interface DiscoverScreenProps {
   onPostPrefillConsumed?: () => void;
   onSafetyPress?: () => void;
   onTakeSelfie?: () => void;
+  onNotificationsPress?: () => void;
 }
 
 type LocationAutocompleteProps = {
@@ -371,7 +372,7 @@ const placesDevBannerS = StyleSheet.create({
   },
 });
 
-export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed, onSafetyPress, onTakeSelfie }: DiscoverScreenProps) => {
+export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMessagesPress, onOpenChat, openPostModal, onPostModalOpened, startOnMyActivity, postPrefill, onPostPrefillConsumed, onSafetyPress, onTakeSelfie, onNotificationsPress }: DiscoverScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const emailPrefix = user?.email?.split("@")[0] ?? "";
@@ -388,12 +389,27 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [savedActivities, setSavedActivities] = useState<any[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const walkthroughShownRef = useRef(false);
   const [toggleY, setToggleY] = useState(120);
-  const hasUnread = false;
+  const [unreadCount, setUnreadCount] = useState(0);
+  const hasUnread = unreadCount > 0;
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
+  // Notifications unread badge — refreshes on focus / on prop change.
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    let cancelled = false;
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("read", false)
+      .then(({ count }: any) => {
+        if (!cancelled) setUnreadCount(count ?? 0);
+      });
+    return () => { cancelled = true; };
+  }, [user, onNotificationsPress]);
 
   // Sunny dynamic copy
   const [sunnyDeckDoneDesc, setSunnyDeckDoneDesc] = useState("check back tomorrow or post your own.");
@@ -1309,9 +1325,17 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           <TouchableOpacity style={s.iconBtn} onPress={() => setShowFilterSheet(true)} activeOpacity={0.7}>
             <Ionicons name="options-outline" size={22} color={colors.teal} />
           </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn} onPress={() => setShowNotifications(true)} activeOpacity={0.7}>
+          <TouchableOpacity style={s.iconBtn} onPress={() => onNotificationsPress?.()} activeOpacity={0.7}>
             <Ionicons name={hasUnread ? "notifications" : "notifications-outline"} size={22} color={colors.teal} />
-            {hasUnread && <View style={s.iconBadge} />}
+            {hasUnread && (
+              unreadCount > 0 ? (
+                <View style={s.iconBadgeCount}>
+                  <Text style={s.iconBadgeCountText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
+                </View>
+              ) : (
+                <View style={s.iconBadge} />
+              )
+            )}
           </TouchableOpacity>
           <TouchableOpacity style={s.avatarBtn} onPress={() => onTabPress("Profile")} activeOpacity={0.85}>
             <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.avatarRing}>
@@ -1781,27 +1805,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           onComplete={() => setShowWalkthrough(false)}
         />
       )}
-
-      {/* Notifications Modal */}
-      <Modal visible={showNotifications} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowNotifications(false)}>
-        <View style={notifS.container}>
-          <View style={notifS.handle} />
-          <View style={notifS.header}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={notifS.title}>activity</Text>
-              <Ionicons name="notifications-outline" size={22} color={colors.teal} />
-            </View>
-            <TouchableOpacity onPress={() => setShowNotifications(false)} style={notifS.closeBtn} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color={colors.muted} />
-            </TouchableOpacity>
-          </View>
-          <View style={notifS.empty}>
-            <SunnyAvatar expression="warm" size={60} />
-            <Text style={notifS.emptyTitle}>nothing yet.</Text>
-            <Text style={notifS.emptyDesc}>notifications are coming soon. you'll hear from us when someone joins your plan.</Text>
-          </View>
-        </View>
-      </Modal>
 
       {/* Filter Sheet */}
       <Modal visible={showFilterSheet} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFilterSheet(false)}>
@@ -2788,6 +2791,26 @@ const s = StyleSheet.create({
   headerRight: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.tintTeal, alignItems: "center", justifyContent: "center" },
   iconBadge: { position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.teal, borderWidth: 1.5, borderColor: colors.background },
+  iconBadgeCount: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.teal,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  iconBadgeCountText: {
+    fontSize: 9,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+  },
   avatarBtn: {},
   avatarRing: { width: 38, height: 38, borderRadius: 19, padding: 2 },
   avatarInner: { flex: 1, borderRadius: 17, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
@@ -3057,17 +3080,6 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: colors.teal,
   },
   lockedFilterText: { fontSize: 11, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
-});
-
-const notifS = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  handle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginTop: 12 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.5 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingBottom: 80 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground },
-  emptyDesc: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, textAlign: "center", maxWidth: 260, lineHeight: 20 },
 });
 
 const filterS = StyleSheet.create({

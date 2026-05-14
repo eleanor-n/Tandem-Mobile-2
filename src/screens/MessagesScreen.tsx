@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import SunnyAvatar from "../components/SunnyAvatar";
 import { BottomNav } from "../components/BottomNav";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, radius, gradients } from "../theme";
@@ -41,6 +42,7 @@ interface MessagesScreenProps {
 export const MessagesScreen = ({ onOpenChat, activeTab, onTabPress, onPostPress }: MessagesScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

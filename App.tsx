@@ -39,6 +39,7 @@ import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SafetySettingsScreen } from "./src/screens/SafetySettingsScreen";
 import { SelfieCaptureScreen } from "./src/screens/SelfieCaptureScreen";
 import { AdminReviewScreen } from "./src/screens/AdminReviewScreen";
+import { NotificationsScreen } from "./src/screens/NotificationsScreen";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -69,6 +70,7 @@ const AppInner = () => {
   const [pendingSelfieOnboarding, setPendingSelfieOnboarding] = useState(false);
   const [showStandaloneSelfie, setShowStandaloneSelfie] = useState(false);
   const [showAdminReview, setShowAdminReview] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showPost, setShowPost] = useState(false);
   const [showMyActivity, setShowMyActivity] = useState(false);
   const [postPrefill, setPostPrefill] = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -345,6 +347,15 @@ const AppInner = () => {
   if (showAdminReview) {
     return <AdminReviewScreen onBack={() => setShowAdminReview(false)} />;
   }
+  if (showNotifications) {
+    return (
+      <NotificationsScreen
+        onBack={() => setShowNotifications(false)}
+        onOpenChat={(c) => { setShowNotifications(false); setActiveTab("Chat"); setActiveChat(c); }}
+        onOpenActivity={() => { setShowNotifications(false); setActiveTab("Discover"); }}
+      />
+    );
+  }
   if (showSafety) {
     return <SafetySettingsScreen onBack={() => setShowSafety(false)} />;
   }
@@ -410,6 +421,7 @@ const AppInner = () => {
           onPostPrefillConsumed={() => setPostPrefill(null)}
           onSafetyPress={() => setShowSafety(true)}
           onTakeSelfie={() => setShowStandaloneSelfie(true)}
+          onNotificationsPress={() => setShowNotifications(true)}
         />
       );
   }
