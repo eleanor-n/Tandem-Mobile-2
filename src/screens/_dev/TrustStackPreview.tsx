@@ -45,6 +45,8 @@ function mockProfile(overrides: {
     phoneVerified: overrides.phoneVerified ?? false,
     eduVerified: overrides.eduVerified ?? false,
     createdAt: overrides.createdAt ?? isoMonthsAgo(4),
+    trustTier: "new" as const,
+    completedTandemCount: 0,
   };
 }
 

@@ -77,6 +77,14 @@ export const NOTIFICATION_COPY = {
     title: "company incoming.",
     body: `${requesterName} just joined your tandem.`,
   }),
+  requestReceived: (requesterName: string, activityTitle: string) => ({
+    title: "someone wants in.",
+    body: `${requesterName} asked to join ${activityTitle}.`,
+  }),
+  requestAccepted: (hostName: string, activityTitle: string) => ({
+    title: "you're in.",
+    body: `${hostName} said yes to ${activityTitle}.`,
+  }),
   approved: () => ({
     title: "locked in.",
     body: "see you there.",
@@ -89,7 +97,27 @@ export const NOTIFICATION_COPY = {
     title: senderName,
     body: messageText,
   }),
-  // Tandem voice
+  spotShared: (sharerName: string) => ({
+    title: "spot shared.",
+    body: `${sharerName} let a friend know where you're meeting.`,
+  }),
+  tandemCompleted: (partnerName: string) => ({
+    title: "tandem done.",
+    body: `how was it with ${partnerName}?`,
+  }),
+  tierPromotedKnown: () => ({
+    title: "you're a known tandemer now.",
+    body: "people can see you've been here, doing this.",
+  }),
+  tierPromotedTrusted: () => ({
+    title: "trusted tandemer.",
+    body: "you've earned a gold ring on your profile.",
+  }),
+  // Tandem voice — safety/account
+  safetyCheckInPrompt: (partnerName: string) => ({
+    title: "How'd it go?",
+    body: `Quick check-in about your tandem with ${partnerName}.`,
+  }),
   verificationApproved: () => ({
     title: "Your profile is verified.",
     body: "Welcome to Tandem.",

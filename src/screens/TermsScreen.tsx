@@ -106,6 +106,10 @@ export const TermsScreen = ({ onBack }: TermsScreenProps) => {
           <SubHead>Background Checks</SubHead>
           <Bullet>Tandem does not conduct criminal background checks on users. Selfie verification confirms identity but does not verify criminal history.</Bullet>
           <Bullet>The absence of a background check does not imply any endorsement, certification, or guarantee regarding any user's character or conduct.</Bullet>
+          <SubHead>Spot Sharing</SubHead>
+          <Body>When you tandem with someone, they may share basic information about your meet-up — including your first name, profile photo, the activity, and a live location — with a friend or family member of their choosing, for safety purposes. By using Tandem, you consent to this limited disclosure when another user shares their spot during an active tandem. Recipients of a spot-share link never see your phone number, email, last name, or any other contact information.</Body>
+          <Bullet>You can request information about a specific spot-share at tandemapp.hq@gmail.com.</Bullet>
+          <Bullet>Spot-share links automatically expire within a fixed window after creation and can be ended at any time by the user who created them.</Bullet>
         </Section>
 
         <Section title="6. Membership Tiers and Payments">

@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 
 export type SelfieStatus = "approved" | "pending_review" | "rejected" | null;
+export type TrustTier = "new" | "known" | "trusted";
 
 export interface TrustProfile {
   firstName: string;
@@ -10,12 +11,14 @@ export interface TrustProfile {
   phoneVerified: boolean;
   eduVerified: boolean;
   createdAt: string | null;
+  trustTier: TrustTier;
+  completedTandemCount: number;
 }
 
 export async function getTrustProfile(userId: string): Promise<TrustProfile | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("first_name, pronouns, selfie_verified, selfie_verification_status, phone_verified, edu_verified, created_at")
+    .select("first_name, pronouns, selfie_verified, selfie_verification_status, phone_verified, edu_verified, created_at, trust_tier, completed_tandem_count")
     .eq("user_id", userId)
     .maybeSingle();
   if (!data) return null;
@@ -27,6 +30,8 @@ export async function getTrustProfile(userId: string): Promise<TrustProfile | nu
     phoneVerified: data.phone_verified ?? false,
     eduVerified: data.edu_verified ?? false,
     createdAt: data.created_at ?? null,
+    trustTier: ((data.trust_tier ?? "new") as TrustTier),
+    completedTandemCount: data.completed_tandem_count ?? 0,
   };
 }
 

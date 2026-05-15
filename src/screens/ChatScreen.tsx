@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform, Image,
+  Modal, Pressable, Alert, Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,10 +14,17 @@ import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@e
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
+interface ActiveSpotShare {
+  share_id: string;
+  expires_at: string;
+  sharer_user_id: string;
+}
+
 interface ChatScreenProps {
   convo: { id: string; name: string; photo: string; age?: number };
   onBack: () => void;
   onTakeSelfie?: () => void;
+  onSendSpot?: () => void;
 }
 
 interface ChatMessage {
@@ -26,7 +34,7 @@ interface ChatMessage {
   created_at: string;
 }
 
-export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => {
+export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
   useFonts({ Fraunces_500Medium_Italic, Fraunces_700Bold_Italic });
   const { user } = useAuth();
@@ -34,6 +42,52 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<ScrollView | null>(null);
   const gate = useVerificationGate();
+  const [activeShare, setActiveShare] = useState<ActiveSpotShare | null>(null);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  const fetchActiveShare = useCallback(async () => {
+    if (!convo.id) return;
+    const { data } = await supabase
+      .from("spot_shares")
+      .select("share_id, expires_at, sharer_user_id, status")
+      .eq("tandem_id", convo.id)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setActiveShare((data as any) ?? null);
+  }, [convo.id]);
+
+  useEffect(() => {
+    fetchActiveShare();
+  }, [fetchActiveShare]);
+
+  const endActiveShare = async () => {
+    if (!activeShare) return;
+    try {
+      await supabase.functions.invoke("end-spot-share", {
+        body: { share_id: activeShare.share_id, reason: "manual" },
+      });
+    } catch (err) {
+      console.warn("[ChatScreen] end share failed:", err);
+    }
+    setActiveShare(null);
+  };
+
+  const handleNeedHelp = async () => {
+    setHelpModalVisible(false);
+    try {
+      await supabase.functions.invoke("trigger-emergency-alert", {
+        body: { tandem_id: convo.id },
+      });
+    } catch (err) {
+      console.warn("[ChatScreen] emergency alert failed:", err);
+    }
+    Linking.openURL("tel:911").catch(() => {
+      Alert.alert("couldn't open dialer.", "call 911 directly.");
+    });
+  };
 
   // Initial load + realtime subscription on messages for this tandem.
   useEffect(() => {
@@ -116,12 +170,42 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
           </View>
           <Text style={s.headerName}>{convo.name}</Text>
         </View>
-        {/* Activity context pill */}
-        <TouchableOpacity style={s.contextPill} activeOpacity={0.8}>
-          <Ionicons name="location" size={11} color={colors.teal} />
-          <Text style={s.contextText}>activity</Text>
-        </TouchableOpacity>
+        <View style={s.headerActions}>
+          <TouchableOpacity
+            onPress={() => setHelpModalVisible(true)}
+            style={s.helpLink}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+          >
+            <Text style={s.helpLinkText}>need help</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onSendSpot}
+            style={s.contextPill}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="location" size={11} color={colors.teal} />
+            <Text style={s.contextText}>send spot</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Active spot share banner */}
+      {activeShare ? (
+        <View style={s.shareBanner}>
+          <Ionicons name="radio" size={14} color={colors.teal} />
+          <Text style={s.shareBannerText}>
+            {activeShare.sharer_user_id === user?.id
+              ? "this tandem's spot is being shared."
+              : `${convo.name} sent the spot to a friend.`}
+          </Text>
+          {activeShare.sharer_user_id === user?.id ? (
+            <TouchableOpacity onPress={endActiveShare} activeOpacity={0.7}>
+              <Text style={s.shareEndLink}>end share</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Messages */}
       <ScrollView
@@ -210,6 +294,39 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie }: ChatScreenProps) => 
         onClose={gate.hideGate}
         onTakeSelfie={onTakeSelfie}
       />
+
+      <Modal
+        visible={helpModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setHelpModalVisible(false)}
+      >
+        <Pressable
+          style={h.backdrop}
+          onPress={() => setHelpModalVisible(false)}
+        >
+          <Pressable style={h.card} onPress={(e) => e.stopPropagation()}>
+            <Text style={h.title}>need help?</Text>
+            <Text style={h.body}>
+              this will call 911 and alert your spot-share contact if active. only use this if you feel unsafe.
+            </Text>
+            <TouchableOpacity
+              onPress={handleNeedHelp}
+              activeOpacity={0.88}
+              style={h.callBtn}
+            >
+              <Text style={h.callBtnText}>Call 911 now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setHelpModalVisible(false)}
+              activeOpacity={0.7}
+              style={h.cancelBtn}
+            >
+              <Text style={h.cancelBtnText}>cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -295,4 +412,94 @@ const s = StyleSheet.create({
   sendBtn: { width: 42, height: 42, borderRadius: 21, overflow: "hidden", ...shadows.brand },
   sendBtnDisabled: { shadowOpacity: 0 },
   sendBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  // Header actions row
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  helpLink: { paddingHorizontal: 6, paddingVertical: 4 },
+  helpLinkText: {
+    fontSize: 12,
+    color: "#B45309",
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+
+  // Spot share banner
+  shareBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.tintTeal,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.teal + "44",
+  },
+  shareBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.secondary,
+    fontFamily: "Quicksand_500Medium",
+  },
+  shareEndLink: {
+    fontSize: 13,
+    color: colors.teal,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+});
+
+const h = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: colors.background,
+    borderRadius: radius.xl,
+    padding: 24,
+    width: "100%",
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
+    color: colors.foreground,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  body: {
+    fontSize: 14,
+    color: colors.secondary,
+    fontFamily: "Quicksand_500Medium",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 18,
+  },
+  callBtn: {
+    backgroundColor: "#DC2626",
+    borderRadius: radius.full,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  callBtnText: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+  },
+  cancelBtn: {
+    marginTop: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+  },
 });

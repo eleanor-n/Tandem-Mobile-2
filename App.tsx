@@ -35,6 +35,7 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
+import { SendSpotScreen } from "./src/screens/SendSpotScreen";
 import { MembershipScreen } from "./src/screens/MembershipScreen";
 import { SafetySettingsScreen } from "./src/screens/SafetySettingsScreen";
 import { SelfieCaptureScreen } from "./src/screens/SelfieCaptureScreen";
@@ -67,6 +68,7 @@ const AppInner = () => {
   const [showScrapbook, setShowScrapbook] = useState(false);
   const [showDevPreview, setShowDevPreview] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
+  const [showSendSpot, setShowSendSpot] = useState(false);
   const [showSplash, setShowSplash] = useState(false);
   const [pendingSelfieOnboarding, setPendingSelfieOnboarding] = useState(false);
   const [showStandaloneSelfie, setShowStandaloneSelfie] = useState(false);
@@ -413,9 +415,27 @@ const AppInner = () => {
       );
       break;
     case "Chat":
-      tabContent = activeChat
-        ? <ChatScreen convo={activeChat} onBack={() => setActiveChat(null)} onTakeSelfie={() => setShowStandaloneSelfie(true)} />
-        : <MessagesScreen {...tabProps} onOpenChat={(c) => setActiveChat(c)} />;
+      if (activeChat && showSendSpot) {
+        tabContent = (
+          <SendSpotScreen
+            tandemId={activeChat.id}
+            partnerName={activeChat.name}
+            onBack={() => setShowSendSpot(false)}
+            onShared={() => setShowSendSpot(false)}
+          />
+        );
+      } else if (activeChat) {
+        tabContent = (
+          <ChatScreen
+            convo={activeChat}
+            onBack={() => setActiveChat(null)}
+            onTakeSelfie={() => setShowStandaloneSelfie(true)}
+            onSendSpot={() => setShowSendSpot(true)}
+          />
+        );
+      } else {
+        tabContent = <MessagesScreen {...tabProps} onOpenChat={(c) => setActiveChat(c)} />;
+      }
       break;
     case "Profile":
       tabContent = (

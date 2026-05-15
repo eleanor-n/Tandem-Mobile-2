@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Tandem — spot share</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Fraunces:ital,wght@1,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #fafaf6;
+        --card: #ffffff;
+        --teal: #2dd4bf;
+        --blue: #3b82f6;
+        --fg: #0f172a;
+        --muted: #6b7280;
+        --secondary: #374151;
+        --border: #e5e7eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 80px;
+        background: var(--bg);
+        font-family: "Quicksand", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        color: var(--fg);
+        min-height: 100vh;
+      }
+      .wrap { max-width: 520px; margin: 0 auto; }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 28px;
+      }
+      .logo-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--teal), var(--blue));
+      }
+      .logo-text { font-weight: 700; font-size: 18px; letter-spacing: -0.4px; }
+      h1 {
+        font-family: "Fraunces", Georgia, serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 28px;
+        line-height: 34px;
+        margin: 0 0 18px;
+        color: var(--fg);
+      }
+      .lede { color: var(--secondary); font-size: 15px; line-height: 22px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        margin-top: 16px;
+      }
+      .row { display: flex; align-items: center; gap: 12px; }
+      .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #f3f4f6;
+        object-fit: cover;
+      }
+      .ring-known { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--teal); }
+      .ring-trusted { box-shadow: 0 0 0 2px #fff, 0 0 0 5px #ffd166, 0 0 14px rgba(255, 209, 102, 0.45); }
+      .name { font-weight: 700; font-size: 17px; }
+      .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+      .label {
+        font-size: 11px;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+        margin-top: 18px;
+        margin-bottom: 8px;
+      }
+      .activity-title { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+      .activity-meta { color: var(--secondary); font-size: 14px; }
+      .map-wrap {
+        margin-top: 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        aspect-ratio: 4 / 3;
+        background: #f3f4f6;
+      }
+      iframe { width: 100%; height: 100%; border: 0; }
+      .updated {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 10px;
+        font-style: italic;
+        font-family: "Fraunces", Georgia, serif;
+      }
+      .ended-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px 20px;
+        text-align: center;
+      }
+      .ended-card h2 {
+        font-family: "Fraunces", Georgia, serif;
+        font-style: italic;
+        font-weight: 500;
+        font-size: 24px;
+        margin: 0 0 8px;
+      }
+      .ended-card p { color: var(--secondary); margin: 0; font-size: 14px; line-height: 20px; }
+      .footer {
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 28px;
+        line-height: 18px;
+      }
+      .footer a { color: var(--teal); text-decoration: none; font-weight: 700; }
+      .loading {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo-dot"></div>
+        <span class="logo-text">tandem</span>
+      </header>
+
+      <div id="root">
+        <div class="loading">looking up the spot...</div>
+      </div>
+
+      <div class="footer">
+        tandem is a platonic social connection app for college students.
+        <br />
+        learn more at <a href="https://thetandemweb.com">thetandemweb.com</a>
+      </div>
+    </div>
+
+    <script>
+      const SUPABASE_URL = "https://ccntlaunczirvntnsjbm.supabase.co";
+      const FN_URL = SUPABASE_URL + "/functions/v1/get-spot-share";
+
+      function getShareIdFromUrl() {
+        const parts = window.location.pathname.split("/").filter(Boolean);
+        // expects .../spot-share/{id}
+        const last = parts[parts.length - 1];
+        if (last && last !== "spot-share" && last !== "index.html") return last;
+        const q = new URLSearchParams(window.location.search);
+        return q.get("id");
+      }
+
+      function escapeHtml(str) {
+        if (str == null) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function ringClass(tier) {
+        if (tier === "trusted") return "ring-trusted";
+        if (tier === "known") return "ring-known";
+        return "";
+      }
+
+      function formatRelative(iso) {
+        if (!iso) return "";
+        const diff = Date.now() - new Date(iso).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return "just now";
+        if (mins < 60) return mins + "m ago";
+        const hrs = Math.floor(mins / 60);
+        return hrs + "h ago";
+      }
+
+      function renderEnded(state) {
+        const root = document.getElementById("root");
+        const msg =
+          state === "expired"
+            ? "this share has expired."
+            : "this share has ended.";
+        root.innerHTML =
+          '<div class="ended-card">' +
+          '<h2>the spot is no longer being shared.</h2>' +
+          '<p>' + msg + ' both of them are off the live map now.</p>' +
+          "</div>";
+      }
+
+      function renderShare(data) {
+        const root = document.getElementById("root");
+        const sharer = data.sharer || {};
+        const partner = data.partner || {};
+        const activity = data.activity || {};
+        const lat = data.current_lat;
+        const lng = data.current_lng;
+
+        const mapEmbed =
+          lat != null && lng != null
+            ? '<iframe loading="lazy" allowfullscreen src="https://maps.google.com/maps?q=' +
+              lat +
+              "," +
+              lng +
+              '&z=15&output=embed"></iframe>'
+            : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;padding:24px;text-align:center;">no live location yet. the map will update when they share their position.</div>';
+
+        const sharerName = escapeHtml(sharer.first_name || "your friend");
+        const partnerName = escapeHtml(partner.first_name || "their tandem partner");
+        const recipient = data.recipient_name
+          ? "hey " + escapeHtml(data.recipient_name) + " — "
+          : "";
+
+        root.innerHTML =
+          "<h1>" +
+          recipient +
+          sharerName +
+          " is meeting " +
+          partnerName +
+          " right now.</h1>" +
+          '<p class="lede">they sent you this live map so you can keep an eye out. it auto-ends in a few hours.</p>' +
+
+          '<div class="card">' +
+          '<div class="label">who\'s meeting</div>' +
+          '<div class="row">' +
+          (sharer.avatar_url
+            ? '<img class="avatar ' +
+              ringClass(sharer.trust_tier) +
+              '" src="' +
+              escapeHtml(sharer.avatar_url) +
+              '" alt="" />'
+            : '<div class="avatar ' + ringClass(sharer.trust_tier) + '"></div>') +
+          "<div>" +
+          '<div class="name">' +
+          sharerName +
+          "</div>" +
+          '<div class="meta">' +
+          escapeHtml(sharer.pronouns || "") +
+          "</div>" +
+          "</div></div>" +
+
+          '<div class="row" style="margin-top:14px;">' +
+          (partner.avatar_url
+            ? '<img class="avatar ' +
+              ringClass(partner.trust_tier) +
+              '" src="' +
+              escapeHtml(partner.avatar_url) +
+              '" alt="" />'
+            : '<div class="avatar ' + ringClass(partner.trust_tier) + '"></div>') +
+          "<div>" +
+          '<div class="name">' +
+          partnerName +
+          "</div>" +
+          '<div class="meta">tandem partner</div>' +
+          "</div></div>" +
+
+          (activity.title
+            ? '<div class="label">what they\'re doing</div>' +
+              '<div class="activity-title">' +
+              escapeHtml(activity.title) +
+              "</div>" +
+              '<div class="activity-meta">' +
+              escapeHtml(activity.location_name || "") +
+              "</div>"
+            : "") +
+          "</div>" +
+
+          '<div class="label">live location</div>' +
+          '<div class="map-wrap">' +
+          mapEmbed +
+          "</div>" +
+          (data.location_updated_at
+            ? '<div class="updated">last update — ' +
+              escapeHtml(formatRelative(data.location_updated_at)) +
+              "</div>"
+            : "");
+      }
+
+      async function load() {
+        const id = getShareIdFromUrl();
+        if (!id) {
+          renderEnded("expired");
+          return;
+        }
+        try {
+          const res = await fetch(FN_URL + "?id=" + encodeURIComponent(id), {
+            method: "GET",
+          });
+          if (!res.ok) {
+            renderEnded("expired");
+            return;
+          }
+          const data = await res.json();
+          if (data.status !== "active") {
+            renderEnded(data.status);
+            return;
+          }
+          renderShare(data);
+        } catch (e) {
+          renderEnded("expired");
+        }
+      }
+
+      load();
+      // Auto-refresh every 60 seconds while active
+      setInterval(load, 60000);
+    </script>
+  </body>
+</html>
