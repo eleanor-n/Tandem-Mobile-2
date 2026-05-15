@@ -22,11 +22,14 @@ interface Props {
   onClose: () => void;
   onVerified: () => void;
   onSkip: () => void;
+  // When false, the modal cannot be dismissed without successful verification:
+  // no X button, no skip link. Used for mandatory onboarding gating.
+  dismissible?: boolean;
 }
 
 const RESEND_THROTTLE_SECONDS = 60;
 
-export function EduVerificationModal({ visible, onClose, onVerified, onSkip }: Props) {
+export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dismissible = true }: Props) {
   const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<"email" | "otp" | "done">("email");
   const [email, setEmail] = useState("");
@@ -167,9 +170,11 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip }: P
         <View style={[s.card, { paddingBottom: insets.bottom + 24 }]}>
           <View style={s.handle} />
 
-          <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close" size={20} color={colors.muted} />
-          </TouchableOpacity>
+          {dismissible && (
+            <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={20} color={colors.muted} />
+            </TouchableOpacity>
+          )}
 
           {stage === "email" && (
             <>
@@ -216,9 +221,11 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip }: P
                 </LinearGradient>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={onSkip} activeOpacity={0.7} style={s.skipBtn}>
-                <Text style={s.skipBtnText}>skip for now</Text>
-              </TouchableOpacity>
+              {dismissible && (
+                <TouchableOpacity onPress={onSkip} activeOpacity={0.7} style={s.skipBtn}>
+                  <Text style={s.skipBtnText}>skip for now</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
 
@@ -276,9 +283,11 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip }: P
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={onSkip} activeOpacity={0.7} style={s.skipBtn}>
-                <Text style={s.skipBtnText}>skip for now</Text>
-              </TouchableOpacity>
+              {dismissible && (
+                <TouchableOpacity onPress={onSkip} activeOpacity={0.7} style={s.skipBtn}>
+                  <Text style={s.skipBtnText}>skip for now</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
 

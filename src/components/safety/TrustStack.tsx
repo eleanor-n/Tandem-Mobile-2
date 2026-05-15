@@ -115,11 +115,11 @@ function PostDetailSkeleton() {
 const EXPLAINER_ROWS = [
   {
     label: "selfie verification",
-    body: "we check that you're a real person and that your selfie matches your profile photo.",
+    body: "we verify selfies by matching them to your profile photo. verification is automatic and takes seconds.",
   },
   {
     label: ".edu verification",
-    body: "we confirm your college email so you know everyone here is actually a student.",
+    body: "we confirm your college email so you know everyone here is actually a student. required to use tandem.",
   },
   {
     label: "shared tandems",
@@ -153,40 +153,57 @@ function ExplainerModal({ visible, onClose }: { visible: boolean; onClose: () =>
 
 // ── Badge sub-component ──────────────────────────────────────────────────────
 
+type BadgeState = "verified" | "pending" | "rejected" | "unverified";
+
 function VerifiedBadge({
-  verified,
+  state,
   label,
   voiceLabel,
 }: {
-  verified: boolean;
+  state: BadgeState;
   label: string;
   voiceLabel: string;
 }) {
+  const iconName =
+    state === "verified" ? "checkmark-circle"
+    : state === "pending" ? "time-outline"
+    : state === "rejected" ? "refresh-circle-outline"
+    : "ellipse-outline";
+  const color =
+    state === "verified" ? colors.teal
+    : state === "pending" ? "#F59E0B"
+    : state === "rejected" ? "#DC2626"
+    : colors.muted;
   return (
     <View style={s.badge} accessible accessibilityLabel={voiceLabel}>
-      <Ionicons
-        name={verified ? "checkmark-circle" : "ellipse-outline"}
-        size={14}
-        color={verified ? colors.teal : colors.muted}
-      />
-      <Text style={[s.badgeText, !verified && s.badgeTextMuted]}>{label}</Text>
+      <Ionicons name={iconName as any} size={14} color={color} />
+      <Text style={[s.badgeText, state !== "verified" && s.badgeTextMuted]}>{label}</Text>
     </View>
   );
+}
+
+function selfieState(profile: TrustProfile): BadgeState {
+  if (profile.selfieVerified || profile.selfieStatus === "approved") return "verified";
+  if (profile.selfieStatus === "pending_review") return "pending";
+  if (profile.selfieStatus === "rejected") return "rejected";
+  return "unverified";
 }
 
 // ── Profile variant ──────────────────────────────────────────────────────────
 
 function ProfileTrust({ trust }: { trust: TrustState }) {
   const { profile, sharedCount } = trust;
+  const sState = selfieState(profile);
+  const selfieVoice =
+    sState === "verified" ? "selfie verified"
+    : sState === "pending" ? "selfie pending review"
+    : sState === "rejected" ? "selfie verification failed — tap to retry"
+    : "selfie not verified";
   return (
     <View style={s.profileRow}>
+      <VerifiedBadge state={sState} label="selfie" voiceLabel={selfieVoice} />
       <VerifiedBadge
-        verified={profile.selfieVerified}
-        label="selfie"
-        voiceLabel={profile.selfieVerified ? "selfie verified" : "selfie not verified"}
-      />
-      <VerifiedBadge
-        verified={profile.eduVerified}
+        state={profile.eduVerified ? "verified" : "unverified"}
         label=".edu"
         voiceLabel={profile.eduVerified ? "dot edu verified" : "dot edu not verified"}
       />

@@ -32,6 +32,7 @@ function mockProfile(overrides: {
   firstName?: string;
   pronouns?: string | null;
   selfieVerified?: boolean;
+  selfieStatus?: "approved" | "pending_review" | "rejected" | null;
   phoneVerified?: boolean;
   eduVerified?: boolean;
   createdAt?: string | null;
@@ -40,6 +41,7 @@ function mockProfile(overrides: {
     firstName: overrides.firstName ?? "maya",
     pronouns: overrides.pronouns ?? "she/her",
     selfieVerified: overrides.selfieVerified ?? false,
+    selfieStatus: overrides.selfieStatus ?? (overrides.selfieVerified ? "approved" : null),
     phoneVerified: overrides.phoneVerified ?? false,
     eduVerified: overrides.eduVerified ?? false,
     createdAt: overrides.createdAt ?? isoMonthsAgo(4),

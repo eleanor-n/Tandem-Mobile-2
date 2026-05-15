@@ -167,7 +167,7 @@ const STEPS = [
   },
   {
     key: "edu_verify",
-    messages: ["one quick thing."],
+    messages: ["one quick thing.", "verify your school email — it's how we keep tandem safe."],
     expression: "warm" as SunnyExpression,
     inputType: "edu_verify",
     options: [],
@@ -186,7 +186,7 @@ const STEPS = [
 ];
 
 // Steps where skip is NOT allowed
-const UNSKIPPABLE = new Set(["opening", "name", "birthday", "done"]);
+const UNSKIPPABLE = new Set(["opening", "name", "birthday", "done", "edu_verify"]);
 
 // Fallback reactions if LLM fails — specific per known answer
 const FALLBACK_REACTIONS: Record<string, { message: string; expression: SunnyExpression }> = {
@@ -1438,9 +1438,10 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
 
       <EduVerificationModal
         visible={step.inputType === "edu_verify" && isShowingInput}
-        onClose={() => { /* user dismisses sheet — treat as skip */ goNextStep(); }}
+        dismissible={false}
+        onClose={() => { /* mandatory — no dismiss */ }}
         onVerified={() => goNextStep()}
-        onSkip={() => goNextStep()}
+        onSkip={() => { /* skip disabled in onboarding */ }}
       />
 
       {/* Notification permission prompt overlay */}

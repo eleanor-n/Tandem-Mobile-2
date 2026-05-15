@@ -29,7 +29,9 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
   const [permission, requestPermission] = useCameraPermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [doneMessage, setDoneMessage] = useState<string>("");
   const [showSunnyDone, setShowSunnyDone] = useState(false);
   const sunnyOpacity = useRef(new Animated.Value(0)).current;
 
@@ -53,7 +55,10 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
     }
   };
 
-  const handleRetake = () => setPhotoUri(null);
+  const handleRetake = () => {
+    setPhotoUri(null);
+    setUploadError(null);
+  };
 
   const handleUseThis = async () => {
     if (!photoUri || !user) return;
@@ -81,13 +86,54 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
         .update({
           selfie_url: path,
           selfie_uploaded_at: new Date().toISOString(),
+          selfie_verification_status: null,
+          selfie_similarity_score: null,
+          selfie_reviewed_at: null,
         } as any)
         .eq("user_id", user.id);
       if (updateErr) throw updateErr;
 
+      // Upload succeeded — now run automated face comparison.
+      setUploading(false);
+      setVerifying(true);
+      const { data: result, error: invokeErr } = await supabase.functions.invoke(
+        "verify-selfie-rekognition",
+        { body: {} },
+      );
+      setVerifying(false);
+
+      const status = (result as any)?.status as "approved" | "pending_review" | "rejected" | undefined;
+      const message = (result as any)?.message as string | undefined;
+
+      if (invokeErr || !status) {
+        console.warn("[SelfieCapture] verify invoke failed:", invokeErr?.message ?? result);
+        // Treat as pending — user can move on.
+        setDoneMessage("we're double-checking. you can use Tandem in the meantime.");
+        setShowSunnyDone(true);
+        Animated.timing(sunnyOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+        setTimeout(() => onComplete(), 2200);
+        return;
+      }
+
+      if (status === "rejected") {
+        setUploadError(
+          message
+            ?? "your selfie didn't match your profile photo. take another with your face clearly visible.",
+        );
+        // Keep the photo visible so the user sees what was rejected alongside
+        // the error message. handleRetake clears photoUri + error together.
+        return;
+      }
+
+      // approved or pending_review — both advance.
+      setDoneMessage(
+        status === "approved"
+          ? (message ?? "you're verified.")
+          : "we're double-checking. you can use Tandem in the meantime.",
+      );
       setShowSunnyDone(true);
       Animated.timing(sunnyOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-      setTimeout(() => onComplete(), 2000);
+      setTimeout(() => onComplete(), status === "approved" ? 1600 : 2200);
     } catch (err: any) {
       // Detailed log so we can see the actual Supabase error code/message in
       // device logs (Xcode Console / `npx react-native log-ios`).
@@ -99,6 +145,7 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
       console.warn("[SelfieCapture] upload failed:", err?.message ?? err);
       setUploadError("We couldn't save your selfie. Try again.");
       setUploading(false);
+      setVerifying(false);
     }
   };
 
@@ -111,7 +158,7 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
     return (
       <View style={s.root}>
         <Animated.Text style={[s.sunnyDoneLine, { opacity: sunnyOpacity }]}>
-          great. we're checking it out, this usually takes a few hours.
+          {doneMessage}
         </Animated.Text>
       </View>
     );
@@ -148,10 +195,10 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
       <View style={[s.root, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
         <Text style={s.title}>look good?</Text>
         <Image source={{ uri: photoUri }} style={s.preview} />
-        {uploading ? (
+        {uploading || verifying ? (
           <View style={s.uploadingRow}>
             <ActivityIndicator color={colors.teal} />
-            <Text style={s.uploadingText}>Uploading...</Text>
+            <Text style={s.uploadingText}>{verifying ? "Verifying..." : "Uploading..."}</Text>
           </View>
         ) : (
           <>

@@ -40,6 +40,7 @@ import { SafetySettingsScreen } from "./src/screens/SafetySettingsScreen";
 import { SelfieCaptureScreen } from "./src/screens/SelfieCaptureScreen";
 import { AdminReviewScreen } from "./src/screens/AdminReviewScreen";
 import { NotificationsScreen } from "./src/screens/NotificationsScreen";
+import { EduVerificationModal } from "./src/components/safety/EduVerificationModal";
 import { SplashAnimationScreen } from "./src/screens/SplashAnimationScreen";
 import { ResetPasswordScreen } from "./src/screens/ResetPasswordScreen";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -71,6 +72,8 @@ const AppInner = () => {
   const [showStandaloneSelfie, setShowStandaloneSelfie] = useState(false);
   const [showAdminReview, setShowAdminReview] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showForcedEduGate, setShowForcedEduGate] = useState(false);
+  const eduGateCheckedRef = useRef(false);
   const [showPost, setShowPost] = useState(false);
   const [showMyActivity, setShowMyActivity] = useState(false);
   const [postPrefill, setPostPrefill] = useState<{ name: string; lat: number; lng: number } | null>(null);
@@ -116,6 +119,23 @@ const AppInner = () => {
     };
     if (onboardingCompleted === true) checkFirstLaunch();
   }, [onboardingCompleted]);
+
+  // Once-per-session check: existing onboarded users who never verified their
+  // .edu must do so now. Brand promise is real names + real faces + real plans.
+  useEffect(() => {
+    if (onboardingCompleted !== true || !user || eduGateCheckedRef.current) return;
+    eduGateCheckedRef.current = true;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("edu_verified")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data && (data as any).edu_verified !== true) {
+        setShowForcedEduGate(true);
+      }
+    })();
+  }, [onboardingCompleted, user]);
 
   // Request location + notification permissions once after onboarding completes
   useEffect(() => {
@@ -443,6 +463,15 @@ const AppInner = () => {
           <Text style={appS.devBtnText}>dev</Text>
         </TouchableOpacity>
       ) : null}
+
+      {/* Mandatory .edu gate for existing users — checked once per session. */}
+      <EduVerificationModal
+        visible={showForcedEduGate}
+        dismissible={false}
+        onClose={() => { /* mandatory — no dismiss */ }}
+        onVerified={() => setShowForcedEduGate(false)}
+        onSkip={() => { /* skip disabled */ }}
+      />
     </View>
   );
 };
