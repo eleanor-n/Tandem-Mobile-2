@@ -226,6 +226,7 @@ export const SelfieCaptureScreen = ({ onComplete, onSkip, isStandalone }: Selfie
       <View style={[s.cameraHeader, { paddingTop: insets.top + 8 }]}>
         <Text style={s.title}>Verify with a selfie</Text>
         <Text style={s.sub}>so we know it's really you. front-facing, eyes on camera.</Text>
+        <Text style={s.sunnyHint}>we'll match this against your profile photo.</Text>
       </View>
       <View style={s.cameraWrap}>
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
@@ -268,6 +269,16 @@ const s = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
     fontFamily: "Quicksand_400Regular",
+  },
+  sunnyHint: {
+    fontSize: 15,
+    color: colors.foreground,
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 10,
+    paddingHorizontal: 16,
+    lineHeight: 20,
   },
   cameraWrap: {
     flex: 1,

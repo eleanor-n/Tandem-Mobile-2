@@ -569,6 +569,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.7} disabled={uploadingPhoto}>
             <Text style={s.photoHint}>{uploadingPhoto ? "uploading..." : "tap to change photo"}</Text>
           </TouchableOpacity>
+          <Text style={s.photoGuidance}>Choose a clear photo of your face. We use it to verify you.</Text>
           <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
             <Text style={s.name}>{profile?.first_name || "Your name"}</Text>
           </TouchableOpacity>
@@ -950,6 +951,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               <TouchableOpacity onPress={handlePhotoUpload} activeOpacity={0.7} disabled={uploadingPhoto}>
                 <Text style={es.photoHintText}>{uploadingPhoto ? "uploading..." : "change photo"}</Text>
               </TouchableOpacity>
+              <Text style={es.photoGuidance}>Choose a clear photo of your face. We use it to verify you.</Text>
             </View>
 
             <Text style={es.label}>FIRST NAME</Text>
@@ -1287,6 +1289,7 @@ const s = StyleSheet.create({
   avatarInitial: { fontSize: 32, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted },
   avatarPlaceholder: { flex: 1, borderRadius: 43, backgroundColor: "#F0FDFB", alignItems: "center", justifyContent: "center" },
   photoHint: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", marginTop: -4 },
+  photoGuidance: { fontSize: 12, color: colors.muted, fontFamily: "Quicksand_500Medium", marginTop: 4, paddingHorizontal: 24, textAlign: "center", lineHeight: 16 },
   name: { fontSize: 22, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.foreground, letterSpacing: -0.4 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   location: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
@@ -1650,6 +1653,7 @@ const es = StyleSheet.create({
   editAvatar: { width: 72, height: 72, borderRadius: 36, overflow: "hidden", backgroundColor: colors.surface },
   editAvatarImg: { width: 72, height: 72, borderRadius: 36 },
   photoHintText: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
+  photoGuidance: { fontSize: 12, color: colors.muted, fontFamily: "Quicksand_500Medium", marginTop: 6, paddingHorizontal: 8, textAlign: "center", lineHeight: 16 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
   pill: {
     paddingHorizontal: 12, paddingVertical: 6,

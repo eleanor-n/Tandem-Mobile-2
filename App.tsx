@@ -386,6 +386,7 @@ const AppInner = () => {
         onMembershipPress={() => { setShowSettings(false); setShowMembership(true); }}
         onSafetyPress={() => { setShowSettings(false); setShowSafety(true); }}
         onAdminReviewPress={() => { setShowSettings(false); setShowAdminReview(true); }}
+        onSelfieVerifyPress={() => setShowStandaloneSelfie(true)}
       />
     );
   }

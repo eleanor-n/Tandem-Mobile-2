@@ -17,6 +17,7 @@ interface SettingsScreenProps {
   onMembershipPress?: () => void;
   onSafetyPress?: () => void;
   onAdminReviewPress?: () => void;
+  onSelfieVerifyPress?: () => void;
 }
 
 const ChevronRight = () => <Ionicons name="chevron-forward" size={16} color={colors.muted} />;
@@ -46,22 +47,27 @@ const MEMBERSHIP_FEATURES = [
   { label: "Trail adventures", free: false, go: false, trail: true },
 ];
 
-export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdminReviewPress }: SettingsScreenProps) => {
+export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdminReviewPress, onSelfieVerifyPress }: SettingsScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selfieVerified, setSelfieVerified] = useState(false);
+  const [selfieStatus, setSelfieStatus] = useState<"approved" | "pending_review" | "rejected" | null>(null);
 
   useEffect(() => {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("is_admin")
+      .select("is_admin, selfie_verified, selfie_verification_status")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }: any) => {
-        if (data?.is_admin) setIsAdmin(true);
+        if (!data) return;
+        if (data.is_admin) setIsAdmin(true);
+        setSelfieVerified(!!data.selfie_verified);
+        setSelfieStatus(data.selfie_verification_status ?? null);
       });
   }, [user]);
   const [membershipTier, setMembershipTier] = useState("Free");
@@ -206,6 +212,29 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdm
           <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={() => setShowEduVerify(true)}>
             <Text style={s.rowLabel}>Verify school email</Text>
             <ChevronRight />
+          </TouchableOpacity>
+          <View style={s.divider} />
+          <TouchableOpacity
+            style={s.row}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (selfieVerified || selfieStatus === "approved") return;
+              onSelfieVerifyPress?.();
+            }}
+          >
+            <Text style={s.rowLabel}>Verify with a selfie</Text>
+            <View style={s.rowRight}>
+              {selfieVerified || selfieStatus === "approved" ? (
+                <Text style={[s.rowValue, { color: colors.teal }]}>Verified ✓</Text>
+              ) : selfieStatus === "pending_review" ? (
+                <Text style={[s.rowValue, { color: "#F59E0B" }]}>Pending</Text>
+              ) : (
+                <>
+                  <Text style={[s.rowValue, { color: colors.teal }]}>Verify</Text>
+                  <ChevronRight />
+                </>
+              )}
+            </View>
           </TouchableOpacity>
           {isAdmin && (
             <>

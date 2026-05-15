@@ -1394,6 +1394,9 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
             )}
             {step.inputType === "photo" && (
               <View style={styles.photoPickerArea}>
+                <Text style={styles.photoGuidance}>
+                  Choose a clear photo of your face. We use it to verify you.
+                </Text>
                 {profilePhotoUri ? (
                   <View style={styles.photoPreviewRow}>
                     <Image source={{ uri: profilePhotoUri }} style={styles.photoPreview} />
@@ -1804,6 +1807,15 @@ const styles = StyleSheet.create({
     paddingVertical: 20, backgroundColor: colors.background,
   },
   photoPickerText: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
+  photoGuidance: {
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+    textAlign: "center",
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    lineHeight: 18,
+  },
   photoPreviewRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   photoPreview: { width: 64, height: 64, borderRadius: 32 },
   photoChangeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
