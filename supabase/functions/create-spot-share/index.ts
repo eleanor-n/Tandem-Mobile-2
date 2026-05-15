@@ -2,7 +2,8 @@
 // Called when a user starts sharing their tandem spot with an outside friend.
 //
 // Body:
-//   { tandem_id: string, recipient_name?: string, expires_in_hours?: number }
+//   { tandem_id: string, recipient_name?: string, recipient_phone?: string,
+//     expires_in_hours?: number }
 //
 // Returns:
 //   { share_id: string, public_url: string }
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
     const userId = userData.user.id;
 
     const body = await req.json();
-    const { tandem_id, recipient_name, expires_in_hours } = body ?? {};
+    const { tandem_id, recipient_name, recipient_phone, expires_in_hours } = body ?? {};
     if (!tandem_id) {
       return new Response(JSON.stringify({ error: "tandem_id required" }), {
         status: 400,
@@ -113,6 +114,7 @@ Deno.serve(async (req) => {
         sharer_user_id: userId,
         partner_user_id: partnerId,
         recipient_name: recipient_name ?? null,
+        recipient_phone: recipient_phone ?? null,
         expires_at: expiresAt,
         status: "active",
       } as any)

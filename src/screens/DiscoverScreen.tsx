@@ -13,6 +13,7 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Switch,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -585,6 +586,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setFilterHumor([]);
   };
   const [postSpots, setPostSpots] = useState(1);
+  const [postAutoAcceptTrusted, setPostAutoAcceptTrusted] = useState(false);
   const [showGroupUpsell, setShowGroupUpsell] = useState(false);
   const [showGroupNudge, setShowGroupNudge] = useState(false);
   const maxCompanions = tier === "free" ? 1 : 10;
@@ -850,6 +852,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         goingCount: 0,
         goingAvatars: [],
         vibe: a.description ?? "",
+        max_participants: a.max_participants ?? 1,
+        auto_accept_trusted: a.auto_accept_trusted === true,
         host: {
           name: profileMap[a.user_id].first_name,
           user_id: a.user_id,
@@ -994,6 +998,49 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setSafetyCheckInActivity(act);
   };
 
+  // Evaluate whether a join request should auto-accept.
+  // Returns true only when every gate passes: the post opts in, the
+  // requester is Known/Trusted, not suspended, has no recent reports,
+  // and the post still has capacity.
+  const evaluateAutoAccept = async (
+    activity: any,
+    requesterId: string,
+  ): Promise<boolean> => {
+    if (!activity?.auto_accept_trusted) return false;
+
+    // Requester profile + tier + suspension
+    const { data: requesterProfile } = await supabase
+      .from("profiles")
+      .select("trust_tier, suspended_at, edu_verified, selfie_verified")
+      .eq("user_id", requesterId)
+      .maybeSingle();
+    if (!requesterProfile) return false;
+    if (requesterProfile.suspended_at) return false;
+    if (!requesterProfile.edu_verified || !requesterProfile.selfie_verified) return false;
+    const tierOk = requesterProfile.trust_tier === "known" || requesterProfile.trust_tier === "trusted";
+    if (!tierOk) return false;
+
+    // No reports against requester in the last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentReportCount } = await supabase
+      .from("user_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("reported_user_id", requesterId)
+      .gte("created_at", thirtyDaysAgo);
+    if ((recentReportCount ?? 0) > 0) return false;
+
+    // Capacity gate: count existing accepted joiners
+    const cap = activity?.max_participants ?? 1;
+    const { count: acceptedCount } = await supabase
+      .from("join_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("activity_id", activity.id)
+      .eq("status", "accepted");
+    if ((acceptedCount ?? 0) >= cap) return false;
+
+    return true;
+  };
+
   const executeImIn = async (activityId: string) => {
     const act = liveActivities.find((a: any) => a.id === activityId);
 
@@ -1002,20 +1049,14 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setRequestedSet(prev => new Set([...prev, activityId]));
     setCurrentIndex(prev => prev + 1);
 
-    // Async: insert join request
-    // SUPABASE: Ensure join_requests table exists:
-    // CREATE TABLE IF NOT EXISTS join_requests (
-    //   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    //   activity_id uuid REFERENCES activities(id) ON DELETE CASCADE,
-    //   requester_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-    //   status text DEFAULT 'pending',
-    //   created_at timestamptz DEFAULT now()
-    // );
     if (user) {
+      const autoAccept = await evaluateAutoAccept(act, user.id);
+      const initialStatus = autoAccept ? "accepted" : "pending";
+
       const { error } = await supabase.from("join_requests").insert({
         activity_id: activityId,
         requester_id: user.id,
-        status: "pending",
+        status: initialStatus,
       } as any);
       if (error) {
         console.warn("join_requests insert failed:", error.message);
@@ -1044,6 +1085,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             name: act.host.name ?? "them",
             photo: act.host.photo ?? "",
           });
+        }
+
+        // On auto-accept, push to both sides (the existing notify-request-accepted
+        // webhook fires on UPDATE; this is an INSERT with status=accepted so we
+        // explicitly invoke to cover that case).
+        if (autoAccept) {
+          try {
+            await supabase.functions.invoke("notify-auto-accept", {
+              body: {
+                activity_id: activityId,
+                requester_id: user.id,
+                poster_id: act.host.user_id,
+              },
+            });
+          } catch (err) {
+            console.warn("[autoAccept] notify failed:", err);
+          }
         }
       }
     }
@@ -1302,6 +1360,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         is_group: postSpots > 1,
         status: "active",
         image_url: uploadedImageUrl,
+        auto_accept_trusted: postAutoAcceptTrusted,
       };
       console.log("[Post] submitting:", payload);
       const { data, error } = await supabase.from("activities").insert(payload).select().single();
@@ -1322,6 +1381,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setPostDesc("");
       setPostSpots(1);
       setPostPhotoUri(null);
+      setPostAutoAcceptTrusted(false);
       setShowGroupNudge(false);
       setFeedRefreshKey(k => k + 1);
       showToast("posted! check back soon.");
@@ -1729,6 +1789,13 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                       </View>
                     </View>
                   </View>
+
+                  {/* Auto-accept badge — only shown when the poster opted in */}
+                  {currentCard.auto_accept_trusted ? (
+                    <Text style={s.autoAcceptBadge}>
+                      auto-accepts trusted joiners
+                    </Text>
+                  ) : null}
 
                   {/* Host strip — below card on cream bg */}
                   <View style={s.hostStrip}>
@@ -2235,6 +2302,21 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                 {Math.max(0, FREE_MONTHLY_POST_LIMIT - monthlyPostCount)} of {FREE_MONTHLY_POST_LIMIT} free tandems left this month
               </Text>
             )}
+
+            <View style={modalS.autoAcceptRow}>
+              <View style={modalS.autoAcceptLabelWrap}>
+                <Text style={modalS.autoAcceptLabel}>auto-accept trusted joiners</Text>
+                <Text style={modalS.autoAcceptHint}>
+                  known and trusted tandemers join without you having to decide.
+                </Text>
+              </View>
+              <Switch
+                value={postAutoAcceptTrusted}
+                onValueChange={setPostAutoAcceptTrusted}
+                trackColor={{ false: colors.border, true: colors.teal }}
+                thumbColor={colors.white}
+              />
+            </View>
 
             <TouchableOpacity style={modalS.postBtn} activeOpacity={0.88}
               onPress={handleSubmitPost} disabled={isPosting}>
@@ -2999,6 +3081,16 @@ const s = StyleSheet.create({
   stackAvatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: colors.white, backgroundColor: colors.surface },
   goingText: { fontSize: 12, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
+  autoAcceptBadge: {
+    fontSize: 12,
+    color: colors.secondary,
+    fontFamily: "Fraunces_500Medium_Italic",
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: -4,
+  },
+
   // Host strip below card
   hostStrip: {
     flexDirection: "row", alignItems: "center",
@@ -3231,6 +3323,35 @@ const modalS = StyleSheet.create({
   },
   postBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   postBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
+  autoAcceptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.white,
+    marginTop: 10,
+    marginBottom: 14,
+  },
+  autoAcceptLabelWrap: { flex: 1 },
+  autoAcceptLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
+    color: colors.foreground,
+    marginBottom: 4,
+  },
+  autoAcceptHint: {
+    fontSize: 13,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.secondary,
+    lineHeight: 18,
+  },
   groupNudge: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     backgroundColor: "#F0FDFB", borderRadius: 8,

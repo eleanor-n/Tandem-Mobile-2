@@ -113,6 +113,10 @@ export const NOTIFICATION_COPY = {
     title: "trusted tandemer.",
     body: "you've earned a gold ring on your profile.",
   }),
+  tandemRemoved: () => ({
+    title: "tandem update.",
+    body: "the tandem you joined isn't happening for you anymore. it's okay.",
+  }),
   // Tandem voice — safety/account
   safetyCheckInPrompt: (partnerName: string) => ({
     title: "How'd it go?",

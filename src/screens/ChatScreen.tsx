@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, shadows, gradients } from "../theme";
 import { useVerificationGate } from "../lib/verificationGate";
 import { VerificationGateModal } from "../components/safety/VerificationGateModal";
+import { EmergencyConfirmModal } from "../components/safety/EmergencyConfirmModal";
 import { useFonts, Fraunces_500Medium_Italic, Fraunces_700Bold_Italic } from "@expo-google-fonts/fraunces";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
@@ -44,6 +45,58 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
   const gate = useVerificationGate();
   const [activeShare, setActiveShare] = useState<ActiveSpotShare | null>(null);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [overflowVisible, setOverflowVisible] = useState(false);
+  const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [isPoster, setIsPoster] = useState(false);
+  const [tandemContext, setTandemContext] = useState<{
+    activityId: string | null;
+    partnerId: string | null;
+  }>({ activityId: null, partnerId: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!convo.id || !user) return;
+    (async () => {
+      const { data: tandem } = await supabase
+        .from("tandems")
+        .select("user_a_id, user_b_id, activity_id")
+        .eq("id", convo.id)
+        .maybeSingle();
+      if (cancelled || !tandem) return;
+      const partnerId =
+        (tandem as any).user_a_id === user.id ? (tandem as any).user_b_id : (tandem as any).user_a_id;
+      setTandemContext({
+        activityId: (tandem as any).activity_id ?? null,
+        partnerId: partnerId ?? null,
+      });
+      if ((tandem as any).activity_id) {
+        const { data: act } = await supabase
+          .from("activities")
+          .select("user_id")
+          .eq("id", (tandem as any).activity_id)
+          .maybeSingle();
+        if (!cancelled) setIsPoster((act as any)?.user_id === user.id);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [convo.id, user]);
+
+  const handleRemoveFromTandem = async () => {
+    if (removing) return;
+    setRemoving(true);
+    try {
+      await supabase.functions.invoke("remove-from-tandem", {
+        body: { tandem_id: convo.id },
+      });
+    } catch (err) {
+      console.warn("[ChatScreen] remove failed:", err);
+    } finally {
+      setRemoving(false);
+      setRemoveConfirmVisible(false);
+      onBack();
+    }
+  };
 
   const fetchActiveShare = useCallback(async () => {
     if (!convo.id) return;
@@ -77,16 +130,66 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
 
   const handleNeedHelp = async () => {
     setHelpModalVisible(false);
+
+    // Fire admin alert in the background (non-blocking)
+    supabase.functions
+      .invoke("trigger-emergency-alert", { body: { tandem_id: convo.id } })
+      .catch((err) => console.warn("[ChatScreen] emergency alert failed:", err));
+
+    // Look up the active spot share to pull the recipient phone + context for SMS
+    let smsUrl: string | null = null;
     try {
-      await supabase.functions.invoke("trigger-emergency-alert", {
-        body: { tandem_id: convo.id },
-      });
+      const { data: share } = await supabase
+        .from("spot_shares")
+        .select("share_id, recipient_phone")
+        .eq("tandem_id", convo.id)
+        .eq("status", "active")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (share?.recipient_phone) {
+        const { data: callerProf } = await supabase.auth.getUser();
+        const callerName = callerProf?.user?.user_metadata?.first_name ?? "your friend";
+
+        let actTitle = "a tandem";
+        let actLocation = "";
+        if (tandemContext.activityId) {
+          const { data: act } = await supabase
+            .from("activities")
+            .select("title, location_name")
+            .eq("id", tandemContext.activityId)
+            .maybeSingle();
+          actTitle = (act as any)?.title ?? actTitle;
+          actLocation = (act as any)?.location_name ?? "";
+        }
+
+        const shareUrl = `https://thetandemweb.com/spot-share/${share.share_id}`;
+        const locationFragment = actLocation ? ` in ${actLocation}` : "";
+        const messageBody = `Emergency. I need help. ${callerName}, currently at ${actTitle}${locationFragment}. Spot share: ${shareUrl}`;
+        const separator = Platform.OS === "ios" ? "&" : "?";
+        smsUrl = `sms:${share.recipient_phone}${separator}body=${encodeURIComponent(messageBody)}`;
+      }
     } catch (err) {
-      console.warn("[ChatScreen] emergency alert failed:", err);
+      console.warn("[ChatScreen] sms lookup failed:", err);
     }
-    Linking.openURL("tel:911").catch(() => {
-      Alert.alert("couldn't open dialer.", "call 911 directly.");
-    });
+
+    // Open the native SMS composer first (so the user can hit send while 911
+    // is dialing). If we have no recipient phone, skip directly to the dialer.
+    const finishWithCall = () => {
+      Linking.openURL("tel:911").catch(() => {
+        Alert.alert("couldn't open dialer.", "call 911 directly.");
+      });
+    };
+
+    if (smsUrl) {
+      Linking.openURL(smsUrl)
+        .catch(() => { /* still call 911 */ })
+        .finally(finishWithCall);
+    } else {
+      finishWithCall();
+    }
   };
 
   // Initial load + realtime subscription on messages for this tandem.
@@ -187,6 +290,16 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
             <Ionicons name="location" size={11} color={colors.teal} />
             <Text style={s.contextText}>send spot</Text>
           </TouchableOpacity>
+          {isPoster ? (
+            <TouchableOpacity
+              onPress={() => setOverflowVisible(true)}
+              style={s.overflowBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.muted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -296,29 +409,71 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
       />
 
       <Modal
-        visible={helpModalVisible}
+        visible={overflowVisible}
         animationType="fade"
         transparent
-        onRequestClose={() => setHelpModalVisible(false)}
+        onRequestClose={() => setOverflowVisible(false)}
       >
         <Pressable
           style={h.backdrop}
-          onPress={() => setHelpModalVisible(false)}
+          onPress={() => setOverflowVisible(false)}
         >
           <Pressable style={h.card} onPress={(e) => e.stopPropagation()}>
-            <Text style={h.title}>need help?</Text>
-            <Text style={h.body}>
-              this will call 911 and alert your spot-share contact if active. only use this if you feel unsafe.
-            </Text>
+            <Text style={h.title}>{convo.name}</Text>
             <TouchableOpacity
-              onPress={handleNeedHelp}
-              activeOpacity={0.88}
-              style={h.callBtn}
+              onPress={() => {
+                setOverflowVisible(false);
+                setRemoveConfirmVisible(true);
+              }}
+              activeOpacity={0.7}
+              style={overflowS.menuRow}
             >
-              <Text style={h.callBtnText}>Call 911 now</Text>
+              <Ionicons name="person-remove-outline" size={18} color={colors.destructive} />
+              <Text style={overflowS.menuRowText}>Remove from tandem</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setHelpModalVisible(false)}
+              onPress={async () => {
+                setOverflowVisible(false);
+                if (!user || !tandemContext.partnerId) return;
+                await supabase.from("blocked_users").upsert(
+                  { blocker_id: user.id, blocked_id: tandemContext.partnerId },
+                  { ignoreDuplicates: true } as any,
+                );
+                Alert.alert("blocked.", "they won't see your activity anymore.");
+                onBack();
+              }}
+              activeOpacity={0.7}
+              style={overflowS.menuRow}
+            >
+              <Ionicons name="ban-outline" size={18} color={colors.destructive} />
+              <Text style={overflowS.menuRowText}>Block user</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={async () => {
+                setOverflowVisible(false);
+                if (!user || !tandemContext.partnerId) return;
+                await supabase.from("user_reports").insert({
+                  reporter_id: user.id,
+                  reported_user_id: tandemContext.partnerId,
+                  tandem_id: convo.id,
+                  activity_id: tandemContext.activityId,
+                  reason: "reported from chat",
+                } as any);
+                try {
+                  await supabase.functions.invoke("update-trust-tier", {
+                    body: { user_id: tandemContext.partnerId, trigger: "report" },
+                  });
+                } catch { /* non-blocking */ }
+                Alert.alert("report submitted.");
+              }}
+              activeOpacity={0.7}
+              style={overflowS.menuRow}
+            >
+              <Ionicons name="flag-outline" size={18} color={colors.destructive} />
+              <Text style={overflowS.menuRowText}>Report</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setOverflowVisible(false)}
               activeOpacity={0.7}
               style={h.cancelBtn}
             >
@@ -327,6 +482,55 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={removeConfirmVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setRemoveConfirmVisible(false)}
+      >
+        <Pressable
+          style={h.backdrop}
+          onPress={() => setRemoveConfirmVisible(false)}
+        >
+          <Pressable style={h.card} onPress={(e) => e.stopPropagation()}>
+            <Text style={h.title}>Remove {convo.name} from this tandem?</Text>
+            <Text style={h.body}>
+              They won't be in this tandem anymore. They'll get a brief notification but no details. You can still see each other on Tandem.
+            </Text>
+            <TouchableOpacity
+              onPress={handleRemoveFromTandem}
+              disabled={removing}
+              activeOpacity={0.88}
+              style={overflowS.removeBtn}
+            >
+              <LinearGradient
+                colors={["#DC2626", "#B91C1C"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={overflowS.removeBtnInner}
+              >
+                <Text style={overflowS.removeBtnText}>
+                  {removing ? "Removing..." : "Remove"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setRemoveConfirmVisible(false)}
+              activeOpacity={0.7}
+              style={h.cancelBtn}
+            >
+              <Text style={h.cancelBtnText}>cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <EmergencyConfirmModal
+        visible={helpModalVisible}
+        onCancel={() => setHelpModalVisible(false)}
+        onConfirm={handleNeedHelp}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -415,6 +619,12 @@ const s = StyleSheet.create({
 
   // Header actions row
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  overflowBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   helpLink: { paddingHorizontal: 6, paddingVertical: 4 },
   helpLinkText: {
     fontSize: 12,
@@ -480,18 +690,6 @@ const h = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 18,
   },
-  callBtn: {
-    backgroundColor: "#DC2626",
-    borderRadius: radius.full,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  callBtnText: {
-    fontSize: 15,
-    color: colors.white,
-    fontFamily: "Quicksand_700Bold",
-    fontWeight: "700",
-  },
   cancelBtn: {
     marginTop: 10,
     paddingVertical: 12,
@@ -501,5 +699,36 @@ const h = StyleSheet.create({
     fontSize: 14,
     color: colors.muted,
     fontFamily: "Quicksand_500Medium",
+  },
+});
+
+const overflowS = StyleSheet.create({
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  menuRowText: {
+    fontSize: 15,
+    color: colors.destructive,
+    fontFamily: "Quicksand_600SemiBold",
+    fontWeight: "600",
+  },
+  removeBtn: {
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  removeBtnInner: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  removeBtnText: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
   },
 });

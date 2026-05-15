@@ -30,13 +30,43 @@ interface Props {
 
 type ShareMethod = "text" | "imessage" | "copy" | "other";
 
+// Format a US phone number for display. Accepts up to 10 digits.
+// Returns a string like "(555) 123-4567" or partial input on the way.
+function formatUsPhone(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(0, 10);
+  if (d.length === 0) return "";
+  if (d.length <= 3) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
+
+function digitsOnly(s: string): string {
+  return s.replace(/\D/g, "");
+}
+
 export const SendSpotScreen = ({ tandemId, partnerName, onBack, onShared }: Props) => {
   const insets = useSafeAreaInsets();
   const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [method, setMethod] = useState<ShareMethod>("text");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(true);
   const [sending, setSending] = useState(false);
+
+  const validatePhone = (): boolean => {
+    const d = digitsOnly(recipientPhone);
+    if (d.length === 0) {
+      setPhoneError(null);
+      return true; // optional field
+    }
+    if (d.length < 10) {
+      setPhoneError("enter a 10-digit US phone number");
+      return false;
+    }
+    setPhoneError(null);
+    return true;
+  };
 
   useEffect(() => {
     (async () => {
@@ -60,12 +90,16 @@ export const SendSpotScreen = ({ tandemId, partnerName, onBack, onShared }: Prop
 
   const handleSend = async () => {
     if (sending) return;
+    if (!validatePhone()) return;
     setSending(true);
     try {
+      const phoneDigits = digitsOnly(recipientPhone);
+      const e164 = phoneDigits.length === 10 ? `+1${phoneDigits}` : null;
       const { data, error } = await supabase.functions.invoke("create-spot-share", {
         body: {
           tandem_id: tandemId,
           recipient_name: recipientName.trim() || null,
+          recipient_phone: e164,
         },
       });
       if (error) {
@@ -162,9 +196,30 @@ export const SendSpotScreen = ({ tandemId, partnerName, onBack, onShared }: Prop
           onChangeText={setRecipientName}
           placeholder="who are you sending this to?"
           placeholderTextColor={colors.muted}
-          style={s.input}
+          style={[s.input, { marginBottom: 14 }]}
           maxLength={48}
         />
+
+        {/* Recipient phone */}
+        <Text style={s.fieldLabel}>their phone number</Text>
+        <TextInput
+          value={recipientPhone}
+          onChangeText={(v) => {
+            setRecipientPhone(formatUsPhone(v));
+            if (phoneError) setPhoneError(null);
+          }}
+          onBlur={validatePhone}
+          placeholder="+1 (XXX) XXX-XXXX"
+          placeholderTextColor={colors.muted}
+          keyboardType="phone-pad"
+          maxLength={14}
+          style={[s.input, phoneError && s.inputError]}
+        />
+        {phoneError ? <Text style={s.inputErrorText}>{phoneError}</Text> : (
+          <Text style={s.inputHint}>
+            used if you ever hit "need help" mid-tandem. we'll open your texts pre-filled.
+          </Text>
+        )}
 
         {/* Method */}
         <Text style={s.fieldLabel}>send via</Text>
@@ -297,7 +352,23 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: colors.foreground,
     fontFamily: "Quicksand_500Medium",
-    marginBottom: 20,
+    marginBottom: 6,
+  },
+  inputError: {
+    borderColor: colors.destructive,
+  },
+  inputErrorText: {
+    fontSize: 12,
+    color: colors.destructive,
+    fontFamily: "Quicksand_500Medium",
+    marginBottom: 14,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+    lineHeight: 18,
+    marginBottom: 14,
   },
 
   methodGroup: { gap: 8, marginBottom: 22 },

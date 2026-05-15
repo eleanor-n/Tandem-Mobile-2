@@ -354,7 +354,7 @@ Membership cards in `/settings/membership`:
 ### Do-Not-Break Rules
 
 - **Never hardcode credentials.** All keys/URLs come from `.env` or Supabase Edge Function secrets.
-- **Age is shown ONLY on ProfileScreen**, displayed as "[X] years old" below the user's name. Age is computed from the birthday field using calculateAge(). Do NOT show age attached to a name anywhere (no "Maya, 22" format). Do NOT show age in MessagesScreen, ChatScreen, activity cards, host strips, or request rows.
+- **Age is shown on ProfileScreen and RequestSheet only.** ProfileScreen renders it as "[X] years old" below the name. RequestSheet is a full profile detail view in a sheet, so age is allowed there too — formatted as a meta segment like "she/her · 18 · freshman". Age is computed from `birthday` via `calculateAge()`. Do NOT show age attached to a name anywhere (no "Maya, 22" format). Do NOT show age in MessagesScreen, ChatScreen, activity cards, host strips, or request rows.
 - **Never make the background pure white (`#FFFFFF`).** Always `#FAFAF6`.
 - **Never use teal/gradient as a full screen background.**
 - **Never add dating-profile style fields** (YOU BOTH, comfort show, etc.) to activity cards.

@@ -33,6 +33,7 @@ interface RequesterProfile {
   avatar_url: string | null;
   pronouns: string | null;
   year_of_school: string | null;
+  birthday: string | null;
   selfie_verified: boolean;
   phone_verified: boolean;
   edu_verified: boolean;
@@ -42,6 +43,13 @@ interface RequesterProfile {
   deep_prompts: Record<string, string> | null;
   video_url: string | null;
   bio: string | null;
+}
+
+function calculateAge(birthday: string | null): number | null {
+  if (!birthday) return null;
+  return Math.floor(
+    (Date.now() - new Date(birthday).getTime()) / (365.25 * 24 * 60 * 60 * 1000),
+  );
 }
 
 interface ScrapbookCard {
@@ -94,7 +102,7 @@ export function RequestSheet({
         supabase
           .from("profiles")
           .select(
-            "user_id, first_name, avatar_url, pronouns, year_of_school, selfie_verified, phone_verified, edu_verified, trust_tier, completed_tandem_count, quick_prompts, deep_prompts, video_url, bio",
+            "user_id, first_name, avatar_url, pronouns, year_of_school, birthday, selfie_verified, phone_verified, edu_verified, trust_tier, completed_tandem_count, quick_prompts, deep_prompts, video_url, bio",
           )
           .eq("user_id", requesterUserId)
           .maybeSingle(),
@@ -198,15 +206,19 @@ export function RequestSheet({
                 />
                 <Text style={s.name}>{firstName}</Text>
                 <View style={s.metaRow}>
-                  {profile.pronouns ? (
-                    <Text style={s.metaText}>{profile.pronouns.toLowerCase()}</Text>
-                  ) : null}
-                  {profile.year_of_school ? (
-                    <>
-                      {profile.pronouns ? <View style={s.metaDot} /> : null}
-                      <Text style={s.metaText}>{profile.year_of_school}</Text>
-                    </>
-                  ) : null}
+                  {(() => {
+                    const age = calculateAge(profile.birthday);
+                    const parts: string[] = [];
+                    if (profile.pronouns) parts.push(profile.pronouns.toLowerCase());
+                    if (age != null) parts.push(String(age));
+                    if (profile.year_of_school) parts.push(profile.year_of_school);
+                    return parts.map((p, i) => (
+                      <React.Fragment key={i}>
+                        {i > 0 ? <View style={s.metaDot} /> : null}
+                        <Text style={s.metaText}>{p}</Text>
+                      </React.Fragment>
+                    ));
+                  })()}
                 </View>
                 {verified ? (
                   <View style={s.verifiedRow}>
