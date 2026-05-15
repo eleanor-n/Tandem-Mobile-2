@@ -45,8 +45,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
     const trimmedEmail = email.toLowerCase().trim();
+
+    // UMich-only gate (admins bypass). Backend is the source of truth.
+    const { data: profile } = await supabaseService
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const isAdmin = !!(profile as any)?.is_admin;
+    if (!isAdmin && !trimmedEmail.endsWith("@umich.edu")) {
+      return new Response(
+        JSON.stringify({
+          error: "UMICH_ONLY",
+          message: "Tandem is currently only available to University of Michigan students. We'll expand to other schools soon.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
 
     const { error: insertErr } = await supabaseService
       .from("edu_verifications")

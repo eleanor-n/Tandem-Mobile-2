@@ -63,6 +63,7 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
     if (!v) return "Please enter your school email.";
     if (!v.endsWith(".edu")) return "That doesn't look like a .edu address.";
     if (!/^[^\s@]+@[^\s@]+\.edu$/.test(v)) return "Please enter a valid email.";
+    if (!v.endsWith("@umich.edu")) return "Tandem is currently only for UMich students";
     return null;
   };
 
@@ -184,7 +185,7 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
               <Text style={s.label}>School email</Text>
               <TextInput
                 style={[s.input, emailError ? s.inputError : null]}
-                placeholder="you@school.edu"
+                placeholder="your @umich.edu email"
                 placeholderTextColor={colors.muted}
                 value={email}
                 onChangeText={(t) => { setEmail(t); if (emailError) setEmailError(null); }}
