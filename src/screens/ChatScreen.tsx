@@ -48,6 +48,8 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
   const [overflowVisible, setOverflowVisible] = useState(false);
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const [isPoster, setIsPoster] = useState(false);
   const [tandemContext, setTandemContext] = useState<{
     activityId: string | null;
@@ -94,6 +96,29 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
     } finally {
       setRemoving(false);
       setRemoveConfirmVisible(false);
+      onBack();
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (blocking) return;
+    if (!user || !tandemContext.partnerId) return;
+    setBlocking(true);
+    try {
+      // Remove from this tandem first so the chat disappears for them,
+      // then block so neither side surfaces in the other's feed.
+      await supabase.functions.invoke("remove-from-tandem", {
+        body: { tandem_id: convo.id },
+      });
+      await supabase.from("blocked_users").upsert(
+        { blocker_id: user.id, blocked_id: tandemContext.partnerId },
+        { ignoreDuplicates: true } as any,
+      );
+    } catch (err) {
+      console.warn("[ChatScreen] block failed:", err);
+    } finally {
+      setBlocking(false);
+      setBlockConfirmVisible(false);
       onBack();
     }
   };
@@ -432,15 +457,9 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
               <Text style={overflowS.menuRowText}>Remove from tandem</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={async () => {
+              onPress={() => {
                 setOverflowVisible(false);
-                if (!user || !tandemContext.partnerId) return;
-                await supabase.from("blocked_users").upsert(
-                  { blocker_id: user.id, blocked_id: tandemContext.partnerId },
-                  { ignoreDuplicates: true } as any,
-                );
-                Alert.alert("blocked.", "they won't see your activity anymore.");
-                onBack();
+                setBlockConfirmVisible(true);
               }}
               activeOpacity={0.7}
               style={overflowS.menuRow}
@@ -517,6 +536,49 @@ export const ChatScreen = ({ convo, onBack, onTakeSelfie, onSendSpot }: ChatScre
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setRemoveConfirmVisible(false)}
+              activeOpacity={0.7}
+              style={h.cancelBtn}
+            >
+              <Text style={h.cancelBtnText}>cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={blockConfirmVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setBlockConfirmVisible(false)}
+      >
+        <Pressable
+          style={h.backdrop}
+          onPress={() => setBlockConfirmVisible(false)}
+        >
+          <Pressable style={h.card} onPress={(e) => e.stopPropagation()}>
+            <Text style={h.title}>Block {convo.name}?</Text>
+            <Text style={h.body}>
+              They'll be removed from this tandem and you won't see each other on Tandem anywhere.
+            </Text>
+            <TouchableOpacity
+              onPress={handleBlockUser}
+              disabled={blocking}
+              activeOpacity={0.88}
+              style={overflowS.removeBtn}
+            >
+              <LinearGradient
+                colors={["#DC2626", "#B91C1C"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={overflowS.removeBtnInner}
+              >
+                <Text style={overflowS.removeBtnText}>
+                  {blocking ? "Blocking..." : "Block"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setBlockConfirmVisible(false)}
               activeOpacity={0.7}
               style={h.cancelBtn}
             >
