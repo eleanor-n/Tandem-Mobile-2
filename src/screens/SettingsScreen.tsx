@@ -26,8 +26,6 @@ const CheckIcon = () => <Ionicons name="checkmark" size={16} color={colors.teal}
 
 const VISIBILITY_FIELDS = [
   { key: "gender", label: "Gender" },
-  { key: "sexuality", label: "Sexuality" },
-  { key: "religion", label: "Religion" },
   { key: "relationship_status", label: "Relationship Status" },
   { key: "occupation", label: "Job / Occupation" },
   { key: "mbti", label: "Personality Type" },
@@ -73,8 +71,7 @@ export const SettingsScreen = ({ onBack, onMembershipPress, onSafetyPress, onAdm
   const [membershipTier, setMembershipTier] = useState("Free");
   const [whoToSee, setWhoToSee] = useState("Everyone");
   const [visibility, setVisibility] = useState<Record<string, boolean>>({
-    gender: true, sexuality: true, religion: true,
-    relationship_status: true, occupation: true, mbti: true, humor_type: true, purpose: true,
+    gender: true, relationship_status: true, occupation: true, mbti: true, humor_type: true, purpose: true,
   });
 
   const [showDiscovery, setShowDiscovery] = useState(false);

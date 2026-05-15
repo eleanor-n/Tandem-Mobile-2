@@ -285,6 +285,7 @@ const AppInner = () => {
               first_name: data.name || data.first_name,
               birthday: data.birthday,
               gender: data.gender,
+              year_of_school: data.year_of_school,
               occupation: data.occupation,
               personality_type: data.personality || data.mbti,
               humor_type: Array.isArray(data.humor) ? data.humor : [],

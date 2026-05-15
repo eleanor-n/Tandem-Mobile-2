@@ -37,8 +37,6 @@ const calculateAge = (birthday: string | null): number | null => {
 
 const VISIBILITY_FIELDS = [
   { key: "gender", label: "Gender" },
-  { key: "sexuality", label: "Sexuality" },
-  { key: "religion", label: "Religion" },
   { key: "relationship_status", label: "Relationship Status" },
   { key: "occupation", label: "Job / Occupation" },
   { key: "mbti", label: "Personality Type" },
@@ -239,8 +237,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       if (data) {
         setProfile(data);
         setVisibility((data.profile_visibility as Record<string, boolean>) || {
-          gender: true, sexuality: true, religion: true,
-          relationship_status: true, occupation: true, mbti: true, humor_type: true,
+          gender: true, relationship_status: true, occupation: true, mbti: true, humor_type: true,
         });
         setProfilePublic(data.is_public !== false);
         setEditFirstName(data.first_name || "");
@@ -270,8 +267,7 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           setProfile(data);
           setVisibility(
             (data.profile_visibility as Record<string, boolean>) || {
-              gender: true, sexuality: true, religion: true,
-              relationship_status: true, occupation: true, mbti: true, humor_type: true,
+              gender: true, relationship_status: true, occupation: true, mbti: true, humor_type: true,
             }
           );
         }

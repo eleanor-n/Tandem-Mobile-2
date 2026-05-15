@@ -93,6 +93,13 @@ const STEPS = [
     options: ["Man", "Woman", "Non-binary", "Prefer not to say", "Other"],
   },
   {
+    key: "year_of_school",
+    messages: ["what year are you?"],
+    expression: "warm" as SunnyExpression,
+    inputType: "single",
+    options: ["freshman", "sophomore", "junior", "senior", "grad"],
+  },
+  {
     key: "occupation",
     messages: ["what do you do?"],
     expression: "warm" as SunnyExpression,
@@ -214,9 +221,9 @@ const getGenericFallback = () =>
   MULTI_FALLBACKS[Math.floor(Math.random() * MULTI_FALLBACKS.length)];
 
 const PROGRESS_MAP: Record<number, number> = {
-  0: 8, 1: 18, 2: 28, 3: 36, 4: 44, 5: 52,
-  6: 60, 7: 68, 8: 76, 9: 84, 10: 92, 11: 96,
-  12: 100, 13: 100,
+  0: 7, 1: 14, 2: 21, 3: 28, 4: 35, 5: 42,
+  6: 49, 7: 57, 8: 64, 9: 71, 10: 78, 11: 85,
+  12: 92, 13: 100, 14: 100,
 };
 
 // ─── LLM Reaction Helper ─────────────────────────────────────

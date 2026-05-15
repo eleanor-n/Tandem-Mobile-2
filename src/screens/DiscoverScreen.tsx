@@ -59,13 +59,25 @@ const FALLBACK_PHOTOS: Record<string, string> = {
   default: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800",
 };
 
+// Locked category set — used by the Discover filter and the post-creation picker.
+// Ordered for visual flow on a 3-row chip wrap.
+const CATEGORIES = [
+  "coffee", "food", "study", "errands", "hiking",
+  "fitness", "sports", "games", "concerts", "events", "markets",
+] as const;
+
 const CATEGORY_ICON: Record<string, string> = {
   coffee: "cafe-outline",
+  food: "restaurant-outline",
+  study: "book-outline",
+  errands: "bag-handle-outline",
   hiking: "walk-outline",
-  markets: "bag-outline",
-  concerts: "musical-notes-outline",
   fitness: "barbell-outline",
   sports: "football-outline",
+  games: "game-controller-outline",
+  concerts: "musical-notes-outline",
+  events: "sparkles-outline",
+  markets: "bag-outline",
   default: "compass-outline",
 };
 
@@ -511,9 +523,29 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     }, 2500);
   };
   const [showPostModal, setShowPostModal] = useState(false);
+  const [monthlyPostCount, setMonthlyPostCount] = useState<number | null>(null);
+  const [showPostCapUpsell, setShowPostCapUpsell] = useState(false);
+  const FREE_MONTHLY_POST_LIMIT = 5;
   useEffect(() => {
     if (openPostModal) { setShowPostModal(true); onPostModalOpened?.(); }
   }, [openPostModal]);
+
+  // Fetch this month's post count when the post modal opens (Free-tier cap UI).
+  useEffect(() => {
+    if (!showPostModal || !user) return;
+    const start = new Date();
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    supabase
+      .from("activities")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gte("created_at", start.toISOString())
+      .then(({ count }: any) => {
+        setMonthlyPostCount(count ?? 0);
+      });
+  }, [showPostModal, user]);
+
   useEffect(() => {
     if (!postPrefill) return;
     setPostLocation(postPrefill.name);
@@ -530,8 +562,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [filterAgeMin, setFilterAgeMin] = useState(18);
   const [filterAgeMax, setFilterAgeMax] = useState(35);
   const [filterGenders, setFilterGenders] = useState<string[]>(["all"]);
-  const [filterSexuality, setFilterSexuality] = useState<string[]>([]);
-  const [filterReligion, setFilterReligion] = useState<string[]>([]);
+  const [filterYears, setFilterYears] = useState<string[]>(["all"]);
   const [filterPersonality, setFilterPersonality] = useState<string[]>([]);
   const [filterHumor, setFilterHumor] = useState<string[]>([]);
 
@@ -541,17 +572,15 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setList(next.includes(val) ? next.filter(x => x !== val) : [...next, val]);
   };
 
-  const hasLockedFilter = filterSexuality.length > 0 || filterReligion.length > 0 ||
-    filterPersonality.length > 0 || filterHumor.length > 0;
+  const hasLockedFilter = filterPersonality.length > 0 || filterHumor.length > 0;
 
   const resetFilters = () => {
     setFilterDistance("10 mi");
     setFilterAgeMin(18);
     setFilterAgeMax(35);
     setFilterGenders(["all"]);
+    setFilterYears(["all"]);
     setSelectedCategory(null);
-    setFilterSexuality([]);
-    setFilterReligion([]);
     setFilterPersonality([]);
     setFilterHumor([]);
   };
@@ -565,7 +594,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [postSelectedCategory, setPostSelectedCategory] = useState("");
-  const [postCustomCategory, setPostCustomCategory] = useState("");
   const [postLocation, setPostLocation] = useState("");
   const [postLocationLat, setPostLocationLat] = useState<number | null>(null);
   const [postLocationLng, setPostLocationLng] = useState<number | null>(null);
@@ -692,9 +720,9 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       const userIds = [...new Set(data.map((a: any) => a.user_id).filter(Boolean))] as string[];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("user_id, first_name, avatar_url")
+        .select("user_id, first_name, avatar_url, year_of_school, edu_verified, selfie_verified")
         .in("user_id", userIds);
-      const profileMap: Record<string, { first_name: string; avatar_url: string }> = {};
+      const profileMap: Record<string, { first_name: string; avatar_url: string; year_of_school?: string; edu_verified?: boolean; selfie_verified?: boolean }> = {};
       for (const p of profiles ?? []) {
         profileMap[p.user_id] = p;
       }
@@ -742,8 +770,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         .filter((a: any) => a.user_id === currentUserId)
         .map((a: any) => a.title));
 
+      // Hard floor: only show posts from fully-verified users (.edu + selfie).
+      // Unverified users can browse but their posts are gated from the feed.
+      const verifiedOnly = validActivities.filter((a: any) => {
+        const p = profileMap[a.user_id];
+        return p?.edu_verified === true && p?.selfie_verified === true;
+      });
+
+      // Year-of-school filter (multi-select; "all" disables).
+      const yearFiltered = (filterYears.length === 0 || filterYears.includes("all"))
+        ? verifiedOnly
+        : verifiedOnly.filter((a: any) => {
+            const y = profileMap[a.user_id]?.year_of_school;
+            return y && filterYears.includes(y);
+          });
+
       // Exclude interacted activities, own posts, and blocked users
-      const baseFiltered = validActivities.filter((a: any) =>
+      const baseFiltered = yearFiltered.filter((a: any) =>
         !excludedIds.has(a.id) && a.user_id !== currentUserId && !blockedIds.has(a.user_id)
       );
 
@@ -824,7 +867,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setLiveActivities([]);
     }
     setLoadingActivities(false);
-  }, []);
+  }, [filterYears]);
 
   useEffect(() => {
     if (discoverMode !== "browse") return;
@@ -1192,9 +1235,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       showToast("add a title to post.");
       return;
     }
-    const finalCategory = postSelectedCategory === "other"
-      ? postCustomCategory.trim()
-      : postSelectedCategory;
+    const finalCategory = postSelectedCategory;
     const formattedDate = formatDateForDB(selectedDate);
     // -- Run in Supabase SQL editor if not already done:
     // alter table public.activities add column if not exists image_url text;
@@ -1209,17 +1250,21 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         return;
       }
 
-      // Rate limit: max 5 posts per 24 hours
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count } = await supabase
-        .from("activities")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", freshUser.id)
-        .gte("created_at", twentyFourHoursAgo);
-      if (count !== null && count >= 5) {
-        showToast("you've hit today's post limit. try again tomorrow.");
-        setIsPosting(false);
-        return;
+      // Free-tier cap: 5 posts per calendar month. Paid tiers (go, trail) unlimited.
+      if (tier === "free") {
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const { count } = await supabase
+          .from("activities")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", freshUser.id)
+          .gte("created_at", monthStart.toISOString());
+        if (count !== null && count >= FREE_MONTHLY_POST_LIMIT) {
+          setIsPosting(false);
+          setShowPostCapUpsell(true);
+          return;
+        }
       }
 
       // Upload photo first if one was selected
@@ -1271,7 +1316,6 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setSelectedDate(new Date());
       setSelectedTime(null);
       setPostSelectedCategory("");
-      setPostCustomCategory("");
       setPostLocation("");
       setPostLocationLat(null);
       setPostLocationLng(null);
@@ -1838,7 +1882,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             {/* ── Category ── */}
             <Text style={filterS.sectionLabel}>CATEGORY</Text>
             <View style={filterS.optionWrap}>
-              {["coffee", "hiking", "markets", "concerts", "fitness", "sports"].map(cat => (
+              {CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat}
                   onPress={() => setSelectedCategory(cat === selectedCategory ? null : cat)}
@@ -1899,36 +1943,23 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               })}
             </View>
 
-            {/* ── Sexuality (locked) ── */}
-            <View style={filterS.lockedSectionHeader}>
-              <Text style={filterS.sectionLabel}>SEXUALITY</Text>
-              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
-            </View>
+            {/* ── Year of school (multi-select, not premium-gated) ── */}
+            <Text style={filterS.sectionLabel}>year of school</Text>
             <View style={filterS.pillRow}>
-              {["straight", "gay · lesbian", "bisexual", "all"].map(s => (
-                <TouchableOpacity key={s} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterSexuality, s, setFilterSexuality); }} activeOpacity={0.8}>
-                  <View style={filterS.pillLocked}>
-                    <Text style={filterS.pillLockedText}>{s}</Text>
-                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* ── Religion (locked) ── */}
-            <View style={filterS.lockedSectionHeader}>
-              <Text style={filterS.sectionLabel}>RELIGION</Text>
-              <View style={filterS.goBadge}><Text style={filterS.goBadgeText}>Tandem Go</Text></View>
-            </View>
-            <View style={filterS.pillRow}>
-              {["christian", "jewish", "muslim", "hindu", "buddhist", "spiritual", "agnostic / atheist", "all"].map(r => (
-                <TouchableOpacity key={r} onPress={() => { if (tier === "free") setShowFilterUpsell(true); else toggleMulti(filterReligion, r, setFilterReligion); }} activeOpacity={0.8}>
-                  <View style={filterS.pillLocked}>
-                    <Text style={filterS.pillLockedText}>{r}</Text>
-                    {tier === "free" && <Ionicons name="lock-closed" size={10} color={colors.muted} />}
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {["freshman", "sophomore", "junior", "senior", "grad", "all"].map(y => {
+                const active = filterYears.includes(y);
+                return (
+                  <TouchableOpacity key={y} onPress={() => toggleMulti(filterYears, y, setFilterYears)} activeOpacity={0.8}>
+                    {active ? (
+                      <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={filterS.pillActive}>
+                        <Text style={filterS.pillActiveText}>{y}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={filterS.pill}><Text style={filterS.pillText}>{y}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* ── Personality (locked) ── */}
@@ -2048,45 +2079,22 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
             <Text style={modalS.sectionLabel}>CATEGORY</Text>
             <View style={modalS.categoryPillRow}>
-              {[
-                { key: "outdoors",  label: "outdoors" },
-                { key: "food",      label: "food + drinks" },
-                { key: "arts",      label: "arts + culture" },
-                { key: "fitness",   label: "fitness + wellness" },
-                { key: "social",    label: "social + events" },
-                { key: "learning",  label: "learning + skills" },
-                { key: "travel",    label: "day trips + travel" },
-                { key: "games",     label: "games + fun" },
-                { key: "music",     label: "music + shows" },
-                { key: "other",     label: "something else" },
-              ].map(c => (
+              {CATEGORIES.map(cat => (
                 <TouchableOpacity
-                  key={c.key}
+                  key={cat}
                   onPress={() => {
-                    setPostSelectedCategory(prev => prev === c.key ? "" : c.key);
-                    if (c.key !== "other") setPostCustomCategory("");
+                    setPostSelectedCategory(prev => prev === cat ? "" : cat);
                   }}
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[modalS.categoryPill, postSelectedCategory === c.key && modalS.categoryPillActive]}
+                  style={[modalS.categoryPill, postSelectedCategory === cat && modalS.categoryPillActive]}
                 >
-                  <Text style={[modalS.categoryPillText, postSelectedCategory === c.key && modalS.categoryPillTextActive]}>
-                    {c.label}
+                  <Text style={[modalS.categoryPillText, postSelectedCategory === cat && modalS.categoryPillTextActive]}>
+                    {cat}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            {postSelectedCategory === "other" && (
-              <TextInput
-                style={modalS.customCategoryInput}
-                value={postCustomCategory}
-                onChangeText={setPostCustomCategory}
-                placeholder="what are you doing?"
-                placeholderTextColor={colors.muted}
-                maxLength={40}
-                autoFocus
-              />
-            )}
 
             <Text style={[modalS.sectionLabel, { marginBottom: 6 }]}>WHERE?</Text>
             <LocationAutocomplete
@@ -2221,6 +2229,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
               value={postDesc}
               onChangeText={setPostDesc}
             />
+
+            {tier === "free" && monthlyPostCount !== null && (
+              <Text style={modalS.postCapHint}>
+                {Math.max(0, FREE_MONTHLY_POST_LIMIT - monthlyPostCount)} of {FREE_MONTHLY_POST_LIMIT} free tandems left this month
+              </Text>
+            )}
 
             <TouchableOpacity style={modalS.postBtn} activeOpacity={0.88}
               onPress={handleSubmitPost} disabled={isPosting}>
@@ -2612,7 +2626,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         onDismiss={() => setShowFilterUpsell(false)}
         onUpgrade={() => { setShowFilterUpsell(false); setShowFilterSheet(false); onMembershipPress?.(); }}
         headline="advanced filters are a tandem go thing."
-        subtext="filter by sexuality, religion, personality, and humor with tandem go."
+        subtext="filter by personality and humor with tandem go."
+      />
+
+      {/* Upsell Sheet — Free tier monthly post cap */}
+      <UpsellSheet
+        visible={showPostCapUpsell}
+        onDismiss={() => setShowPostCapUpsell(false)}
+        onUpgrade={() => { setShowPostCapUpsell(false); setShowPostModal(false); onMembershipPress?.(); }}
+        headline="You've used your 5 free tandems this month."
+        subtext="Upgrade to Tandem Go for unlimited posts."
       />
 
       {/* Request Sheet */}
@@ -3198,6 +3221,14 @@ const modalS = StyleSheet.create({
     textAlignVertical: "top",
   },
   postBtn: { height: 52, borderRadius: radius.full, overflow: "hidden", ...shadows.brand },
+  postCapHint: {
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 8,
+  },
   postBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   postBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   groupNudge: {
