@@ -42,13 +42,12 @@ Deno.serve(async (req) => {
           metadata: { supabase_user_id: userId },
         });
 
-    // Create checkout session with 7-day free trial
+    // Paid from day 1 — Tandem does not offer free trials.
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customer.id,
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
-        trial_period_days: 7,
         metadata: { supabase_user_id: userId },
       },
       success_url: "https://thetandemweb.com/subscription?status=success",

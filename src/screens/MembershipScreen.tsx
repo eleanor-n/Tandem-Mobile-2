@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Animated,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Animated, Linking,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -48,6 +48,19 @@ const BILLING_LABEL: Record<Period, string> = {
   threeMonth: "every 3 months",
   annual:     "annually",
 };
+
+// Plan-card pricing label in the format Eleanor specified: "$15.99/month",
+// "$35.99 every 3 months", etc.
+const PERIOD_SUFFIX: Record<Period, string> = {
+  weekly:     "/week",
+  monthly:    "/month",
+  threeMonth: " every 3 months",
+  annual:     "/year",
+};
+
+function priceLabel(tier: Tier, period: Period): string {
+  return `${PRICES[tier][period].total}${PERIOD_SUFFIX[period]}`;
+}
 
 // Savings vs weekly rate
 const SAVINGS: Record<Tier, Partial<Record<Period, string>>> = {
@@ -107,48 +120,78 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
     setLoadingTier(tier);
     try {
       const priceId = PRICES[tier][period].id;
-      console.log("[Stripe] invoking checkout:", { tier, period, priceId });
-      const { data: result, error: invokeError } = await supabase.functions.invoke("create-checkout-session", {
+      console.log("[checkout] invoking:", { tier, period, priceId });
+      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
         body: {
           priceId,
           userId: user.id,
           userEmail: user.email,
         },
       });
-      console.log("[Stripe] checkout response:", result, invokeError);
-      const url = (result as any)?.url;
-      if (invokeError || !url) {
-        console.error("No checkout URL returned:", invokeError ?? result);
+      console.log("[checkout] full response:", JSON.stringify({ data, error }, null, 2));
+      console.log("[checkout] data keys:", data ? Object.keys(data) : "no data");
+
+      // Surface a 200-with-error-body (function ran but Stripe rejected the call).
+      const errorMessage = (data as any)?.error ?? error?.message;
+      const url: string | undefined = (data as any)?.url;
+      console.log("[checkout] extracted url:", url, "errorMessage:", errorMessage);
+
+      if (!url) {
+        console.error("[checkout] no url in response:", { data, error });
         Alert.alert(
-          "something went wrong",
-          "couldn't open checkout right now. try again in a moment.",
-          [{ text: "ok" }]
+          "Couldn't open checkout.",
+          errorMessage
+            ? `${errorMessage}. Please try again.`
+            : "Please try again.",
+          [{ text: "OK" }]
         );
         setLoadingTier(null);
         return;
       }
 
-      const browserResult = await WebBrowser.openAuthSessionAsync(
-        url,
-        "https://thetandemweb.com/subscription"
-      );
-
-      // Refresh membership tier regardless of success/cancel
-      await refreshOnboarding();
-
-      if (browserResult.type === "success" && browserResult.url?.includes("/success")) {
-        const text = await getSunnyResponse({ context: "subscribeSuccess" });
-        if (text) {
-          setSunnyBanner(text);
-          sunnyBannerOpacity.setValue(0);
-          Animated.timing(sunnyBannerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-          setTimeout(() => {
-            Animated.timing(sunnyBannerOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setSunnyBanner(null));
-          }, 3500);
+      // Use openBrowserAsync (SFSafariViewController on iOS), not
+      // openAuthSessionAsync — the latter requires the redirect URL to be a
+      // registered Universal Link and silently dismisses otherwise, which is
+      // why the previous version did nothing visible.
+      let browserOpened = false;
+      try {
+        await WebBrowser.openBrowserAsync(url);
+        browserOpened = true;
+      } catch (browserErr) {
+        console.warn("[checkout] openBrowserAsync failed, falling back to Linking:", browserErr);
+        try {
+          await Linking.openURL(url);
+          browserOpened = true;
+        } catch (linkErr) {
+          console.error("[checkout] Linking.openURL also failed:", linkErr);
         }
       }
+
+      if (!browserOpened) {
+        Alert.alert(
+          "Couldn't open checkout.",
+          "Please try again.",
+          [{ text: "OK" }]
+        );
+        setLoadingTier(null);
+        return;
+      }
+
+      // Refresh membership tier when the user returns from the in-app browser.
+      await refreshOnboarding();
+
+      const text = await getSunnyResponse({ context: "subscribeSuccess" });
+      if (text) {
+        setSunnyBanner(text);
+        sunnyBannerOpacity.setValue(0);
+        Animated.timing(sunnyBannerOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+        setTimeout(() => {
+          Animated.timing(sunnyBannerOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => setSunnyBanner(null));
+        }, 3500);
+      }
     } catch (e) {
-      console.warn("Checkout error:", e);
+      console.warn("[checkout] exception:", e);
+      Alert.alert("Couldn't open checkout.", "Please try again.", [{ text: "OK" }]);
     } finally {
       setLoadingTier(null);
     }
@@ -314,9 +357,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
             </View>
           ) : (
             <View style={s.ctaWrap}>
-              <Text style={{ fontSize: 12, color: colors.muted, textAlign: "center", marginBottom: 8 }}>
-                7-day free trial, then billed {BILLING_LABEL[period]}
-              </Text>
+              <Text style={s.pricingLabel}>{priceLabel("go", period)}</Text>
               <TouchableOpacity
                 style={s.goCtaWrap}
                 onPress={() => handleSubscribe("go")}
@@ -332,13 +373,11 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                   {loadingTier === "go" ? (
                     <ActivityIndicator color={colors.white} />
                   ) : (
-                    <Text style={s.ctaText}>start free trial</Text>
+                    <Text style={s.ctaText}>Get Tandem Go</Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-              <Text style={{ fontSize: 10, color: colors.muted, textAlign: "center", marginTop: 6 }}>
-                cancel anytime. trial applies to new subscribers only.
-              </Text>
+              <Text style={s.renewFootnote}>cancel anytime.</Text>
             </View>
           )}
         </View>
@@ -379,6 +418,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
             </View>
           ) : (
             <View style={s.ctaWrap}>
+              <Text style={[s.pricingLabel, s.pricingLabelWhite]}>{priceLabel("trail", period)}</Text>
               <TouchableOpacity
                 style={s.trailCtaWrap}
                 onPress={() => handleSubscribe("trail")}
@@ -389,7 +429,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                   {loadingTier === "trail" ? (
                     <ActivityIndicator color={colors.teal} />
                   ) : (
-                    <Text style={s.trailCtaText}>blaze the trail</Text>
+                    <Text style={s.trailCtaText}>Get Tandem Trail</Text>
                   )}
                 </View>
               </TouchableOpacity>
@@ -505,6 +545,22 @@ const s = StyleSheet.create({
   ctaInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   ctaText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   ctaWrap: { paddingHorizontal: 16, paddingBottom: 16, gap: 8 },
+  pricingLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    fontFamily: "Quicksand_600SemiBold",
+    color: colors.secondary,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  pricingLabelWhite: { color: "rgba(255,255,255,0.9)" },
+  renewFootnote: {
+    fontSize: 11,
+    color: colors.muted,
+    textAlign: "center",
+    marginTop: 4,
+    fontFamily: "Quicksand_500Medium",
+  },
   renewNote: {
     textAlign: "center", fontSize: 11, color: "#aaa",
     fontFamily: "Fraunces_500Medium_Italic",
