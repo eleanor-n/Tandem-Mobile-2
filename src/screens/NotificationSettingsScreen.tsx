@@ -20,15 +20,17 @@ const DEFAULT_PREFS = {
   activity_reminder: true,
   weekly_checkin: true,
   birthday: true,
+  vibe_join: true,
 };
 
 const LABELS: Record<keyof typeof DEFAULT_PREFS, { label: string; sub: string; icon: string }> = {
-  join_request:       { label: "someone says i'm in",        sub: "when someone requests to join your activity",  icon: "person-add-outline" },
-  accepted:           { label: "your tandem is accepted",    sub: "when a host accepts your join request",         icon: "checkmark-circle-outline" },
-  new_message:        { label: "new messages",               sub: "when someone sends you a message",             icon: "chatbubble-outline" },
-  activity_reminder:  { label: "activity reminders",         sub: "1 hour before your activity starts",           icon: "alarm-outline" },
-  weekly_checkin:     { label: "sunny's weekly check-in",    sub: "a gentle nudge to get out there",              icon: "sunny-outline" },
-  birthday:           { label: "birthday messages",          sub: "sunny remembers your birthday",                icon: "gift-outline" },
+  join_request:       { label: "someone says i'm in",          sub: "when someone requests to join your activity",  icon: "person-add-outline" },
+  accepted:           { label: "your tandem is accepted",      sub: "when a host accepts your join request",         icon: "checkmark-circle-outline" },
+  new_message:        { label: "new messages",                 sub: "when someone sends you a message",             icon: "chatbubble-outline" },
+  activity_reminder:  { label: "activity reminders",           sub: "1 hour before your activity starts",           icon: "alarm-outline" },
+  weekly_checkin:     { label: "sunny's weekly check-in",      sub: "a gentle nudge to get out there",              icon: "sunny-outline" },
+  birthday:           { label: "birthday messages",            sub: "sunny remembers your birthday",                icon: "gift-outline" },
+  vibe_join:          { label: "when someone wants in on your vibe", sub: "the 'i'm in' tap that signals interest.", icon: "sparkles-outline" },
 };
 
 interface NotificationSettingsScreenProps {
