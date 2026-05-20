@@ -16,13 +16,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const GO_PRICES = new Set([
   "price_1T6Xe1QtlSTTnULkTpBp1mxM",
   "price_1T6XqKQtlSTTnULkkkm1vB5D",
-  "price_1T6XqQQtlSTTnULkHPrMv0Vo",
+  "price_1THMmpQtlSTTnULkYuEn9Lmc",
   "price_1T6XqRQtlSTTnULk9QguocAx",
 ]);
 const TRAIL_PRICES = new Set([
   "price_1T6XiSQtlSTTnULkFUO91T1d",
   "price_1T6XqSQtlSTTnULk8FOPYTiK",
-  "price_1T6XqTQtlSTTnULkwga3Xwr6",
+  "price_1THMmsQtlSTTnULkWc52qIoe",
   "price_1T6XqUQtlSTTnULkkCs6dJyP",
 ]);
 

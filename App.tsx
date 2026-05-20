@@ -33,6 +33,9 @@ import { MapScreen } from "./src/screens/MapScreen";
 import { ScrapbookScreen } from "./src/screens/ScrapbookScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { NotificationSettingsScreen } from "./src/screens/NotificationSettingsScreen";
+import { TermsScreen } from "./src/screens/TermsScreen";
+import { PrivacyScreen } from "./src/screens/PrivacyScreen";
 import { MessagesScreen } from "./src/screens/MessagesScreen";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { SendSpotScreen } from "./src/screens/SendSpotScreen";
@@ -69,6 +72,10 @@ const AppInner = () => {
   const [showDevPreview, setShowDevPreview] = useState(false);
   const [activeChat, setActiveChat] = useState<{ id: string; name: string; photo: string; age?: number } | null>(null);
   const [showSendSpot, setShowSendSpot] = useState(false);
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [profileEditTrigger, setProfileEditTrigger] = useState(0);
   const [showSplash, setShowSplash] = useState(false);
   const [pendingSelfieOnboarding, setPendingSelfieOnboarding] = useState(false);
   const [showStandaloneSelfie, setShowStandaloneSelfie] = useState(false);
@@ -382,6 +389,15 @@ const AppInner = () => {
   if (showSafety) {
     return <SafetySettingsScreen onBack={() => setShowSafety(false)} />;
   }
+  if (showNotificationPrefs) {
+    return <NotificationSettingsScreen onBack={() => setShowNotificationPrefs(false)} />;
+  }
+  if (showTerms) {
+    return <TermsScreen onBack={() => setShowTerms(false)} />;
+  }
+  if (showPrivacy) {
+    return <PrivacyScreen onBack={() => setShowPrivacy(false)} />;
+  }
   if (showSettings) {
     return (
       <SettingsScreen
@@ -390,6 +406,14 @@ const AppInner = () => {
         onSafetyPress={() => { setShowSettings(false); setShowSafety(true); }}
         onAdminReviewPress={() => { setShowSettings(false); setShowAdminReview(true); }}
         onSelfieVerifyPress={() => setShowStandaloneSelfie(true)}
+        onEditProfilePress={() => {
+          setShowSettings(false);
+          setActiveTab("Profile");
+          setProfileEditTrigger((n) => n + 1);
+        }}
+        onNotificationPrefsPress={() => setShowNotificationPrefs(true)}
+        onTermsPress={() => setShowTerms(true)}
+        onPrivacyPress={() => setShowPrivacy(true)}
       />
     );
   }
@@ -446,6 +470,7 @@ const AppInner = () => {
           onMessagesPress={() => setActiveTab("Chat")}
           onMyActivityPress={() => { setActiveTab("Discover"); setShowMyActivity(true); }}
           onScrapbookPress={() => setShowScrapbook(true)}
+          editTrigger={profileEditTrigger}
         />
       );
       break;

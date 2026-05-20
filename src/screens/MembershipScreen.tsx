@@ -11,61 +11,52 @@ import { colors, radius, shadows, gradients } from "../theme";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { getSunnyResponse } from "../lib/sunny";
+import { billingCaption, calculatePerWeek } from "../lib/pricing";
 
 // REQUIRED Supabase edge function secrets:
 // - STRIPE_SECRET_KEY (sk_live_...)
 // - STRIPE_WEBHOOK_SECRET (whsec_...)
 // Set at: supabase.com/dashboard/project/ccntlaunczirvntnsjbm/functions
 
-type Period = "weekly" | "monthly" | "threeMonth" | "annual";
+type Period = "weekly" | "monthly" | "sixMonth" | "annual";
 type Tier = "go" | "trail";
 
 const PERIODS: { key: Period; label: string }[] = [
-  { key: "weekly",     label: "weekly" },
-  { key: "monthly",    label: "monthly" },
-  { key: "threeMonth", label: "3 months" },
-  { key: "annual",     label: "annual" },
+  { key: "weekly",   label: "weekly" },
+  { key: "monthly",  label: "monthly" },
+  { key: "sixMonth", label: "6 months" },
+  { key: "annual",   label: "annual" },
 ];
 
-const PRICES: Record<Tier, Record<Period, { id: string; perWeek: string; billingNote: string; total: string }>> = {
+// PRICE_ID for the new sixMonth tier is set to the existing 3-month price
+// IDs until the 6-month prices ship in Stripe. See the report at the end of
+// this commit for the manual step.
+const PRICES: Record<Tier, Record<Period, { id: string; totalCents: number }>> = {
   go: {
-    weekly:     { id: "price_1T6Xe1QtlSTTnULkTpBp1mxM", perWeek: "$5.99",  billingNote: "billed weekly",        total: "$5.99"   },
-    monthly:    { id: "price_1T6XqKQtlSTTnULkkkm1vB5D", perWeek: "$3.69",  billingNote: "billed monthly",       total: "$15.99"  },
-    threeMonth: { id: "price_1T6XqQQtlSTTnULkHPrMv0Vo", perWeek: "$2.77",  billingNote: "billed every 3 months",total: "$35.99"  },
-    annual:     { id: "price_1T6XqRQtlSTTnULk9QguocAx", perWeek: "$2.31",  billingNote: "billed annually",      total: "$119.99" },
+    weekly:   { id: "price_1T6Xe1QtlSTTnULkTpBp1mxM", totalCents: 599   },
+    monthly:  { id: "price_1T6XqKQtlSTTnULkkkm1vB5D", totalCents: 1599  },
+    sixMonth: { id: "price_1THMmpQtlSTTnULkYuEn9Lmc", totalCents: 7999  },
+    annual:   { id: "price_1T6XqRQtlSTTnULk9QguocAx", totalCents: 11999 },
   },
   trail: {
-    weekly:     { id: "price_1T6XiSQtlSTTnULkFUO91T1d", perWeek: "$7.99",  billingNote: "billed weekly",        total: "$7.99"   },
-    monthly:    { id: "price_1T6XqSQtlSTTnULk8FOPYTiK", perWeek: "$5.54",  billingNote: "billed monthly",       total: "$23.99"  },
-    threeMonth: { id: "price_1T6XqTQtlSTTnULkwga3Xwr6", perWeek: "$4.15",  billingNote: "billed every 3 months",total: "$53.99"  },
-    annual:     { id: "price_1T6XqUQtlSTTnULkkCs6dJyP", perWeek: "$3.46",  billingNote: "billed annually",      total: "$179.99" },
+    weekly:   { id: "price_1T6XiSQtlSTTnULkFUO91T1d", totalCents: 799   },
+    monthly:  { id: "price_1T6XqSQtlSTTnULk8FOPYTiK", totalCents: 2399  },
+    sixMonth: { id: "price_1THMmsQtlSTTnULkWc52qIoe", totalCents: 11999 },
+    annual:   { id: "price_1T6XqUQtlSTTnULkkCs6dJyP", totalCents: 17999 },
   },
 };
 
-const BILLING_LABEL: Record<Period, string> = {
-  weekly:     "weekly",
-  monthly:    "monthly",
-  threeMonth: "every 3 months",
-  annual:     "annually",
+const PERIOD_TO_INTERVAL: Record<Period, "week" | "month" | "sixmonth" | "year"> = {
+  weekly:   "week",
+  monthly:  "month",
+  sixMonth: "sixmonth",
+  annual:   "year",
 };
-
-// Plan-card pricing label in the format Eleanor specified: "$15.99/month",
-// "$35.99 every 3 months", etc.
-const PERIOD_SUFFIX: Record<Period, string> = {
-  weekly:     "/week",
-  monthly:    "/month",
-  threeMonth: " every 3 months",
-  annual:     "/year",
-};
-
-function priceLabel(tier: Tier, period: Period): string {
-  return `${PRICES[tier][period].total}${PERIOD_SUFFIX[period]}`;
-}
 
 // Savings vs weekly rate
 const SAVINGS: Record<Tier, Partial<Record<Period, string>>> = {
-  go:    { threeMonth: "save 54%", annual: "save 61%" },
-  trail: { threeMonth: "save 48%", annual: "save 57%" },
+  go:    { sixMonth: "save 66%", annual: "save 61%" },
+  trail: { sixMonth: "save 64%", annual: "save 57%" },
 };
 
 const GO_FEATURES = [
@@ -238,7 +229,7 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
   };
 
   const savingsBadge = (tier: Tier) => {
-    if (period === "threeMonth" || period === "annual") {
+    if (period === "sixMonth" || period === "annual") {
       return SAVINGS[tier][period];
     }
     return null;
@@ -337,9 +328,8 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                 </View>
               )}
             </View>
-            <Text style={[s.goPrice, fontsLoaded && { fontFamily: "Fraunces_500Medium_Italic" }]}>{PRICES.go[period].perWeek}</Text>
-            <Text style={s.perWeekLabel}>per week</Text>
-            <Text style={s.billingNote}>{PRICES.go[period].billingNote} · {PRICES.go[period].total}</Text>
+            <Text style={s.goPrice}>{calculatePerWeek(PRICES.go[period].totalCents, PERIOD_TO_INTERVAL[period])}/week</Text>
+            <Text style={s.billingNote}>{billingCaption(PRICES.go[period].totalCents, PERIOD_TO_INTERVAL[period])}</Text>
           </View>
 
           <View style={s.features}>
@@ -357,7 +347,6 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
             </View>
           ) : (
             <View style={s.ctaWrap}>
-              <Text style={s.pricingLabel}>{priceLabel("go", period)}</Text>
               <TouchableOpacity
                 style={s.goCtaWrap}
                 onPress={() => handleSubscribe("go")}
@@ -398,9 +387,8 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
                 </View>
               )}
             </View>
-            <Text style={[s.trailPrice, fontsLoaded && { fontFamily: "Fraunces_500Medium_Italic" }]}>{PRICES.trail[period].perWeek}</Text>
-            <Text style={s.trailPerWeekLabel}>per week</Text>
-            <Text style={s.trailBillingNote}>{PRICES.trail[period].billingNote} · {PRICES.trail[period].total}</Text>
+            <Text style={s.trailPrice}>{calculatePerWeek(PRICES.trail[period].totalCents, PERIOD_TO_INTERVAL[period])}/week</Text>
+            <Text style={s.trailBillingNote}>{billingCaption(PRICES.trail[period].totalCents, PERIOD_TO_INTERVAL[period])}</Text>
           </View>
 
           <View style={s.features}>
@@ -418,7 +406,6 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
             </View>
           ) : (
             <View style={s.ctaWrap}>
-              <Text style={[s.pricingLabel, s.pricingLabelWhite]}>{priceLabel("trail", period)}</Text>
               <TouchableOpacity
                 style={s.trailCtaWrap}
                 onPress={() => handleSubscribe("trail")}
@@ -464,6 +451,10 @@ export const MembershipScreen = ({ onBack, currentTier = "free" }: MembershipScr
             ? <ActivityIndicator color={colors.muted} size="small" />
             : <Text style={s.restoreBtnText}>restore purchases</Text>}
         </TouchableOpacity>
+
+        <Text style={s.billingFootnote}>
+          cancel anytime. billed through your app store account.
+        </Text>
 
         {/* Comparison table */}
         <Text style={s.compTitle}>COMPARE PLANS</Text>
@@ -642,6 +633,14 @@ const s = StyleSheet.create({
   manageSubText: { fontSize: 13, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.teal },
   restoreBtn: { alignSelf: "center", paddingVertical: 8 },
   restoreBtnText: { fontSize: 13, fontFamily: "Quicksand_400Regular", color: colors.muted },
+  billingFootnote: {
+    marginTop: 18,
+    fontSize: 12,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.muted,
+    textAlign: "center",
+  },
   compTitle: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 1.2, marginTop: 4 },
   compTable: {
     backgroundColor: colors.white, borderRadius: radius.xl,

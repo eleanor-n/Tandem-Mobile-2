@@ -60,6 +60,9 @@ interface ProfileScreenProps {
   onPostPress?: () => void;
   onMyActivityPress?: () => void;
   onScrapbookPress?: () => void;
+  // Incremented by Settings → "edit profile" so this screen can open its
+  // edit sheet on mount/refocus. We compare against a stored prev-value.
+  editTrigger?: number;
 }
 
 const ProfileVideo = ({ uri }: { uri: string }) => {
@@ -78,7 +81,7 @@ const ProfileVideo = ({ uri }: { uri: string }) => {
   );
 };
 
-export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress, onScrapbookPress }: ProfileScreenProps) => {
+export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress, onScrapbookPress, editTrigger }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<any>(null);
@@ -107,6 +110,16 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [trustRefreshKey, setTrustRefreshKey] = useState(0);
+  const lastEditTriggerRef = useRef<number | undefined>(editTrigger);
+
+  // When Settings → "edit profile" fires, App.tsx bumps editTrigger.
+  useEffect(() => {
+    if (editTrigger == null) return;
+    if (lastEditTriggerRef.current !== editTrigger) {
+      lastEditTriggerRef.current = editTrigger;
+      setShowEditSheet(true);
+    }
+  }, [editTrigger]);
 
   // Realtime: refresh TrustStack when this user's verification flips.
   useEffect(() => {
@@ -487,6 +500,25 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const missingPrompts = Object.keys(quickPrompts).length === 0 && Object.keys(deepPrompts).length === 0;
   const isIncomplete = missingPhoto || missingInterests || missingPrompts;
 
+  // Empty-state gates for the activity zone.
+  // Source of truth is profiles.completed_tandem_count when present; fall
+  // back to memories.length otherwise so the screen stays correct during
+  // the rollout window before that counter is populated.
+  const completedTandemCount = (profile?.completed_tandem_count as number | undefined) ?? memories.length;
+  const hasCompletedTandems = completedTandemCount > 0;
+  const hasNotes = comments.length > 0;
+  const hasIntroVideo = !!profile?.video_url;
+  const hasPostedAnyTandem = activitiesCount > 0 || companionsCount > 0 || hostingCount > 0;
+  const showActivityZone = hasCompletedTandems || hasNotes || hasPostedAnyTandem;
+
+  const tierKey = (profile?.membership_tier as string | undefined) ?? "free";
+  const upgradeCopy =
+    tierKey === "free"
+      ? { title: "upgrade to tandem go", helper: "unlimited tandems + premium filters" }
+      : tierKey === "go"
+        ? { title: "upgrade to tandem trail", helper: "founding badge + trail-exclusive adventures" }
+        : null;
+
   if (loading) {
     return (
       <View style={s.loading}>
@@ -497,14 +529,25 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   return (
     <View style={s.container}>
-      {/* Settings gear — top right */}
-      <TouchableOpacity
-        style={[s.gearBtn, { top: insets.top + 12 }]}
-        onPress={onSettingsPress}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="settings-outline" size={22} color={colors.muted} />
-      </TouchableOpacity>
+      {/* Top-right icon row — share + settings */}
+      <View style={[s.topIconRow, { top: insets.top + 12 }]} pointerEvents="box-none">
+        <TouchableOpacity
+          onPress={handleShareProfile}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={s.topIconBtn}
+        >
+          <Ionicons name="share-outline" size={22} color={colors.muted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onSettingsPress}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={s.topIconBtn}
+        >
+          <Ionicons name="settings-outline" size={22} color={colors.muted} />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         ref={profileScrollRef}
@@ -569,13 +612,23 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
             <Text style={s.name}>{profile?.first_name || "Your name"}</Text>
           </TouchableOpacity>
-          {profile?.birthday && (
-            <Text style={s.ageText}>{calculateAge(profile.birthday)} years old</Text>
-          )}
-          <View style={s.locationRow}>
-            <Ionicons name="location" size={13} color={colors.muted} />
-            <Text style={s.location}>{profile?.location_name || "Princeton, NJ"}</Text>
-          </View>
+          {(() => {
+            const age = profile?.birthday ? calculateAge(profile.birthday) : null;
+            const meta = [
+              age != null ? String(age) : null,
+              profile?.pronouns ? String(profile.pronouns).toLowerCase() : null,
+              profile?.year_of_school ?? null,
+            ].filter(Boolean) as string[];
+            return meta.length > 0 ? (
+              <Text style={s.identityMeta}>{meta.join(" · ")}</Text>
+            ) : null;
+          })()}
+          {profile?.location_name ? (
+            <View style={s.locationRow}>
+              <Ionicons name="location" size={13} color={colors.muted} />
+              <Text style={s.location}>{profile.location_name}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Verification + trust signals */}
@@ -671,6 +724,10 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </View>
         )}
 
+        {/* ── Zone divider: Identity → Voice ── */}
+        <View style={s.zoneDivider} />
+
+        {/* ZONE 2: VOICE — prompts + intro video */}
         {/* Prompts */}
         {Object.entries(quickPrompts).map(([key, value]) => (
           <TouchableOpacity key={key} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
@@ -719,179 +776,168 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           );
         })}
 
-        {/* Intro video — polaroid frame. Empty state renders smaller so it
-            reads as a placeholder, not a giant cream rectangle. */}
-        <View style={[ivS.wrap, !profile?.video_url && ivS.wrapEmpty]}>
-          <TouchableOpacity
-            activeOpacity={profile?.video_url ? 1 : 0.85}
-            onPress={profile?.video_url ? undefined : handleRecordIntroVideo}
-            disabled={recordingIntroVideo}
-            style={[ivS.frame, !profile?.video_url && ivS.frameEmpty]}
-          >
-            <View style={[ivS.photoArea, !profile?.video_url && ivS.photoAreaEmpty]}>
-              {recordingIntroVideo ? (
-                <ActivityIndicator color={colors.teal} />
-              ) : profile?.video_url ? (
+        {/* Intro video — when present, render the polaroid. When missing on
+            the OWN profile, render a soft dashed Sunny card encouraging
+            recording (per Update 3). */}
+        {hasIntroVideo ? (
+          <View style={ivS.wrap}>
+            <View style={ivS.frame}>
+              <View style={ivS.photoArea}>
                 <ProfileVideo uri={profile.video_url} />
-              ) : (
-                <SunnyAvatar expression="warm" size={64} />
-              )}
+              </View>
+              <Text style={ivS.caption}>intro video</Text>
             </View>
-            <Text style={[ivS.caption, !profile?.video_url && ivS.captionEmpty]}>
-              {recordingIntroVideo
-                ? "saving your intro video..."
-                : profile?.video_url
-                  ? "intro video"
-                  : "tap to add an intro video"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent tandems — polaroid strip */}
-        <View style={s.section}>
-          <View style={s.sectionHeaderRow}>
-            <Text style={ms.recentTandemsHeader}>recent tandems</Text>
-            <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7}>
-              <Text style={s.memoriesSeeAll}>See all →</Text>
-            </TouchableOpacity>
           </View>
-          {memories.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 12, paddingBottom: 8, paddingHorizontal: 2 }}
-            >
-              {memories.slice(0, 3).map((m) => {
-                const photoUri = m.cover_photo_url || m.scrapbook_photos?.[0]?.photo_url;
-                return (
-                  <TouchableOpacity
-                    key={m.id}
-                    activeOpacity={0.85}
-                    onPress={() => onScrapbookPress?.()}
-                    style={ms.miniFrame}
-                  >
-                    <View style={ms.miniPhotoArea}>
-                      {photoUri ? (
-                        <Image
-                          source={{ uri: photoUri }}
-                          style={{ width: "100%", height: "100%" }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Image
-                          source={require("../../assets/icon.png")}
-                          style={{ width: 28, height: 28, opacity: 0.35 }}
-                          resizeMode="contain"
-                        />
-                      )}
-                    </View>
-                    {m.caption || m.title ? (
-                      <Text style={ms.miniCaption} numberOfLines={1}>{m.caption || m.title}</Text>
-                    ) : (
-                      <View style={ms.miniCaptionSpacer} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => onPostPress?.()}
-              style={ms.miniFrameEmpty}
-            >
-              <View style={[ms.miniPhotoArea, ms.miniPhotoAreaEmpty]}>
-                <View style={ms.miniPhotoAreaEmptyTint} pointerEvents="none" />
-                <SunnyAvatar expression="warm" size={96} />
-              </View>
-              <Text style={ms.miniCaption} numberOfLines={1}>first tandem coming soon</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Comments from tandem companions */}
-        <View style={s.section}>
-          <Text style={s.sectionLabel}>from people i've tandem'd with</Text>
-          {comments.map(c => (
-            <View key={c.id} style={s.commentRow}>
-              {c.avatar ? (
-                <Image source={{ uri: c.avatar }} style={s.commentAvatar} />
-              ) : (
-                <View style={[s.commentAvatar, s.commentAvatarPlaceholder]}>
-                  <Text style={s.commentAvatarInitial}>{c.name[0].toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={{ flex: 1, gap: 4 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={s.commentName}>{c.name}</Text>
-                  <LinearGradient
-                    colors={gradients.brand}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                    style={s.commentVibePill}
-                  >
-                    <Text style={s.commentVibeText}>{c.vibeTag}</Text>
-                  </LinearGradient>
-                </View>
-                <Text style={s.commentText}>{c.text}</Text>
-                <Text style={s.commentDate}>{c.date}</Text>
-              </View>
-              <TouchableOpacity onPress={() => deleteComment(c.id)} activeOpacity={0.7} style={s.commentDelete}>
-                <Ionicons name="trash-outline" size={15} color={colors.muted} />
-              </TouchableOpacity>
-            </View>
-          ))}
-          {/* TODO: gate by tandem history — for now visible to everyone */}
-          <TouchableOpacity style={s.leaveNoteBtn} onPress={() => setShowLeaveNote(true)} activeOpacity={0.8}>
-            <Text style={s.leaveNoteBtnText}>leave a note</Text>
+        ) : (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleRecordIntroVideo}
+            disabled={recordingIntroVideo}
+            style={s.introVideoEmpty}
+          >
+            {recordingIntroVideo ? (
+              <ActivityIndicator color={colors.teal} />
+            ) : (
+              <>
+                <SunnyAvatar expression="warm" size={48} />
+                <Text style={s.introVideoEmptyText}>
+                  your face on video makes people way more likely to join. record one →
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
-        </View>
-
-        {/* Notification preferences */}
-        <TouchableOpacity onPress={() => setShowNotifSettings(true)} style={s.privacyToggle} activeOpacity={0.7}>
-          <Text style={s.privacyToggleText}>notification preferences →</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
-        </TouchableOpacity>
-
-        {/* Privacy */}
-        <TouchableOpacity onPress={() => setShowPrivacy(!showPrivacy)} style={s.privacyToggle} activeOpacity={0.7}>
-          <Text style={s.privacyToggleText}>manage what others see →</Text>
-          <Ionicons name={showPrivacy ? "chevron-up" : "chevron-down"} size={14} color={colors.muted} />
-        </TouchableOpacity>
-        {showPrivacy && (
-          <View style={s.card}>
-            <Text style={s.cardLabelSub}>Toggle off anything you don't want shown publicly</Text>
-            {VISIBILITY_FIELDS.map(({ key, label }) => (
-              <View key={key} style={s.privacyRow}>
-                <Text style={s.privacyLabel}>{label}</Text>
-                <Switch
-                  value={visibility[key] ?? true}
-                  onValueChange={() => toggleVisibility(key)}
-                  trackColor={{ false: colors.border, true: colors.teal }}
-                  thumbColor={colors.white}
-                />
-              </View>
-            ))}
-          </View>
         )}
 
-        {/* Share + Edit + Upgrade */}
-        <View style={{ gap: 10 }}>
-          <TouchableOpacity onPress={handleShareProfile} activeOpacity={0.7} style={s.shareProfileBtn}>
-            <Ionicons name="share-outline" size={15} color={colors.muted} />
-            <Text style={s.shareProfileText}>share your profile</Text>
-          </TouchableOpacity>
-          <View style={s.actionRow}>
-            <TouchableOpacity style={s.outlineBtn} activeOpacity={0.85} onPress={() => setShowEditSheet(true)}>
-              <Text style={s.outlineBtnText}>edit profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.upgradeWrap} activeOpacity={0.85} onPress={onMembershipPress}>
-              <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.upgradeInner}>
-                <Text style={s.upgradeText}>upgrade</Text>
+        {/* ── Zone divider: Voice → Activity ── */}
+        {showActivityZone ? <View style={s.zoneDivider} /> : null}
+
+        {/* ZONE 3: ACTIVITY (conditional) */}
+        {showActivityZone ? (
+          <>
+            {/* Recent tandems — polaroid strip OR single empty placeholder */}
+            {hasCompletedTandems ? (
+              <View style={s.section}>
+                <View style={s.sectionHeaderRow}>
+                  <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+                  <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7}>
+                    <Text style={s.memoriesSeeAll}>See all →</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 12, paddingBottom: 8, paddingHorizontal: 2 }}
+                >
+                  {memories.slice(0, 3).map((m) => {
+                    const photoUri = m.cover_photo_url || m.scrapbook_photos?.[0]?.photo_url;
+                    return (
+                      <TouchableOpacity
+                        key={m.id}
+                        activeOpacity={0.85}
+                        onPress={() => onScrapbookPress?.()}
+                        style={ms.miniFrame}
+                      >
+                        <View style={ms.miniPhotoArea}>
+                          {photoUri ? (
+                            <Image
+                              source={{ uri: photoUri }}
+                              style={{ width: "100%", height: "100%" }}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <Image
+                              source={require("../../assets/icon.png")}
+                              style={{ width: 28, height: 28, opacity: 0.35 }}
+                              resizeMode="contain"
+                            />
+                          )}
+                        </View>
+                        {m.caption || m.title ? (
+                          <Text style={ms.miniCaption} numberOfLines={1}>{m.caption || m.title}</Text>
+                        ) : (
+                          <View style={ms.miniCaptionSpacer} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : hasPostedAnyTandem ? (
+              <View style={s.section}>
+                <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+                <View style={s.emptyPolaroid}>
+                  <View style={s.emptyPolaroidPhoto}>
+                    <SunnyAvatar expression="warm" size={48} />
+                  </View>
+                  <Text style={s.emptyPolaroidCaption}>your first tandem will live here.</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Notes — only shown when there are 1+ */}
+            {hasNotes ? (
+              <View style={s.section}>
+                <Text style={s.sectionLabel}>from people i've tandem'd with</Text>
+                {comments.map(c => (
+                  <View key={c.id} style={s.commentRow}>
+                    {c.avatar ? (
+                      <Image source={{ uri: c.avatar }} style={s.commentAvatar} />
+                    ) : (
+                      <View style={[s.commentAvatar, s.commentAvatarPlaceholder]}>
+                        <Text style={s.commentAvatarInitial}>{c.name[0].toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={s.commentName}>{c.name}</Text>
+                        <LinearGradient
+                          colors={gradients.brand}
+                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                          style={s.commentVibePill}
+                        >
+                          <Text style={s.commentVibeText}>{c.vibeTag}</Text>
+                        </LinearGradient>
+                      </View>
+                      <Text style={s.commentText}>{c.text}</Text>
+                      <Text style={s.commentDate}>{c.date}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteComment(c.id)} activeOpacity={0.7} style={s.commentDelete}>
+                      <Ionicons name="trash-outline" size={15} color={colors.muted} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
+        {/* ── Zone divider: Activity (or Voice) → Footer ── */}
+        <View style={s.zoneDivider} />
+
+        {/* FOOTER — upgrade card (conditional) + edit profile */}
+        <View style={{ gap: 12 }}>
+          {upgradeCopy ? (
+            <TouchableOpacity activeOpacity={0.88} onPress={onMembershipPress}>
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={s.upgradeCard}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={s.upgradeCardTitle}>{upgradeCopy.title}</Text>
+                  <Text style={s.upgradeCardHelper}>{upgradeCopy.helper}</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={20} color={colors.white} />
               </LinearGradient>
             </TouchableOpacity>
-          </View>
-          <TouchableOpacity onPress={() => setShowDeleteModal(true)} activeOpacity={0.7} style={{ alignSelf: "center", paddingVertical: 8 }}>
-            <Text style={s.deleteAccountText}>delete my account</Text>
+          ) : null}
+          <TouchableOpacity
+            style={s.editProfileBtn}
+            activeOpacity={0.85}
+            onPress={() => setShowEditSheet(true)}
+          >
+            <Text style={s.editProfileBtnText}>edit profile</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1248,6 +1294,124 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+  topIconRow: {
+    position: "absolute",
+    right: 12,
+    zIndex: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
+  topIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1F2937",
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  zoneDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 20,
+    marginHorizontal: 4,
+  },
+  identityMeta: {
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+    fontWeight: "500",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  introVideoEmpty: {
+    alignSelf: "center",
+    width: "70%",
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    gap: 10,
+  },
+  introVideoEmptyText: {
+    fontSize: 13,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.secondary,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  emptyPolaroid: {
+    alignSelf: "center",
+    width: 140,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 8,
+    paddingBottom: 12,
+    borderRadius: 4,
+    transform: [{ rotate: "-1deg" }],
+    alignItems: "center",
+  },
+  emptyPolaroidPhoto: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: colors.tintTeal,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 2,
+    marginBottom: 8,
+  },
+  emptyPolaroidCaption: {
+    fontSize: 11,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.muted,
+    textAlign: "center",
+  },
+  upgradeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  upgradeCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
+    color: colors.white,
+  },
+  upgradeCardHelper: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: "Quicksand_500Medium",
+    marginTop: 2,
+  },
+  editProfileBtn: {
+    backgroundColor: colors.white,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.foreground,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  editProfileBtnText: {
+    fontSize: 14,
+    fontFamily: "Quicksand_500Medium",
+    fontWeight: "500",
+    color: colors.foreground,
+  },
   gearBtn: {
     position: "absolute",
     right: 16,
