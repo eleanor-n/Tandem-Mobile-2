@@ -117,6 +117,14 @@ export const NOTIFICATION_COPY = {
     title: "tandem update.",
     body: "the tandem you joined isn't happening for you anymore. it's okay.",
   }),
+  vibingStarted: () => ({
+    title: "you're vibing.",
+    body: "people nearby can see you.",
+  }),
+  vibeJoiner: (userName: string) => ({
+    title: `${userName} is in for your vibe.`,
+    body: "",
+  }),
   // Tandem voice — safety/account
   safetyCheckInPrompt: (partnerName: string) => ({
     title: "How'd it go?",

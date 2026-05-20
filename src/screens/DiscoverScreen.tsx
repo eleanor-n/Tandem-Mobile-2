@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
+  Pressable,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -41,6 +42,8 @@ import { FirstJoinReminder } from "../components/safety/FirstJoinReminder";
 import { hasSeenFirstJoinReminder, markFirstJoinReminderSeen } from "../lib/safetyStorage";
 import { useVerificationGate } from "../lib/verificationGate";
 import { VerificationGateModal } from "../components/safety/VerificationGateModal";
+import { VibingCreationSheet } from "../components/VibingCreationSheet";
+import { VibingCard, type VibeFeedItem } from "../components/VibingCard";
 
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -499,6 +502,9 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
 
   // Live activity data
   const [liveActivities, setLiveActivities] = useState<any[]>([]);
+  const [liveVibes, setLiveVibes] = useState<VibeFeedItem[]>([]);
+  const [showVibingSheet, setShowVibingSheet] = useState(false);
+  const [showPostOrVibeSheet, setShowPostOrVibeSheet] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [myPosts, setMyPosts] = useState<any[]>([]);
@@ -838,6 +844,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       });
 
       setLiveActivities(afterDistance.map((a: any) => ({
+        type: "tandem_post" as const,
         id: a.id,
         title: a.title,
         category: a.tags?.[0] ?? "default",
@@ -854,6 +861,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         vibe: a.description ?? "",
         max_participants: a.max_participants ?? 1,
         auto_accept_trusted: a.auto_accept_trusted === true,
+        created_at: a.created_at,
         host: {
           name: profileMap[a.user_id].first_name,
           user_id: a.user_id,
@@ -893,6 +901,82 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       supabase.removeChannel(channel);
     };
   }, [discoverMode, feedRefreshKey, fetchLiveActivities]);
+
+  // Fetch ambient vibes via the audience-filtering RPC. The RPC handles the
+  // nearby + trusted + friend-of-friend visibility rules server-side.
+  const fetchVibes = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data: viewerProfile } = await supabase
+        .from("profiles")
+        .select("location_lat, location_lng")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const lat = (viewerProfile as any)?.location_lat;
+      const lng = (viewerProfile as any)?.location_lng;
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        setLiveVibes([]);
+        return;
+      }
+      const { data: rows, error } = await supabase.rpc("get_visible_vibes", {
+        viewer_id: user.id,
+        viewer_lat: lat,
+        viewer_lng: lng,
+      });
+      if (error) {
+        console.warn("[Feed] get_visible_vibes failed:", error.message);
+        setLiveVibes([]);
+        return;
+      }
+      const list = (rows ?? []) as any[];
+      const userIds = [...new Set(list.map((v) => v.user_id))] as string[];
+      let profileMap: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, first_name, avatar_url, trust_tier, birthday")
+          .in("user_id", userIds);
+        for (const p of (profs ?? []) as any[]) profileMap[p.user_id] = p;
+      }
+      const enriched: VibeFeedItem[] = list.map((v) => ({
+        id: v.id,
+        user_id: v.user_id,
+        vibe_preset: v.vibe_preset,
+        emoji: v.emoji ?? null,
+        duration_minutes: v.duration_minutes,
+        audience: v.audience,
+        current_lat: v.current_lat,
+        current_lng: v.current_lng,
+        location_label: v.location_label ?? null,
+        expires_at: v.expires_at,
+        created_at: v.created_at,
+        user_first_name: profileMap[v.user_id]?.first_name ?? null,
+        user_avatar_url: profileMap[v.user_id]?.avatar_url ?? null,
+        user_trust_tier: profileMap[v.user_id]?.trust_tier ?? "new",
+        user_birthday: profileMap[v.user_id]?.birthday ?? null,
+      }));
+      setLiveVibes(enriched);
+    } catch (err) {
+      console.warn("[Feed] vibes fetch error:", err);
+      setLiveVibes([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (discoverMode !== "browse") return;
+    fetchVibes();
+    const channel = supabase
+      .channel("vibing-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vibing_status" },
+        () => fetchVibes(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [discoverMode, feedRefreshKey, fetchVibes]);
 
   // Fetch my posts when switching to myActivity tab
   useEffect(() => {
@@ -980,9 +1064,22 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setCurrentIndex(0);
   }, [activeFilter, discoverMode]);
 
-  const deck = (() => {
-    return activeFilter === "all" ? liveActivities : liveActivities.filter((a: any) => a.category === activeFilter);
-  })();
+  // Interleave tandem posts + ambient vibes in a single feed, newest first.
+  // Memoized so it doesn't re-sort on every render.
+  const deck = useMemo(() => {
+    const acts = activeFilter === "all"
+      ? liveActivities
+      : liveActivities.filter((a: any) => a.category === activeFilter);
+    // Vibes are not category-filtered (they're ambient, not categorized).
+    const vibeItems = liveVibes.map((v) => ({ ...v, type: "vibe" as const }));
+    const merged: any[] = [...acts, ...vibeItems];
+    merged.sort((a, b) => {
+      const ta = new Date(a.created_at ?? 0).getTime();
+      const tb = new Date(b.created_at ?? 0).getTime();
+      return tb - ta;
+    });
+    return merged;
+  }, [activeFilter, liveActivities, liveVibes]);
 
   const handleImIn = (activityId: string) => {
     if (!verificationGate.isVerified) {
@@ -1670,8 +1767,33 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   <Text style={s.deckDoneCtaText}>Post a tandem</Text>
                 </LinearGradient>
               </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setShowVibingSheet(true)}
+                style={s.startVibingBtn}
+              >
+                <Text style={s.startVibingBtnText}>start vibing</Text>
+              </TouchableOpacity>
             </View>
-          ) : !currentCard ? null : (
+          ) : !currentCard ? null : currentCard.type === "vibe" ? (
+            <View style={[s.cardScrollContent, { paddingHorizontal: 16, paddingTop: 12 }]}>
+              <VibingCard
+                vibe={currentCard as VibeFeedItem}
+                onOpenChat={(c) => onOpenChat?.(c)}
+                onExpired={(vibeId) => {
+                  setLiveVibes((prev) => prev.filter((v) => v.id !== vibeId));
+                  setCurrentIndex((prev) => prev + 1);
+                }}
+              />
+              <TouchableOpacity
+                onPress={() => setCurrentIndex((p) => p + 1)}
+                activeOpacity={0.7}
+                style={s.vibeSkipBtn}
+              >
+                <Text style={s.vibeSkipText}>next →</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
             <>
               {/* Card scrollable area */}
               <ScrollView
@@ -1903,10 +2025,68 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         </Animated.View>
       )}
 
+      <VibingCreationSheet
+        visible={showVibingSheet}
+        onClose={() => setShowVibingSheet(false)}
+        onStarted={() => {
+          setFeedRefreshKey((k) => k + 1);
+          showToast("you're vibing. people nearby can see you.");
+        }}
+      />
+
+      <Modal
+        visible={showPostOrVibeSheet}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPostOrVibeSheet(false)}
+      >
+        <Pressable
+          style={moveSheet.backdrop}
+          onPress={() => setShowPostOrVibeSheet(false)}
+        >
+          <Pressable
+            style={[moveSheet.sheet, { paddingBottom: Math.max(insets.bottom, 14) + 18 }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={moveSheet.handle} />
+            <Text style={moveSheet.helper}>what's the move?</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowPostOrVibeSheet(false);
+                setShowPostModal(true);
+              }}
+              activeOpacity={0.88}
+              style={moveSheet.optionWrap}
+            >
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={moveSheet.option}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={colors.white} />
+                <Text style={moveSheet.optionText}>post a tandem</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowPostOrVibeSheet(false);
+                setShowVibingSheet(true);
+              }}
+              activeOpacity={0.85}
+              style={moveSheet.optionOutline}
+            >
+              <Ionicons name="sparkles-outline" size={20} color={colors.teal} />
+              <Text style={moveSheet.optionOutlineText}>start vibing</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <BottomNav
         activeTab={activeTab}
         onTabPress={onTabPress}
-        onPostPress={() => setShowPostModal(true)}
+        onPostPress={() => setShowPostOrVibeSheet(true)}
       />
 
       {showWalkthrough && (
@@ -3026,6 +3206,33 @@ const s = StyleSheet.create({
   // Card scroll
   cardScroll: { flex: 1 },
   cardScrollContent: { paddingTop: 4, paddingBottom: 8 },
+  vibeSkipBtn: {
+    alignSelf: "center",
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  vibeSkipText: {
+    fontSize: 13,
+    color: colors.muted,
+    fontFamily: "Quicksand_500Medium",
+  },
+  startVibingBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: colors.teal,
+    backgroundColor: colors.white,
+    alignItems: "center",
+  },
+  startVibingBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    fontFamily: "Quicksand_700Bold",
+    color: colors.teal,
+  },
 
   // Activity card
   cardWrapper: { gap: 0 },
@@ -3617,4 +3824,72 @@ const viewerS = StyleSheet.create({
   },
   promptQ: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.muted, letterSpacing: 0.8, textTransform: "capitalize" },
   promptA: { fontSize: 15, fontWeight: "600", fontFamily: "Quicksand_600SemiBold", color: colors.foreground, lineHeight: 20 },
+});
+
+const moveSheet = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    gap: 12,
+    ...shadows.float,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: "center",
+    marginBottom: 6,
+  },
+  helper: {
+    fontSize: 18,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.foreground,
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  optionWrap: {
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    ...shadows.brand,
+  },
+  option: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+  },
+  optionText: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+  },
+  optionOutline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.teal,
+    backgroundColor: colors.white,
+  },
+  optionOutlineText: {
+    fontSize: 15,
+    color: colors.teal,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
+  },
 });
