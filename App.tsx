@@ -440,6 +440,7 @@ const AppInner = () => {
           setProfileEditTrigger((n) => n + 1);
         }}
         onNotificationPrefsPress={() => setShowNotificationPrefs(true)}
+        onScrapbookPress={() => { setShowSettings(false); setShowScrapbook(true); }}
         onTermsPress={() => setShowTerms(true)}
         onPrivacyPress={() => setShowPrivacy(true)}
       />

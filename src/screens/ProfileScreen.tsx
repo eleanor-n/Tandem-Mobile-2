@@ -289,8 +289,21 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("*, avatar_url, photos, video_url, deep_prompts").eq("user_id", user.id).single().then(({ data }) => {
+    // Explicit `completed_tandem_count` (in addition to `*`) so a stale
+    // PostgREST schema cache would surface as an error response rather than
+    // silently dropping the column from the row.
+    supabase
+      .from("profiles")
+      .select("*, avatar_url, photos, video_url, deep_prompts, completed_tandem_count")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data, error }) => {
+      if (error) {
+        console.warn("[ProfileScreen] primary profile fetch error:", error.message);
+      }
       if (data) {
+        console.log("[ProfileScreen] primary fetch keys:", Object.keys(data));
+        console.log("[ProfileScreen] completed_tandem_count typeof/value:", typeof (data as any).completed_tandem_count, (data as any).completed_tandem_count);
         setProfile(data);
         setVisibility((data.profile_visibility as Record<string, boolean>) || {
           gender: true, relationship_status: true, occupation: true, mbti: true, humor_type: true,
@@ -314,11 +327,15 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
     if (!user) return;
     supabase
       .from("profiles")
-      .select("*")
+      .select("*, completed_tandem_count")
       .eq("user_id", user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn("[ProfileScreen] secondary profile fetch error:", error.message);
+        }
         if (data) {
+          console.log("[ProfileScreen] secondary fetch completed_tandem_count:", typeof (data as any).completed_tandem_count, (data as any).completed_tandem_count);
           setProfile(data);
           setVisibility(
             (data.profile_visibility as Record<string, boolean>) || {
@@ -513,14 +530,11 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   const handleShareProfile = async () => {
     try {
-      // First name only — strip anything after the first space.
-      const fullName = (profile?.first_name as string | undefined) || "someone";
-      const firstName = fullName.split(" ")[0] || fullName;
-      const message = `${firstName} is on Tandem — the app for finding people to do things with. Join: https://apps.apple.com/app/id6761485692`;
-      await Share.share({
-        title: `${firstName} is on Tandem`,
-        message,
-      });
+      const fullName = (profile?.first_name as string | undefined) ?? "";
+      const firstName = fullName.split(" ")[0]?.toLowerCase() ?? "";
+      const prefix = firstName ? `${firstName}'s tandeming.` : "someone's tandeming.";
+      const message = `${prefix} why go alone when you could tandem? https://apps.apple.com/app/id6761485692`;
+      await Share.share({ message, title: prefix });
     } catch (err: any) {
       console.warn("Share failed:", err.message);
     }
@@ -714,9 +728,17 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           const day = tandemPatterns?.most_common_day ?? null;
           const cat = tandemPatterns?.most_common_category ?? null;
 
-          // Diagnostic log so a future test pass can verify the gates fired.
-          // Cheap, runs once per render, no UI impact.
-          console.log("[streak]", { count: c, isOwnProfile: true, patterns: { day, cat } });
+          // Render-side diagnostic — reveals whether the field actually
+          // landed on the profile object at the moment the gate runs.
+          console.log("[streak]", {
+            count: c,
+            rawType: typeof raw,
+            rawValue: raw,
+            isOwnProfile: true,
+            patterns: { day, cat },
+            profileLoaded: !!profile,
+            profileFields: profile ? Object.keys(profile) : [],
+          });
 
           if (!Number.isFinite(c) || c < 3) return null;
           if (c < 10) return <Text style={s.streakLine}>{c} tandems so far.</Text>;
@@ -882,12 +904,17 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             {/* Recent tandems — polaroid strip OR single empty placeholder */}
             {hasCompletedTandems ? (
               <View style={s.section}>
-                <View style={s.sectionHeaderRow}>
-                  <Text style={ms.recentTandemsHeader}>recent tandems</Text>
-                  <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7}>
-                    <Text style={s.memoriesSeeAll}>See all →</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={() => onScrapbookPress?.()}
+                  activeOpacity={0.7}
+                  style={s.sectionHeaderRow}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+                  </View>
+                  <Text style={s.memoriesSeeAll}>See all →</Text>
+                </TouchableOpacity>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -929,7 +956,14 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
               </View>
             ) : hasPostedAnyTandem ? (
               <View style={s.section}>
-                <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+                <TouchableOpacity
+                  onPress={() => onScrapbookPress?.()}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <Text style={ms.recentTandemsHeader}>recent tandems</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+                </TouchableOpacity>
                 <View style={s.emptyPolaroid}>
                   <View style={s.emptyPolaroidPhoto}>
                     <SunnyAvatar expression="warm" size={48} />

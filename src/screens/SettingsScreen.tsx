@@ -33,6 +33,7 @@ interface SettingsScreenProps {
   onNotificationPrefsPress?: () => void;
   onTermsPress?: () => void;
   onPrivacyPress?: () => void;
+  onScrapbookPress?: () => void;
 }
 
 const VISIBILITY_FIELDS = [
@@ -61,6 +62,7 @@ export const SettingsScreen = ({
   onNotificationPrefsPress,
   onTermsPress,
   onPrivacyPress,
+  onScrapbookPress,
 }: SettingsScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
@@ -150,11 +152,12 @@ export const SettingsScreen = ({
   };
 
   const handleShareProfile = async () => {
-    const name = (firstName ?? "someone").split(" ")[0] || "someone";
+    const first = (firstName ?? "").split(" ")[0]?.toLowerCase() ?? "";
+    const prefix = first ? `${first}'s tandeming.` : "someone's tandeming.";
     try {
       await Share.share({
-        title: `${name} is on Tandem`,
-        message: `${name} is on Tandem — the app for finding people to do things with. Join: https://apps.apple.com/app/id6761485692`,
+        title: prefix,
+        message: `${prefix} why go alone when you could tandem? https://apps.apple.com/app/id6761485692`,
       });
     } catch (err: any) {
       console.warn("[settings] share failed:", err?.message);
@@ -205,6 +208,7 @@ export const SettingsScreen = ({
       >
         <Section title="account">
           <Row label="edit profile" onPress={onEditProfilePress} />
+          <Row label="scrapbook" onPress={onScrapbookPress} />
           <Row label="manage what others see" onPress={() => setShowVisibilityModal(true)} />
           <Row
             label="pronouns + year of school"
