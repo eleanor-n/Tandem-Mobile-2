@@ -43,7 +43,10 @@ import { hasSeenFirstJoinReminder, markFirstJoinReminderSeen } from "../lib/safe
 import { useVerificationGate } from "../lib/verificationGate";
 import { VerificationGateModal } from "../components/safety/VerificationGateModal";
 import { VibingCreationSheet } from "../components/VibingCreationSheet";
-import { VibingCard, type VibeFeedItem } from "../components/VibingCard";
+import type { VibeFeedItem } from "../lib/vibes";
+import { VibingStrip } from "../components/VibingStrip";
+import { VibeDetailSheet } from "../components/VibeDetailSheet";
+import * as Notifications from "expo-notifications";
 
 
 const calculateAge = (birthday: string | null): number | null => {
@@ -505,6 +508,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
   const [liveVibes, setLiveVibes] = useState<VibeFeedItem[]>([]);
   const [showVibingSheet, setShowVibingSheet] = useState(false);
   const [showPostOrVibeSheet, setShowPostOrVibeSheet] = useState(false);
+  const [vibeDetail, setVibeDetail] = useState<VibeFeedItem | null>(null);
+  // Track whether we've already routed a cold-launch daily-prompt tap so we
+  // don't re-open the same sheet on every screen remount.
+  const dailyPromptHandledRef = useRef(false);
+  const [viewerVibe, setViewerVibe] = useState<VibeFeedItem | null>(null);
+  const [viewerProfileMini, setViewerProfileMini] = useState<{
+    first_name: string | null;
+    avatar_url: string | null;
+    trust_tier: "new" | "known" | "trusted";
+  } | null>(null);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [myPosts, setMyPosts] = useState<any[]>([]);
@@ -902,16 +915,100 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     };
   }, [discoverMode, feedRefreshKey, fetchLiveActivities]);
 
-  // Fetch ambient vibes via the audience-filtering RPC. The RPC handles the
-  // nearby + trusted + friend-of-friend visibility rules server-side.
+  // Route taps on daily-prompt push notifications. Handles both warm taps
+  // (listener) and cold-launch taps (getLastNotificationResponseAsync).
+  const handleDailyPromptAction = useCallback(
+    (action: string, payload: any) => {
+      switch (action) {
+        case "open_post_creation":
+          if (payload?.category) setPostSelectedCategory(payload.category);
+          setShowPostModal(true);
+          break;
+        case "open_vibing_creation":
+          setShowVibingSheet(true);
+          break;
+        case "open_whats_the_move_sheet":
+          setShowPostOrVibeSheet(true);
+          break;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      if (data?.kind === "daily_prompt") {
+        handleDailyPromptAction(data.action, data.actionPayload);
+      }
+    });
+    // Cold-launch: app was opened directly from a push tap
+    Notifications.getLastNotificationResponseAsync().then((r) => {
+      if (!r || dailyPromptHandledRef.current) return;
+      const data = r.notification.request.content.data as any;
+      if (data?.kind === "daily_prompt") {
+        dailyPromptHandledRef.current = true;
+        handleDailyPromptAction(data.action, data.actionPayload);
+      }
+    });
+    return () => sub.remove();
+  }, [handleDailyPromptAction]);
+
+  // Fetch ambient vibes (others) via the audience-filtering RPC and the
+  // viewer's own active vibe directly. The RPC excludes the viewer; we
+  // surface their own vibe separately so the strip can show "your vibe".
   const fetchVibes = useCallback(async () => {
     if (!user) return;
     try {
-      const { data: viewerProfile } = await supabase
-        .from("profiles")
-        .select("location_lat, location_lng")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const [
+        { data: viewerProfile },
+        { data: ownVibeRow },
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("location_lat, location_lng, first_name, avatar_url, trust_tier")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("vibing_status")
+          .select("*")
+          .eq("user_id", user.id)
+          .is("ended_at", null)
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      setViewerProfileMini({
+        first_name: (viewerProfile as any)?.first_name ?? null,
+        avatar_url: (viewerProfile as any)?.avatar_url ?? null,
+        trust_tier:
+          ((viewerProfile as any)?.trust_tier as "new" | "known" | "trusted") ?? "new",
+      });
+
+      if (ownVibeRow) {
+        setViewerVibe({
+          id: (ownVibeRow as any).id,
+          user_id: (ownVibeRow as any).user_id,
+          vibe_preset: (ownVibeRow as any).vibe_preset,
+          emoji: (ownVibeRow as any).emoji ?? null,
+          duration_minutes: (ownVibeRow as any).duration_minutes,
+          audience: (ownVibeRow as any).audience,
+          current_lat: (ownVibeRow as any).current_lat,
+          current_lng: (ownVibeRow as any).current_lng,
+          location_label: (ownVibeRow as any).location_label ?? null,
+          expires_at: (ownVibeRow as any).expires_at,
+          created_at: (ownVibeRow as any).created_at,
+          user_first_name: (viewerProfile as any)?.first_name ?? null,
+          user_avatar_url: (viewerProfile as any)?.avatar_url ?? null,
+          user_trust_tier:
+            ((viewerProfile as any)?.trust_tier as "new" | "known" | "trusted") ?? "new",
+        });
+      } else {
+        setViewerVibe(null);
+      }
+
       const lat = (viewerProfile as any)?.location_lat;
       const lng = (viewerProfile as any)?.location_lng;
       if (typeof lat !== "number" || typeof lng !== "number") {
@@ -938,23 +1035,26 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
           .in("user_id", userIds);
         for (const p of (profs ?? []) as any[]) profileMap[p.user_id] = p;
       }
-      const enriched: VibeFeedItem[] = list.map((v) => ({
-        id: v.id,
-        user_id: v.user_id,
-        vibe_preset: v.vibe_preset,
-        emoji: v.emoji ?? null,
-        duration_minutes: v.duration_minutes,
-        audience: v.audience,
-        current_lat: v.current_lat,
-        current_lng: v.current_lng,
-        location_label: v.location_label ?? null,
-        expires_at: v.expires_at,
-        created_at: v.created_at,
-        user_first_name: profileMap[v.user_id]?.first_name ?? null,
-        user_avatar_url: profileMap[v.user_id]?.avatar_url ?? null,
-        user_trust_tier: profileMap[v.user_id]?.trust_tier ?? "new",
-        user_birthday: profileMap[v.user_id]?.birthday ?? null,
-      }));
+      const enriched: VibeFeedItem[] = list
+        // Defensive: RPC already excludes the viewer, but guard in case.
+        .filter((v) => v.user_id !== user.id)
+        .map((v) => ({
+          id: v.id,
+          user_id: v.user_id,
+          vibe_preset: v.vibe_preset,
+          emoji: v.emoji ?? null,
+          duration_minutes: v.duration_minutes,
+          audience: v.audience,
+          current_lat: v.current_lat,
+          current_lng: v.current_lng,
+          location_label: v.location_label ?? null,
+          expires_at: v.expires_at,
+          created_at: v.created_at,
+          user_first_name: profileMap[v.user_id]?.first_name ?? null,
+          user_avatar_url: profileMap[v.user_id]?.avatar_url ?? null,
+          user_trust_tier: profileMap[v.user_id]?.trust_tier ?? "new",
+          user_birthday: profileMap[v.user_id]?.birthday ?? null,
+        }));
       setLiveVibes(enriched);
     } catch (err) {
       console.warn("[Feed] vibes fetch error:", err);
@@ -1064,22 +1164,12 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
     setCurrentIndex(0);
   }, [activeFilter, discoverMode]);
 
-  // Interleave tandem posts + ambient vibes in a single feed, newest first.
-  // Memoized so it doesn't re-sort on every render.
+  // Tandem posts only — vibes now live in the VibingStrip above the feed.
   const deck = useMemo(() => {
-    const acts = activeFilter === "all"
+    return activeFilter === "all"
       ? liveActivities
       : liveActivities.filter((a: any) => a.category === activeFilter);
-    // Vibes are not category-filtered (they're ambient, not categorized).
-    const vibeItems = liveVibes.map((v) => ({ ...v, type: "vibe" as const }));
-    const merged: any[] = [...acts, ...vibeItems];
-    merged.sort((a, b) => {
-      const ta = new Date(a.created_at ?? 0).getTime();
-      const tb = new Date(b.created_at ?? 0).getTime();
-      return tb - ta;
-    });
-    return merged;
-  }, [activeFilter, liveActivities, liveVibes]);
+  }, [activeFilter, liveActivities]);
 
   const handleImIn = (activityId: string) => {
     if (!verificationGate.isVerified) {
@@ -1730,6 +1820,20 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       ) : (
         /* ── Browse Tab — Card Deck ── */
         <View style={s.deckContainer}>
+          {/* Vibing strip — pinned above the main feed when in browse mode */}
+          {discoverMode === "browse" && !loadingActivities ? (
+            <VibingStrip
+              vibes={liveVibes}
+              viewerHasActiveVibe={!!viewerVibe}
+              viewerFirstName={viewerProfileMini?.first_name}
+              viewerAvatarUrl={viewerProfileMini?.avatar_url}
+              viewerTrustTier={viewerProfileMini?.trust_tier}
+              onPressStart={() => setShowVibingSheet(true)}
+              onPressOwnVibe={() => setShowVibingSheet(true)}
+              onPressOtherVibe={(v) => setVibeDetail(v)}
+            />
+          ) : null}
+
           {loadingActivities ? (
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
               <ActivityIndicator color={colors.teal} size="large" />
@@ -1767,33 +1871,8 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
                   <Text style={s.deckDoneCtaText}>Post a tandem</Text>
                 </LinearGradient>
               </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setShowVibingSheet(true)}
-                style={s.startVibingBtn}
-              >
-                <Text style={s.startVibingBtnText}>start vibing</Text>
-              </TouchableOpacity>
             </View>
-          ) : !currentCard ? null : currentCard.type === "vibe" ? (
-            <View style={[s.cardScrollContent, { paddingHorizontal: 16, paddingTop: 12 }]}>
-              <VibingCard
-                vibe={currentCard as VibeFeedItem}
-                onOpenChat={(c) => onOpenChat?.(c)}
-                onExpired={(vibeId) => {
-                  setLiveVibes((prev) => prev.filter((v) => v.id !== vibeId));
-                  setCurrentIndex((prev) => prev + 1);
-                }}
-              />
-              <TouchableOpacity
-                onPress={() => setCurrentIndex((p) => p + 1)}
-                activeOpacity={0.7}
-                style={s.vibeSkipBtn}
-              >
-                <Text style={s.vibeSkipText}>next →</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
+          ) : !currentCard ? null : (
             <>
               {/* Card scrollable area */}
               <ScrollView
@@ -2031,6 +2110,16 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
         onStarted={() => {
           setFeedRefreshKey((k) => k + 1);
           showToast("you're vibing. people nearby can see you.");
+        }}
+      />
+
+      <VibeDetailSheet
+        visible={!!vibeDetail}
+        vibe={vibeDetail}
+        onClose={() => setVibeDetail(null)}
+        onOpenChat={(c) => {
+          setVibeDetail(null);
+          onOpenChat?.(c);
         }}
       />
 
@@ -3206,33 +3295,6 @@ const s = StyleSheet.create({
   // Card scroll
   cardScroll: { flex: 1 },
   cardScrollContent: { paddingTop: 4, paddingBottom: 8 },
-  vibeSkipBtn: {
-    alignSelf: "center",
-    marginTop: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  vibeSkipText: {
-    fontSize: 13,
-    color: colors.muted,
-    fontFamily: "Quicksand_500Medium",
-  },
-  startVibingBtn: {
-    marginTop: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: radius.full,
-    borderWidth: 1.5,
-    borderColor: colors.teal,
-    backgroundColor: colors.white,
-    alignItems: "center",
-  },
-  startVibingBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    fontFamily: "Quicksand_700Bold",
-    color: colors.teal,
-  },
 
   // Activity card
   cardWrapper: { gap: 0 },

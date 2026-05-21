@@ -17,6 +17,45 @@ const PROMOTE_KNOWN_THRESHOLD = 3;
 const PROMOTE_TRUSTED_THRESHOLD = 10;
 const DEMOTION_WINDOW_DAYS = 30;
 
+const MILESTONES = [5, 10, 25, 50, 100];
+const MILESTONE_TEMPLATES: Record<number, string> = {
+  5: "5 tandems. you're rolling.",
+  10: "you just hit 10 tandems. that's a lot of company.",
+  25: "25 tandems. you're a known quantity now.",
+  50: "50 tandems. half a hundred different connections.",
+  100: "100 tandems. you've made tandem a habit. that's the whole point.",
+};
+
+async function sendMilestonePush(
+  supabase: any,
+  userId: string,
+  count: number,
+): Promise<void> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("expo_push_token, notification_preferences")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const token = (profile as any)?.expo_push_token;
+  if (!token) return;
+  if ((profile as any)?.notification_preferences?.milestones === false) return;
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: token,
+        title: "",
+        body: MILESTONE_TEMPLATES[count],
+        sound: "default",
+        data: { kind: "milestone", count },
+      }),
+    });
+  } catch (err: any) {
+    console.warn("[trust-tier] milestone push failed:", err?.message ?? err);
+  }
+}
+
 type Tier = "new" | "known" | "trusted";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -147,6 +186,16 @@ Deno.serve(async (req) => {
     if (suspend !== currentlySuspended) update.suspended = suspend;
 
     await supabase.from("profiles").update(update as any).eq("user_id", user_id);
+
+    // Milestone celebration push — only when the count crosses a threshold
+    // this run (newCount === milestone AND oldCount < milestone).
+    const newCount = completedCount ?? currentCount;
+    const crossedMilestone = MILESTONES.find(
+      (m) => newCount === m && currentCount < m,
+    );
+    if (crossedMilestone) {
+      await sendMilestonePush(supabase, user_id, crossedMilestone);
+    }
 
     // Notify on tier change (promotion only — demotion is silent per spec)
     if (nextTier !== currentTier) {

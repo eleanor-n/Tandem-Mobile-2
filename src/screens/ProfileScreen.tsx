@@ -105,11 +105,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   const [profilePublic, setProfilePublic] = useState(true);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [trustRefreshKey, setTrustRefreshKey] = useState(0);
+  const [tandemPatterns, setTandemPatterns] = useState<{
+    most_common_day: string | null;
+    most_common_category: string | null;
+  } | null>(null);
   const lastEditTriggerRef = useRef<number | undefined>(editTrigger);
 
   // When Settings → "edit profile" fires, App.tsx bumps editTrigger.
@@ -286,6 +288,31 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         }
       });
   }, [user]);
+
+  // Fetch tandem patterns for the streak line — only when the user has 10+
+  // completed tandems. Patterns are session-cached; refetched on profile reload.
+  useEffect(() => {
+    if (!user) return;
+    const count = (profile?.completed_tandem_count as number | undefined) ?? 0;
+    if (count < 10) {
+      setTandemPatterns(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .rpc("get_tandem_patterns", { target_user_id: user.id })
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const row = Array.isArray(data) ? (data as any[])[0] : (data as any);
+        if (row) {
+          setTandemPatterns({
+            most_common_day: row.most_common_day ?? null,
+            most_common_category: row.most_common_category ?? null,
+          });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [user, profile?.completed_tandem_count]);
 
   useEffect(() => {
     if (!user) return;
@@ -637,6 +664,30 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
             <TrustStack key={trustRefreshKey} userId={user.id} viewerId={user.id} variant="profile" />
           </View>
         )}
+
+        {/* Gentle streak line — earned context that grows with tandem count.
+            Always own-profile here (no visitor view in this screen). */}
+        {(() => {
+          const c = (profile?.completed_tandem_count as number | undefined) ?? 0;
+          if (c < 3) return null;
+          if (c < 10) return <Text style={s.streakLine}>{c} tandems so far.</Text>;
+          const day = tandemPatterns?.most_common_day;
+          const cat = tandemPatterns?.most_common_category;
+          if (c < 25) {
+            return (
+              <Text style={s.streakLine}>
+                {c} tandems so far.{day ? ` you tandem most on ${day}s.` : ""}
+              </Text>
+            );
+          }
+          return (
+            <Text style={s.streakLine}>
+              {c} tandems so far.
+              {day ? ` you tandem most on ${day}s` : ""}
+              {day && cat ? `, mostly ${cat}.` : day ? "." : ""}
+            </Text>
+          );
+        })()}
 
         {/* Stat pills */}
         <View style={s.statsRow}>
@@ -1177,53 +1228,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         <NotificationSettingsScreen onBack={() => setShowNotifSettings(false)} />
       </Modal>
 
-      {/* Delete account confirmation modal */}
-      <Modal
-        visible={showDeleteModal}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={del.backdrop}>
-          <View style={del.card}>
-            <Text style={del.title}>delete your account?</Text>
-            <Text style={del.body}>
-              this deletes your profile, posts, messages, and scrapbook permanently. this cannot be undone.
-            </Text>
-            <TouchableOpacity
-              style={del.deleteBtn}
-              activeOpacity={0.88}
-              disabled={deletingAccount}
-              onPress={async () => {
-                setDeletingAccount(true);
-                try {
-                  const { data: { session } } = await supabase.auth.getSession();
-                  if (!session?.access_token) throw new Error("no session");
-                  const res = await fetch(
-                    "https://ccntlaunczirvntnsjbm.supabase.co/functions/v1/delete-account",
-                    {
-                      method: "POST",
-                      headers: { Authorization: `Bearer ${session.access_token}` },
-                    }
-                  );
-                  if (!res.ok) throw new Error(await res.text());
-                  await signOut();
-                } catch (err: any) {
-                  Alert.alert("something went wrong", err.message || "try again.");
-                  setDeletingAccount(false);
-                }
-              }}
-            >
-              {deletingAccount
-                ? <ActivityIndicator color={colors.white} size="small" />
-                : <Text style={del.deleteBtnText}>delete forever</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDeleteModal(false)} activeOpacity={0.7} style={{ paddingVertical: 12 }}>
-              <Text style={del.cancelText}>cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Leave a note bottom sheet */}
       <Modal
@@ -1319,6 +1323,14 @@ const s = StyleSheet.create({
     backgroundColor: colors.border,
     marginVertical: 20,
     marginHorizontal: 4,
+  },
+  streakLine: {
+    marginTop: 8,
+    fontSize: 12,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.muted,
+    textAlign: "center",
   },
   identityMeta: {
     fontSize: 13,
@@ -1594,7 +1606,6 @@ const s = StyleSheet.create({
 
   toast: { position: "absolute", bottom: 100, alignSelf: "center", backgroundColor: "rgba(15,23,42,0.85)", borderRadius: radius.full, paddingHorizontal: 20, paddingVertical: 10 },
   toastText: { fontSize: 13, color: colors.white, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
-  deleteAccountText: { fontSize: 13, color: "#EF4444", fontFamily: "Quicksand_500Medium" },
 
   // Memories
   memoriesHeader: { fontSize: 16, color: "#1a1a1a" },
@@ -1767,17 +1778,6 @@ const ls = StyleSheet.create({
   submitBtnInner: { flex: 1, alignItems: "center", justifyContent: "center" },
   submitBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   cancelBtn: { alignItems: "center", paddingVertical: 16 },
-  cancelText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted },
-});
-
-// Delete account modal styles
-const del = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
-  card: { backgroundColor: colors.background, borderRadius: radius.xl, padding: 24, width: "100%", gap: 12, alignItems: "center" },
-  title: { fontSize: 18, fontWeight: "800", fontFamily: "Quicksand_700Bold", color: "#EF4444", textAlign: "center" },
-  body: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.secondary, textAlign: "center", lineHeight: 20 },
-  deleteBtn: { width: "100%", height: 48, borderRadius: radius.full, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", marginTop: 4 },
-  deleteBtnText: { fontSize: 15, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.white },
   cancelText: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted },
 });
 

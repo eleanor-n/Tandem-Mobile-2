@@ -21,6 +21,8 @@ const DEFAULT_PREFS = {
   weekly_checkin: true,
   birthday: true,
   vibe_join: true,
+  daily_prompts: true,
+  milestones: true,
 };
 
 const LABELS: Record<keyof typeof DEFAULT_PREFS, { label: string; sub: string; icon: string }> = {
@@ -31,6 +33,8 @@ const LABELS: Record<keyof typeof DEFAULT_PREFS, { label: string; sub: string; i
   weekly_checkin:     { label: "sunny's weekly check-in",      sub: "a gentle nudge to get out there",              icon: "sunny-outline" },
   birthday:           { label: "birthday messages",            sub: "sunny remembers your birthday",                icon: "gift-outline" },
   vibe_join:          { label: "when someone wants in on your vibe", sub: "the 'i'm in' tap that signals interest.", icon: "sparkles-outline" },
+  daily_prompts:      { label: "daily prompt",                 sub: "one nudge a day at 5pm. easy to mute.",        icon: "sunny-outline" },
+  milestones:         { label: "tandem milestones",            sub: "a one-time hello when you hit 5, 10, 25 tandems.", icon: "trophy-outline" },
 };
 
 interface NotificationSettingsScreenProps {

@@ -146,6 +146,34 @@ const AppInner = () => {
     })();
   }, [onboardingCompleted, user]);
 
+  // Silent timezone detection — runs once per user when profiles.timezone
+  // is empty. We use the client-detected IANA zone as the source of truth
+  // (the daily-prompt cron needs it server-side to fire at the user's 5pm).
+  const timezoneCheckedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingCompleted !== true || !user || timezoneCheckedRef.current) return;
+    timezoneCheckedRef.current = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("timezone")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const existing = (data as any)?.timezone;
+        if (existing && existing.length > 0) return;
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (!tz) return;
+        await supabase
+          .from("profiles")
+          .update({ timezone: tz } as any)
+          .eq("user_id", user.id);
+      } catch (err) {
+        console.warn("[App] timezone detect failed:", err);
+      }
+    })();
+  }, [onboardingCompleted, user]);
+
   // Request location + notification permissions once after onboarding completes
   useEffect(() => {
     if (onboardingCompleted !== true) return;

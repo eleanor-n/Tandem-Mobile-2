@@ -125,6 +125,12 @@ export const NOTIFICATION_COPY = {
     title: `${userName} is in for your vibe.`,
     body: "",
   }),
+  // Milestone celebrations — pushed when completed_tandem_count crosses a threshold.
+  milestone5:   () => ({ title: "", body: "5 tandems. you're rolling." }),
+  milestone10:  () => ({ title: "", body: "you just hit 10 tandems. that's a lot of company." }),
+  milestone25:  () => ({ title: "", body: "25 tandems. you're a known quantity now." }),
+  milestone50:  () => ({ title: "", body: "50 tandems. half a hundred different connections." }),
+  milestone100: () => ({ title: "", body: "100 tandems. you've made tandem a habit. that's the whole point." }),
   // Tandem voice — safety/account
   safetyCheckInPrompt: (partnerName: string) => ({
     title: "How'd it go?",
