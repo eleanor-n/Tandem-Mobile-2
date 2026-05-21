@@ -19,9 +19,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, radius, shadows, gradients } from "../theme";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+
+const VIBING_EXPLAINER_KEY = "vibing_explainer_seen";
 
 export type VibePreset =
   | "studying"
@@ -76,6 +79,21 @@ export function VibingCreationSheet({ visible, onClose, onStarted }: Props) {
   const [activeVibe, setActiveVibe] = useState<ActiveVibe | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [endingVibe, setEndingVibe] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
+
+  // First-time explainer — shown once per device the first time the user
+  // opens this sheet. Persisted via AsyncStorage (matches existing patterns).
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem(VIBING_EXPLAINER_KEY).then((seen) => {
+      if (!seen) setShowExplainer(true);
+    });
+  }, [visible]);
+
+  const dismissExplainer = () => {
+    setShowExplainer(false);
+    AsyncStorage.setItem(VIBING_EXPLAINER_KEY, "1").catch(() => { /* non-blocking */ });
+  };
 
   // Reset state each time the sheet opens.
   useEffect(() => {
@@ -405,6 +423,40 @@ export function VibingCreationSheet({ visible, onClose, onStarted }: Props) {
           </TouchableOpacity>
         </Pressable>
       </Pressable>
+
+      {/* One-time explainer — first opener only */}
+      <Modal
+        visible={showExplainer}
+        animationType="fade"
+        transparent
+        onRequestClose={dismissExplainer}
+      >
+        <Pressable style={s.explainerBackdrop} onPress={dismissExplainer}>
+          <Pressable
+            style={s.explainerCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={s.explainerTitle}>what's vibing?</Text>
+            <Text style={s.explainerBody}>
+              vibing is a quick way to say "i'm here, come hang." less commitment than posting a tandem. when you start vibing, nearby tandemers and your trusted friends can see it for the duration you pick.
+            </Text>
+            <TouchableOpacity
+              onPress={dismissExplainer}
+              activeOpacity={0.88}
+              style={s.explainerBtnWrap}
+            >
+              <LinearGradient
+                colors={gradients.brand}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={s.explainerBtn}
+              >
+                <Text style={s.explainerBtnText}>got it</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -641,5 +693,51 @@ const s = StyleSheet.create({
     color: colors.white,
     fontFamily: "Quicksand_500Medium",
     fontWeight: "500",
+  },
+  explainerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+  },
+  explainerCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.xl,
+    padding: 24,
+    width: "100%",
+    ...shadows.float,
+  },
+  explainerTitle: {
+    fontSize: 18,
+    fontFamily: "Quicksand_500Medium",
+    fontWeight: "500",
+    color: colors.foreground,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  explainerBody: {
+    fontSize: 14,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.secondary,
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  explainerBtnWrap: {
+    borderRadius: radius.full,
+    overflow: "hidden",
+    ...shadows.brand,
+  },
+  explainerBtn: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  explainerBtnText: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
   },
 });

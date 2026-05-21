@@ -11,7 +11,8 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius } from "../theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, gradients } from "../theme";
 import { TierAvatar } from "./safety/TierAvatar";
 import type { VibeFeedItem } from "../lib/vibes";
 
@@ -97,9 +98,14 @@ export function VibingStrip({
               </View>
             </View>
           ) : (
-            <View style={s.startCircle}>
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={s.startCircle}
+            >
               <Ionicons name="add" size={32} color={colors.white} />
-            </View>
+            </LinearGradient>
           )}
           <Text style={s.itemLabel} numberOfLines={1}>
             {viewerHasActiveVibe ? "your vibe" : "start vibing"}
@@ -109,7 +115,8 @@ export function VibingStrip({
         {/* Empty-state hint when no one else is vibing */}
         {showEmptyHint ? (
           <View style={s.emptyHintWrap}>
-            <Text style={s.emptyHint}>be the first to vibe today.</Text>
+            <Text style={s.emptyHintTeal}>vibing = let people know you're around</Text>
+            <Text style={s.emptyHint}>be the first today.</Text>
           </View>
         ) : (
           liveVibes.map((v) => {
@@ -186,7 +193,6 @@ const s = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.teal,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -233,6 +239,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     height: 64,
     justifyContent: "center",
+    gap: 2,
+  },
+  emptyHintTeal: {
+    fontSize: 12,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.teal,
   },
   emptyHint: {
     fontSize: 12,

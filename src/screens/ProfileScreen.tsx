@@ -81,6 +81,48 @@ const ProfileVideo = ({ uri }: { uri: string }) => {
   );
 };
 
+// Bio with 3-line truncation + tail ellipsis + inline "more" expander.
+// Tap-to-edit only happens on own profile; visitors see plain text. Empty
+// bio on a visitor's profile renders nothing (no awkward placeholder).
+function BioBlock({
+  bio,
+  isOwnProfile,
+  onEdit,
+}: {
+  bio?: string | null;
+  isOwnProfile: boolean;
+  onEdit?: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasBio = !!bio && bio.trim().length > 0;
+
+  if (!hasBio && !isOwnProfile) return null;
+
+  const body = (
+    <>
+      <Text
+        style={[s.bio, !hasBio && { color: colors.muted }]}
+        numberOfLines={expanded ? undefined : 3}
+        ellipsizeMode="tail"
+      >
+        {hasBio ? `"${bio}"` : '"tap to add a bio"'}
+      </Text>
+      {hasBio && bio!.length > 120 && !expanded ? (
+        <TouchableOpacity onPress={() => setExpanded(true)} activeOpacity={0.7}>
+          <Text style={s.bioMoreLink}>more</Text>
+        </TouchableOpacity>
+      ) : null}
+    </>
+  );
+
+  if (!isOwnProfile) return <View>{body}</View>;
+  return (
+    <TouchableOpacity onPress={onEdit} activeOpacity={0.8}>
+      {body}
+    </TouchableOpacity>
+  );
+}
+
 export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMembershipPress, onPostPress, onMyActivityPress, onScrapbookPress, editTrigger }: ProfileScreenProps) => {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
@@ -103,7 +145,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
   const pendingPlayRef = useRef(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  const [profilePublic, setProfilePublic] = useState(true);
   const [showNotifSettings, setShowNotifSettings] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
@@ -254,7 +295,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         setVisibility((data.profile_visibility as Record<string, boolean>) || {
           gender: true, relationship_status: true, occupation: true, mbti: true, humor_type: true,
         });
-        setProfilePublic(data.is_public !== false);
         setEditFirstName(data.first_name || "");
         setEditBio(data.bio || "");
         setEditOccupation(data.occupation || "");
@@ -337,12 +377,6 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
       }, 700);
     });
   }, [profile]);
-
-  const toggleProfilePublic = async () => {
-    const next = !profilePublic;
-    setProfilePublic(next);
-    if (user) await supabase.from("profiles").update({ is_public: next } as any).eq("user_id", user.id);
-  };
 
   const handlePhotoUpload = async () => {
     if (!user) return;
@@ -479,10 +513,13 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
 
   const handleShareProfile = async () => {
     try {
-      const name = profile?.first_name || "someone";
+      // First name only — strip anything after the first space.
+      const fullName = (profile?.first_name as string | undefined) || "someone";
+      const firstName = fullName.split(" ")[0] || fullName;
+      const message = `${firstName} is on Tandem — the app for finding people to do things with. Join: https://apps.apple.com/app/id6761485692`;
       await Share.share({
-        title: `${name} is on Tandem`,
-        message: `${name} is on Tandem, the companionship app. never go alone: https://thetandemweb.com`,
+        title: `${firstName} is on Tandem`,
+        message,
       });
     } catch (err: any) {
       console.warn("Share failed:", err.message);
@@ -666,13 +703,23 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         )}
 
         {/* Gentle streak line — earned context that grows with tandem count.
-            Always own-profile here (no visitor view in this screen). */}
+            Always own-profile here (no visitor view in this screen).
+            Count display is decoupled from patterns: count shows at 3+,
+            day pattern adds at 10+, category pattern adds at 25+. */}
         {(() => {
-          const c = (profile?.completed_tandem_count as number | undefined) ?? 0;
-          if (c < 3) return null;
+          // Numeric coercion guards against the DB returning the value as a
+          // string (Postgres int8 sometimes serializes that way through PostgREST).
+          const raw = profile?.completed_tandem_count;
+          const c = typeof raw === "number" ? raw : Number(raw ?? 0);
+          const day = tandemPatterns?.most_common_day ?? null;
+          const cat = tandemPatterns?.most_common_category ?? null;
+
+          // Diagnostic log so a future test pass can verify the gates fired.
+          // Cheap, runs once per render, no UI impact.
+          console.log("[streak]", { count: c, isOwnProfile: true, patterns: { day, cat } });
+
+          if (!Number.isFinite(c) || c < 3) return null;
           if (c < 10) return <Text style={s.streakLine}>{c} tandems so far.</Text>;
-          const day = tandemPatterns?.most_common_day;
-          const cat = tandemPatterns?.most_common_category;
           if (c < 25) {
             return (
               <Text style={s.streakLine}>
@@ -705,51 +752,18 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={() => onMyActivityPress?.()} activeOpacity={0.7} style={s.myActivityLink}>
-          <Text style={s.myActivityLinkText}>view your posts & saved activities →</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => onScrapbookPress?.()} activeOpacity={0.7} style={s.myActivityLink}>
-          <Text style={s.myActivityLinkText}>open your scrapbook →</Text>
-        </TouchableOpacity>
-
         {/* Bio */}
-        <TouchableOpacity onPress={() => setShowEditSheet(true)} activeOpacity={0.8}>
-          <Text style={[s.bio, !profile?.bio && { color: colors.muted }]}>
-            "{profile?.bio || "tap to add a bio"}"
-          </Text>
-        </TouchableOpacity>
-
-        {/* Public profile banner */}
-        <TouchableOpacity style={[s.publicBanner, profilePublic ? s.publicBannerOn : s.publicBannerOff]} onPress={toggleProfilePublic} activeOpacity={0.8}>
-          <Ionicons name={profilePublic ? "eye-outline" : "eye-off-outline"} size={15} color={profilePublic ? colors.teal : colors.muted} />
-          <Text style={[s.publicBannerText, { color: profilePublic ? colors.teal : colors.muted }]}>
-            {profilePublic ? "your profile is public" : "your profile is private"}
-          </Text>
-          <View style={[s.publicDot, { backgroundColor: profilePublic ? colors.teal : colors.border }]} />
-        </TouchableOpacity>
+        <BioBlock
+          bio={profile?.bio}
+          isOwnProfile
+          onEdit={() => setShowEditSheet(true)}
+        />
 
         {sunnyText.current ? (
           <Animated.Text style={[s.sunnyLine, { opacity: sunnyOpacity }]} numberOfLines={2}>
             {sunnyText.current}
           </Animated.Text>
         ) : null}
-
-        {/* Hosting now */}
-        <View style={s.section}>
-          <Text style={s.sectionLabel}>hosting now</Text>
-          <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
-            <Text style={s.emptyCardCtaText}>+ Post a tandem</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Been to */}
-        <View style={s.section}>
-          <Text style={s.sectionLabel}>been to</Text>
-          <TouchableOpacity onPress={() => onTabPress("Discover")} style={s.emptyCardCta} activeOpacity={0.8}>
-            <Text style={s.emptyCardCtaText}>go find something to join →</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* About chips from real profile */}
         {(profile?.occupation || profile?.personality_type || profile?.humor_type?.length) && (
@@ -1467,10 +1481,6 @@ const s = StyleSheet.create({
   location: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
   ageText: { fontSize: 13, color: colors.muted, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
 
-  // My Activity link
-  myActivityLink: { alignSelf: "center", paddingVertical: 6, paddingHorizontal: 16 },
-  myActivityLinkText: { fontSize: 12, color: colors.teal, fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
-
   // Stat pills
   statsRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
   statPill: {
@@ -1485,6 +1495,14 @@ const s = StyleSheet.create({
 
   // Bio
   bio: { fontSize: 14, fontFamily: "Quicksand_400Regular", color: colors.muted, fontStyle: "italic", textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
+  bioMoreLink: {
+    fontSize: 12,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.teal,
+    textAlign: "center",
+    marginTop: 4,
+  },
 
   // Section
   section: { gap: 10 },
@@ -1492,23 +1510,6 @@ const s = StyleSheet.create({
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionHint: { fontSize: 11, fontFamily: "Quicksand_400Regular", color: colors.muted },
   hScroll: { gap: 12, paddingBottom: 4 },
-
-  // Empty card CTAs
-  emptyCardCta: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    alignItems: "center" as const,
-  },
-  emptyCardCtaText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    fontFamily: "Quicksand_600SemiBold",
-    color: colors.teal,
-  },
 
   // Activity cards
   actCard: {
@@ -1611,11 +1612,6 @@ const s = StyleSheet.create({
   memoriesHeader: { fontSize: 16, color: "#1a1a1a" },
   memoriesSeeAll: { fontSize: 11, color: "#1D9E75", fontWeight: "600", fontFamily: "Quicksand_600SemiBold" },
 
-  publicBanner: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 20 },
-  publicBannerOn: { backgroundColor: "#E8FBF7", borderWidth: 1, borderColor: "#A7EDD9" },
-  publicBannerOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  publicBannerText: { flex: 1, fontSize: 13, fontWeight: "500", fontFamily: "Quicksand_500Medium" },
-  publicDot: { width: 8, height: 8, borderRadius: 4 },
   avatarCameraBtn: { position: "absolute", bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.teal, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.background },
   sunnyLine: { fontStyle: "italic", fontSize: 13, fontFamily: "Quicksand_400Regular", color: "#888", textAlign: "center", paddingHorizontal: 20, marginBottom: 8 },
 });

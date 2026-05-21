@@ -150,11 +150,11 @@ export const SettingsScreen = ({
   };
 
   const handleShareProfile = async () => {
-    const name = firstName ?? "someone";
+    const name = (firstName ?? "someone").split(" ")[0] || "someone";
     try {
       await Share.share({
         title: `${name} is on Tandem`,
-        message: `${name} is on Tandem, the companionship app. never go alone: https://thetandemweb.com`,
+        message: `${name} is on Tandem — the app for finding people to do things with. Join: https://apps.apple.com/app/id6761485692`,
       });
     } catch (err: any) {
       console.warn("[settings] share failed:", err?.message);
