@@ -1571,7 +1571,18 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
       setPostAutoAcceptTrusted(false);
       setShowGroupNudge(false);
       setFeedRefreshKey(k => k + 1);
-      showToast("posted! check back soon.");
+      // First-post Sunny toast — fires once per device, then never again.
+      try {
+        const firstPosted = await AsyncStorage.getItem("first_tandem_posted");
+        if (!firstPosted) {
+          await AsyncStorage.setItem("first_tandem_posted", "1");
+          showToast("posted! you'll get a push when someone wants to join.");
+        } else {
+          showToast("posted! check back soon.");
+        }
+      } catch {
+        showToast("posted! check back soon.");
+      }
     } catch (err: any) {
       console.error("[Post] exception:", err);
       logError(err, { screen: "DiscoverScreen", action: "handleSubmitPost" });
@@ -1855,7 +1866,7 @@ export const DiscoverScreen = ({ activeTab, onTabPress, onMembershipPress, onMes
             <View style={s.deckDone}>
               <SunnyAvatar expression="warm" size={84} />
               <Text style={s.deckDoneSunnyLine}>
-                nothing matches your filters right now. widen them or post your own.
+                feed's quiet right now. be the first one to post something. coffee, study sesh, whatever. people will see it.
               </Text>
               <TouchableOpacity
                 activeOpacity={0.88}

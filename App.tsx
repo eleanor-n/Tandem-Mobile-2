@@ -34,6 +34,7 @@ import { ScrapbookScreen } from "./src/screens/ScrapbookScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { NotificationSettingsScreen } from "./src/screens/NotificationSettingsScreen";
+import { TabWalkthroughTooltip } from "./src/components/TabWalkthroughTooltip";
 import { TermsScreen } from "./src/screens/TermsScreen";
 import { PrivacyScreen } from "./src/screens/PrivacyScreen";
 import { MessagesScreen } from "./src/screens/MessagesScreen";
@@ -331,6 +332,12 @@ const AppInner = () => {
                 ...(data.ideal_saturday ? { ideal_saturday: data.ideal_saturday } : {}),
                 ...(data.friend_who ? { friend_who: data.friend_who } : {}),
               },
+              // New chip-array columns for the two converted prompts. Custom
+              // text (above) lands in quick_prompts; selected chips here.
+              friend_role_tags: Array.isArray(data.friend_role_tags) ? data.friend_role_tags : [],
+              ideal_saturday_tags: Array.isArray(data.ideal_saturday_tags) ? data.ideal_saturday_tags : [],
+              bio: data.bio ?? null,
+              video_url: data.video_url ?? null,
               deep_prompts: deepPrompts,
               photos: Array.isArray(data.photos) && data.photos.length > 0 ? data.photos : [],
               // avatar_url is the primary field ProfileScreen reads; photos[] is the fallback.
@@ -525,6 +532,36 @@ const AppInner = () => {
   return (
     <View style={{ flex: 1 }}>
       {tabContent}
+
+      {/* One-time per-tab Sunny tooltips. Each evaluates on its own
+          AsyncStorage key the first time the matching tab is active. */}
+      <TabWalkthroughTooltip
+        storageKey="walkthrough_discover_seen"
+        active={activeTab === "Discover" && onboardingCompleted === true}
+        message="this is where everything's happening. posts up top, vibes in the strip. tap anything to see more."
+      />
+      <TabWalkthroughTooltip
+        storageKey="walkthrough_map_seen"
+        active={activeTab === "Map" && onboardingCompleted === true}
+        message="same posts on a map. helpful when you wanna see what's close."
+      />
+      <TabWalkthroughTooltip
+        storageKey="walkthrough_chat_seen"
+        active={activeTab === "Chat" && onboardingCompleted === true}
+        message="people who said they're in show up here. you accept or decline, then y'all chat."
+      />
+      <TabWalkthroughTooltip
+        storageKey="walkthrough_profile_seen"
+        active={activeTab === "Profile" && onboardingCompleted === true}
+        message="your home base. tap the gear for settings."
+      />
+      <TabWalkthroughTooltip
+        storageKey="walkthrough_center_button_seen"
+        active={activeTab === "Discover" && onboardingCompleted === true}
+        anchor="bottom-center"
+        message="tap the + in the bottom bar when you wanna post a tandem or start vibing."
+      />
+
       {sunnyToast ? (
         <Animated.View style={[appS.sunnyToast, { opacity: sunnyToastOpacity }]} pointerEvents="none">
           <Text style={appS.sunnyToastText}>{sunnyToast}</Text>

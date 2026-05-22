@@ -111,9 +111,9 @@ export const WelcomeScreen = ({
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        <Text style={s.hero}>Never go{"\n"}alone.</Text>
+        <Text style={s.hero}>hey there.{"\n"}glad you found tandem.</Text>
         <Text style={s.sub}>
-          Easy plans, easier connection.
+          it's basically where people find other people to do stuff with. coffee, runs, study sessions, all of that.{"\n\n"}i'm sunny. i'll walk you through getting set up. it's pretty quick, promise.
         </Text>
 
         <TouchableOpacity
@@ -127,7 +127,7 @@ export const WelcomeScreen = ({
             end={{ x: 1, y: 0 }}
             style={s.ctaGradient}
           >
-            <Text style={s.ctaText}>join tandem →</Text>
+            <Text style={s.ctaText}>let's do this</Text>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -191,12 +191,12 @@ const s = StyleSheet.create({
     gap: 14,
   },
   hero: {
-    fontSize: 52,
+    fontSize: 32,
     fontWeight: "800",
     fontFamily: "Quicksand_700Bold",
     color: "#1C1410",
-    letterSpacing: -2,
-    lineHeight: 56,
+    letterSpacing: -1,
+    lineHeight: 38,
   },
   sub: {
     fontSize: 16,

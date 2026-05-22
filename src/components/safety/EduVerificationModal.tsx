@@ -180,12 +180,12 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
           {stage === "email" && (
             <>
               <Text style={s.sunnyLine}>
-                verify your school email so people can tandem you safely.
+                first thing. gotta make sure you're actually a student. tandem's umich-only right now. drop your .edu email and we'll send you a code.
               </Text>
-              <Text style={s.label}>School email</Text>
+              <Text style={s.label}>school email</Text>
               <TextInput
                 style={[s.input, emailError ? s.inputError : null]}
-                placeholder="your @umich.edu email"
+                placeholder="you@umich.edu"
                 placeholderTextColor={colors.muted}
                 value={email}
                 onChangeText={(t) => { setEmail(t); if (emailError) setEmailError(null); }}
@@ -217,7 +217,7 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
                   {sending ? (
                     <ActivityIndicator color={colors.white} />
                   ) : (
-                    <Text style={s.primaryBtnText}>Send code</Text>
+                    <Text style={s.primaryBtnText}>send me the code</Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -232,7 +232,7 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
 
           {stage === "otp" && (
             <>
-              <Text style={s.sunnyLine}>we just sent it. check your inbox.</Text>
+              <Text style={s.sunnyLine}>okay check your inbox. should be there in like 30 seconds.</Text>
               <Text style={s.sentToText}>{email.trim().toLowerCase()}</Text>
 
               <View style={s.otpRow}>
@@ -297,7 +297,7 @@ export function EduVerificationModal({ visible, onClose, onVerified, onSkip, dis
               <View style={s.doneCheck}>
                 <Ionicons name="checkmark" size={28} color={colors.white} />
               </View>
-              <Text style={s.doneLine}>verified. you're glowing.</Text>
+              <Text style={s.doneLine}>verified! that's the hard part.</Text>
             </View>
           )}
         </View>

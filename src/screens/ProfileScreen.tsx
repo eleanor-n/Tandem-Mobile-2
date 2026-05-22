@@ -815,13 +815,76 @@ export const ProfileScreen = ({ activeTab, onTabPress, onSettingsPress, onMember
         <View style={s.zoneDivider} />
 
         {/* ZONE 2: VOICE — prompts + intro video */}
-        {/* Prompts */}
-        {Object.entries(quickPrompts).map(([key, value]) => (
-          <TouchableOpacity key={key} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
-            <Text style={s.promptLabel}>{(PROMPT_LABELS[key] || key).toLowerCase()}</Text>
-            <Text style={s.promptAnswer}>"{String(value)}"</Text>
-          </TouchableOpacity>
-        ))}
+
+        {/* Friend-role + ideal-saturday: chips array + optional custom text.
+            Hidden entirely when neither chips nor custom text exist. */}
+        {(() => {
+          const friendChips: string[] = Array.isArray(profile?.friend_role_tags) ? profile.friend_role_tags : [];
+          const friendText = (profile?.quick_prompts?.friend_who as string | undefined) ?? null;
+          if (friendChips.length === 0 && !friendText) return null;
+          return (
+            <TouchableOpacity
+              onPress={() => setShowEditSheet(true)}
+              activeOpacity={0.85}
+              style={s.promptBlock}
+            >
+              <Text style={s.promptLabel}>i'm the friend who</Text>
+              {friendChips.length > 0 ? (
+                <View style={s.tagChipRow}>
+                  {friendChips.map((c) => (
+                    <View key={c} style={s.tagChip}>
+                      <Text style={s.tagChipText}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {friendText ? (
+                <Text style={[s.promptAnswer, friendChips.length > 0 && { marginTop: 8 }]}>
+                  "{friendText}"
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })()}
+
+        {(() => {
+          const satChips: string[] = Array.isArray(profile?.ideal_saturday_tags) ? profile.ideal_saturday_tags : [];
+          const satText = (profile?.quick_prompts?.ideal_saturday as string | undefined) ?? null;
+          if (satChips.length === 0 && !satText) return null;
+          return (
+            <TouchableOpacity
+              onPress={() => setShowEditSheet(true)}
+              activeOpacity={0.85}
+              style={s.promptBlock}
+            >
+              <Text style={s.promptLabel}>my ideal saturday</Text>
+              {satChips.length > 0 ? (
+                <View style={s.tagChipRow}>
+                  {satChips.map((c) => (
+                    <View key={c} style={s.tagChip}>
+                      <Text style={s.tagChipText}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+              {satText ? (
+                <Text style={[s.promptAnswer, satChips.length > 0 && { marginTop: 8 }]}>
+                  "{satText}"
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Remaining quick prompts (those NOT handled above by the chip blocks) */}
+        {Object.entries(quickPrompts)
+          .filter(([key]) => key !== "friend_who" && key !== "ideal_saturday")
+          .map(([key, value]) => (
+            <TouchableOpacity key={key} onPress={() => setShowEditSheet(true)} activeOpacity={0.85} style={s.promptBlock}>
+              <Text style={s.promptLabel}>{(PROMPT_LABELS[key] || key).toLowerCase()}</Text>
+              <Text style={s.promptAnswer}>"{String(value)}"</Text>
+            </TouchableOpacity>
+          ))}
         {Object.entries(deepPrompts).map(([prompt, answer]) => {
           const answerStr = String(answer);
           const isVoice = answerStr.startsWith("file://") || answerStr.includes(".m4a") || answerStr.includes("voice-memos") || answerStr.includes("deep-prompt-media") || answerStr.includes("audio/");
@@ -1580,6 +1643,16 @@ const s = StyleSheet.create({
   promptBlock: { backgroundColor: colors.tintTeal, borderRadius: radius.md, padding: 16, borderLeftWidth: 3, borderLeftColor: colors.teal },
   promptLabel: { fontSize: 10, fontWeight: "700", fontFamily: "Quicksand_700Bold", color: colors.teal, letterSpacing: 1.2, marginBottom: 6 },
   promptAnswer: { fontSize: 15, fontWeight: "500", fontFamily: "Quicksand_500Medium", color: colors.foreground, fontStyle: "italic", lineHeight: 22 },
+  tagChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.teal + "55",
+  },
+  tagChipText: { fontSize: 12, color: colors.foreground, fontFamily: "Quicksand_500Medium" },
   mediaPlayBtn: {
     flexDirection: "row" as const,
     alignItems: "center" as const,

@@ -56,31 +56,41 @@ const STEPS = [
   {
     key: "opening",
     messages: [
-      "hi! I'm Sunny",
-      "I basically run the show around here, in the best way possible",
-      "my job is to find you people worth leaving the house for. but first I need to get to know you a little",
-      "don't stress. I promise this won't feel like filling out a form. ready?",
+      "hey there. glad you found tandem.",
+      "it's basically where people find other people to do stuff with. coffee, runs, study sessions, all of that.",
+      "i'm sunny. i'll walk you through getting set up. it's pretty quick, promise.",
     ],
     expression: "warm" as SunnyExpression,
     inputType: "single",
-    options: ["let's go"],
+    options: ["let's do this"],
+  },
+  {
+    key: "edu_verify",
+    messages: [
+      "first thing. gotta make sure you're actually a student.",
+      "tandem's umich-only right now. drop your .edu email and we'll send you a code.",
+    ],
+    expression: "warm" as SunnyExpression,
+    inputType: "edu_verify",
+    options: [],
   },
   {
     key: "name",
-    messages: ["okay first things first. what do I call you?"],
+    messages: ["what should i call you?"],
     expression: "warm" as SunnyExpression,
     inputType: "text",
-    placeholder: "Your first name",
+    placeholder: "your first name",
   },
   {
-    key: "photo",
-    messages: ["let's put a face to the name. add a profile photo."],
+    key: "year_of_school",
+    messages: ["what year are you?"],
     expression: "warm" as SunnyExpression,
-    inputType: "photo",
+    inputType: "single",
+    options: ["freshman", "sophomore", "junior", "senior", "grad"],
   },
   {
     key: "birthday",
-    messages: ["and when's your birthday?", "you have to be 18+ to be here. yes we check"],
+    messages: ["when's your birthday? just for the age math, not for cake plans."],
     expression: "warm" as SunnyExpression,
     inputType: "birthday",
     placeholder: "MM/DD/YYYY",
@@ -93,18 +103,47 @@ const STEPS = [
     options: ["Man", "Woman", "Non-binary", "Prefer not to say", "Other"],
   },
   {
-    key: "year_of_school",
-    messages: ["what year are you?"],
+    key: "photo",
+    messages: [
+      "okay, time for a face. just one clear pic of you. smiling, on a hike, holding coffee, anything.",
+      "people are way more likely to join your tandems when they can actually see who they're meeting.",
+    ],
+    expression: "warm" as SunnyExpression,
+    inputType: "photo",
+  },
+  {
+    key: "halfway",
+    messages: [
+      "okay halfway done. the next bits actually make your profile interesting. hang with me.",
+    ],
     expression: "warm" as SunnyExpression,
     inputType: "single",
-    options: ["freshman", "sophomore", "junior", "senior", "grad"],
+    options: ["keep going"],
+  },
+  {
+    key: "bio",
+    messages: [
+      "give me a few sentences about you. like you'd text a friend introducing you to someone new. who are you, what's your deal?",
+    ],
+    expression: "warm" as SunnyExpression,
+    inputType: "text",
+    placeholder: "a few sentences about you...",
+  },
+  {
+    key: "intro_video",
+    messages: [
+      "okay this one's optional. but real talk, a 5-second video of you saying hi makes people 3x more likely to join your tandems.",
+      "just press record, wave, say what's up. like 10 seconds total.",
+    ],
+    expression: "warm" as SunnyExpression,
+    inputType: "intro_video",
   },
   {
     key: "occupation",
     messages: ["what do you do?"],
     expression: "warm" as SunnyExpression,
     inputType: "text",
-    placeholder: "Job, creative pursuit, professional napper...",
+    placeholder: "job, creative pursuit, professional napper...",
   },
   {
     key: "personality",
@@ -121,41 +160,63 @@ const STEPS = [
   },
   {
     key: "humor",
-    messages: ["how would you describe your humor? pick all that apply"],
+    messages: ["what's your humor? this matches you with people who'll actually get your jokes."],
     expression: "smirky" as SunnyExpression,
     inputType: "multi",
     options: ["Dry & deadpan", "Sarcastic", "Dark humor", "Witty & quick", "Absurdist", "Meme fluent", "Punny", "Wholesome"],
   },
   {
     key: "usage",
-    messages: ["last one. why are you here? what are you actually looking for?"],
+    messages: ["what kinda stuff are you down to tandem on? grab anything that sounds fun."],
     expression: "warm" as SunnyExpression,
     inputType: "multi",
     options: ["Companionship", "Group activities", "Workout buddy", "Exploring the city", "Gaming buddy", "Travel buddy", "Study buddy"],
   },
   {
     key: "ideal_saturday",
-    messages: ["okay quick ones. my ideal Saturday is..."],
+    messages: ["ideal saturday for you. what's it look like? grab whatever sounds right."],
     expression: "warm" as SunnyExpression,
-    inputType: "single",
+    inputType: "multi_with_text",
     options: [
-      "A farmers market and zero plans",
-      "A hike at dawn",
-      "My couch and zero guilt",
-      "Something spontaneous",
+      "couch and movies",
+      "long run plus coffee",
+      "brunch and wandering",
+      "study cafe",
+      "party till late",
+      "trail somewhere",
+      "concert or show",
+      "literally anything outside",
+      "pickup hoops",
+      "gaming all day",
+      "watching the game",
+      "gym then food",
     ],
+    placeholder: "my ideal saturday is...",
+    textLabel: "or describe yours ↓",
   },
   {
     key: "friend_who",
-    messages: ["I'm the friend who..."],
+    messages: ["okay real talk. in your friend group, what's your role? pick what fits, multiple are fine."],
     expression: "warm" as SunnyExpression,
-    inputType: "single",
+    inputType: "multi_with_text",
     options: [
-      "Plans the group chat",
-      "Shows up with snacks",
-      "Gets everyone lost (on purpose)",
-      "Sends memes at 2am",
+      "the planner",
+      "the chaos coordinator",
+      "always brings snacks",
+      "the late one but funny",
+      "the listener",
+      "the chill one",
+      "the driver",
+      "handles the aux",
+      "down for anything",
+      "the realist",
+      "the comic relief",
+      "always brings the energy",
+      "the parent of the group",
+      "remembers everyone's birthday",
     ],
+    placeholder: "i'm the friend who...",
+    textLabel: "or write your own ↓",
   },
   {
     key: "deep_prompt",
@@ -173,27 +234,33 @@ const STEPS = [
     placeholder: "finish the sentence...",
   },
   {
-    key: "edu_verify",
-    messages: ["one quick thing.", "verify your school email — it's how we keep tandem safe."],
-    expression: "warm" as SunnyExpression,
-    inputType: "edu_verify",
-    options: [],
-  },
-  {
     key: "done",
     messages: [
-      "okay that's it. you did great",
-      "I already have people in mind for you",
-      "let's get you in there.",
+      "you're in!",
+      "here's how this works in 3 lines.",
+      "post a tandem when you want company.",
+      "browse other people's posts when you're free.",
+      "start vibing when you're just out and around.",
+      "that's the whole thing. go explore.",
     ],
     expression: "celebratory" as SunnyExpression,
     inputType: "single",
-    options: ["let's go"],
+    options: ["okay show me around"],
   },
 ];
 
 // Steps where skip is NOT allowed
-const UNSKIPPABLE = new Set(["opening", "name", "birthday", "done", "edu_verify"]);
+const UNSKIPPABLE = new Set([
+  "opening",
+  "edu_verify",
+  "name",
+  "year_of_school",
+  "birthday",
+  "photo",
+  "halfway",
+  "bio",
+  "done",
+]);
 
 // Fallback reactions if LLM fails — specific per known answer
 const FALLBACK_REACTIONS: Record<string, { message: string; expression: SunnyExpression }> = {
@@ -1180,6 +1247,31 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
     advanceWithReaction(selectedChips.join(", "), step.key);
   };
 
+  // Multi-select chips PLUS an optional custom text field. Chips go to the
+  // `${step.key}_tags` array column; text goes to the existing `${step.key}`
+  // text column. Either or both may be empty.
+  const [multiText, setMultiText] = useState("");
+  const handleMultiWithTextDone = () => {
+    const text = multiText.trim();
+    if (selectedChips.length === 0 && !text) return;
+    const summary = [...selectedChips, text].filter(Boolean).join(", ") || "(no answer)";
+    addUserMessage(summary);
+    const tagsKey =
+      step.key === "friend_who"
+        ? "friend_role_tags"
+        : step.key === "ideal_saturday"
+          ? "ideal_saturday_tags"
+          : `${step.key}_tags`;
+    const data = {
+      ...profileData,
+      [tagsKey]: selectedChips,
+      [step.key]: text || null,
+    };
+    setProfileData(data);
+    setMultiText("");
+    advanceWithReaction(summary, step.key);
+  };
+
   const handlePhotoUpload = async () => {
     console.log("[Avatar] handlePhotoUpload called");
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1294,7 +1386,7 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
         <SunnyAvatar expression="warm" size={72} />
         <Text style={styles.ageGateTitle}>hey, we love the enthusiasm.</Text>
         <Text style={styles.ageGateBody}>
-          tandem is for adults 18 and up. come back when you're ready — we'll be here.
+          tandem is for adults 18 and up. come back when you're ready. we'll be here.
         </Text>
         <TouchableOpacity
           style={styles.ageGateBtn}
@@ -1390,6 +1482,44 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
                 gridMode={step.key === "personality"}
               />
             )}
+            {step.inputType === "multi_with_text" && step.options && (
+              <View style={{ gap: 14 }}>
+                <OptionChips
+                  options={step.options}
+                  multiSelect
+                  selected={selectedChips}
+                  onSelect={toggleChip}
+                />
+                <Text style={styles.multiTextLabel}>{(step as any).textLabel ?? "or write your own ↓"}</Text>
+                <TextInput
+                  value={multiText}
+                  onChangeText={setMultiText}
+                  placeholder={step.placeholder}
+                  placeholderTextColor={colors.muted}
+                  style={styles.multiTextInput}
+                  multiline
+                  maxLength={200}
+                />
+                <TouchableOpacity
+                  onPress={handleMultiWithTextDone}
+                  disabled={selectedChips.length === 0 && multiText.trim().length === 0}
+                  activeOpacity={0.88}
+                  style={[
+                    styles.multiDoneBtnWrap,
+                    selectedChips.length === 0 && multiText.trim().length === 0 && { opacity: 0.4 },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={gradients.brand}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.multiDoneBtn}
+                  >
+                    <Text style={styles.multiDoneBtnText}>next</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
             {step.inputType === "text" && (
               <ChatTextInput
                 placeholder={step.placeholder}
@@ -1417,6 +1547,34 @@ export const SunnyScreen = ({ onComplete }: SunnyScreenProps) => {
                     <Text style={styles.photoPickerText}>choose a photo</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+            {step.inputType === "intro_video" && (
+              <View style={{ gap: 12 }}>
+                <PromptInput
+                  placeholder="record a 5-10 second hi"
+                  userId={user?.id}
+                  onSubmit={(value, mode) => {
+                    if (mode === "video") {
+                      const data = { ...profileData, video_url: value };
+                      setProfileData(data);
+                      addUserMessage("intro video added ✓");
+                      advanceWithReaction("intro video added", "intro_video", true);
+                    }
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    const data = { ...profileData, video_url: null };
+                    setProfileData(data);
+                    addUserMessage("skip for now");
+                    advanceWithReaction("skip", "intro_video", true);
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.skipBtn}
+                >
+                  <Text style={styles.skipText}>skip for now</Text>
+                </TouchableOpacity>
               </View>
             )}
             {step.inputType === "prompt_pick" && (
@@ -1838,5 +1996,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Quicksand_400Regular",
     color: colors.muted,
+  },
+
+  // Multi-select chips + optional custom text (friend_who, ideal_saturday)
+  multiTextLabel: {
+    fontSize: 12,
+    fontStyle: "italic",
+    fontFamily: "Fraunces_500Medium_Italic",
+    color: colors.muted,
+    textAlign: "center",
+  },
+  multiTextInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.foreground,
+    fontFamily: "Quicksand_500Medium",
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  multiDoneBtnWrap: {
+    borderRadius: 999,
+    overflow: "hidden",
+    alignSelf: "stretch",
+  },
+  multiDoneBtn: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  multiDoneBtnText: {
+    fontSize: 15,
+    color: colors.white,
+    fontFamily: "Quicksand_700Bold",
+    fontWeight: "700",
   },
 });
